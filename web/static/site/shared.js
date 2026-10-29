@@ -76,6 +76,7 @@ export function linkIcon(metal, part, size) {
 // Шапка сайта: логотип, разделы (у «Повторений» — сколько карточек на сегодня), кто вошёл.
 export function header(user, current, due) {
   const nav = [['/', 'Курсы', 'catalog'], ['/review', 'Повторения', 'review'], ['/profile', 'Профиль', 'profile']];
+  if (user.role === 'admin') nav.push(['/admin', 'Админка', 'admin']);
   return '<header class="site-top">' +
     '<a class="site-brand" href="/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg><span class="site-brand-t">Citadel</span></a>' +
     '<nav class="site-nav" aria-label="Разделы">' + nav.map((n) =>

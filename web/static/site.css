@@ -40,6 +40,8 @@
 .tile h3 a { color: var(--txt); text-decoration: none; }
 .tile h3 a:hover { color: var(--acc); }
 .tile p { margin: 0; color: var(--mut); font-size: 15px; }
+.tile-soon { border-style: dashed; background: transparent; }
+.tile-soon h3 { color: var(--mut); }
 
 .empty { padding: 40px 24px; border: 1px dashed var(--line-2); border-radius: 12px; text-align: center; color: var(--mut); }
 

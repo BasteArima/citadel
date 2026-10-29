@@ -106,6 +106,10 @@ func serve(args []string) error {
 		return err
 	}
 	for _, im := range imported {
+		if im.Skipped {
+			log.Info("course file skipped: edited in the admin panel, import it there to update", "id", im.ID, "version", im.Version)
+			continue
+		}
 		log.Info("course", "id", im.ID, "version", im.Version, "new_version", im.New)
 	}
 

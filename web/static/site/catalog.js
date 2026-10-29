@@ -10,12 +10,12 @@ try { filter = sessionStorage.getItem('citadel-catalog-filter') || 'all'; } catc
 
 try {
   const [user, ov] = await Promise.all([api('/api/me'), api('/api/overview?today=' + today())]);
-  render(user, ov.courses);
+  render(user, ov.courses, ov.soon || []);
 } catch (e) {
   app.innerHTML = '<main class="site-main"><p class="site-err">Не удалось загрузить курсы: ' + esc(e.message) + '</p></main>';
 }
 
-function render(user, courses) {
+function render(user, courses, soon) {
   const byId = Object.fromEntries(courses.map((c) => [c.id, c]));
   app.innerHTML = header(user, 'catalog', courses.reduce((s, c) => s + c.due, 0)) +
     '<main class="site-main">' +
@@ -29,7 +29,9 @@ function render(user, courses) {
   const tiles = document.getElementById('tiles');
   const draw = () => {
     const shown = courses.filter((c) => filter === 'all' || courseState(c) === filter);
-    tiles.innerHTML = shown.length ? shown.map((c) => tile(c, byId)).join('') :
+    // неопубликованные курсы — плитками «Скоро»: видно, что готовится, но открыть нельзя
+    const later = filter === 'all' || filter === 'new' ? soon : [];
+    tiles.innerHTML = shown.length || later.length ? shown.map((c) => tile(c, byId)).join('') + later.map(soonTile).join('') :
       '<div class="empty" style="grid-column:1/-1">' + ({ done: 'Пока ни одного пройденного курса. Первое звено ещё куётся.', active: 'Ни один курс ещё не начат.', new: 'Все курсы уже начаты.' }[filter] || 'Курсов пока нет.') + '</div>';
   };
   app.querySelector('.segs').addEventListener('click', (e) => {
@@ -71,6 +73,14 @@ function continueCard(courses, byId) {
   return '<section class="card top-card" aria-labelledby="ct"><div class="lbl" id="ct">' + (c.started ? 'Продолжить' : 'С чего начать') + '</div>' +
     '<div><p>' + esc(c.title) + '</p><h2>Урок ' + c.next.n + '. ' + esc(c.next.title) + '</h2></div>' +
     '<div class="row"><a class="btn btn-l pri" href="/c/' + encodeURIComponent(c.id) + '/#' + encodeURIComponent(c.next.id) + '">' + (c.started ? 'Продолжить' : 'Начать') + '</a></div></section>';
+}
+
+function soonTile(c) {
+  return '<article class="card tile tile-soon metal-' + esc(c.metal) + '" aria-label="' + esc(c.title) + ' — скоро">' +
+    '<div class="tile-h">' + linkIcon(c.metal, 0) + '<span class="chip">Скоро</span></div>' +
+    '<div><h3>' + esc(c.title) + '</h3><p>Курс готовится. Откроется, когда его опубликуют.</p></div>' +
+    '<ul class="chips"><li class="chip"><span class="dot"></span>звено: ' + esc(metalName(c.metal)) + '</li></ul>' +
+    '</article>';
 }
 
 function tile(c, byId) {

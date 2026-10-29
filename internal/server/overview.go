@@ -48,17 +48,18 @@ func (s *server) overview(w http.ResponseWriter, r *http.Request) {
 		today, _ = time.Parse(time.DateOnly, time.Now().UTC().Format(time.DateOnly))
 	}
 	u := userFrom(r.Context())
-	out := make([]Overview, 0, len(s.order))
-	for _, id := range s.order {
+	cat := s.cat.Load()
+	out := make([]Overview, 0, len(cat.order))
+	for _, id := range cat.order {
 		items, err := s.cfg.Store.Progress(r.Context(), u.ID, id)
 		if err != nil {
 			s.log.Error("read progress", "err", err)
 			jsonError(w, http.StatusInternalServerError, "server error")
 			return
 		}
-		out = append(out, overviewOf(s.parsed[id], items, today))
+		out = append(out, overviewOf(cat.parsed[id], items, today))
 	}
-	writeValue(w, map[string]any{"courses": out})
+	writeValue(w, map[string]any{"courses": out, "soon": cat.soon})
 }
 
 func overviewOf(c *course.Course, items map[string]store.Item, today time.Time) Overview {

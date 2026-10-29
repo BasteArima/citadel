@@ -30,11 +30,11 @@
 | `cmd/citadel/` | программа: `serve`, `check`, `convert-v0` |
 | `internal/course/` | формат v1: типы, реестр блоков, проверка курса |
 | `internal/legacy/` | конвертер Go-курса из v0 в v1 |
-| `internal/server/` | HTTP: вход и сессии, API курсов и прогресса, встроенный фронтенд |
+| `internal/server/` | HTTP: вход и сессии, API курсов и прогресса, API админки (`admin.go`), встроенный фронтенд |
 | `internal/store/` | SQLite: версии курсов, пользователи, сессии, прогресс, бэкап |
 | `.env.example` | настройки сервиса: код доступа, админы. Свои значения — в `.env`, он не в git |
-| `web/` | фронтенд, встраивается в бинарник: `course.html` и движок на ES-модулях в `static/engine/` (типы блоков — `blocks/`); каталог и профиль — `catalog.html`, `profile.html` и `static/site/`; стили — `static/style.css` (общие) и `static/site.css` |
-| `content/<id>/course.json` | курсы в формате v1. Go-курс собирается из `legacy/go-course/` командой `task convert` — уроки пока пишутся там |
+| `web/` | фронтенд, встраивается в бинарник: `course.html` и движок на ES-модулях в `static/engine/` (типы блоков — `blocks/`); каталог и профиль — `catalog.html`, `profile.html` и `static/site/`; админка — `admin.html` и `static/admin/`; стили — `static/style.css` (общие) и `static/site.css` |
+| `content/<id>/course.json` | курсы в формате v1 — начальная загрузка: дальше курс живёт версиями в базе и правится в админке ([0009](docs/dev/decisions/0009-database-is-the-source.md)). Go-курс собирается из `legacy/go-course/` командой `task convert` и попадает в базу через «Импорт JSON» |
 | `Taskfile.yml` | команды разработки |
 | `Dockerfile`, `compose.yaml` | образ и запуск на Docker Desktop; база — в томе `citadel-data`. Как поднять у себя — `docs/guides/self-hosting.md` |
 

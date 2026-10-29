@@ -109,13 +109,13 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusUnauthorized, "Код не подошёл. Проверь раскладку и попробуй ещё раз.")
 		return
 	}
-	role := store.RoleStudent
+	configAdmin := false
 	for _, a := range s.cfg.Admins {
 		if strings.EqualFold(a, name) {
-			role = store.RoleAdmin
+			configAdmin = true
 		}
 	}
-	u, err := s.cfg.Store.SignIn(r.Context(), name, role)
+	u, err := s.cfg.Store.SignIn(r.Context(), name, configAdmin)
 	if err != nil {
 		s.log.Error("sign in", "err", err)
 		jsonError(w, http.StatusInternalServerError, "server error")

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"citadel/internal/course"
@@ -37,37 +38,38 @@ type Summary struct {
 }
 
 type server struct {
-	cfg      Config
-	log      *slog.Logger
+	cfg     Config
+	log     *slog.Logger
+	cat     atomic.Pointer[catalog]
+	limiter *limiter
+}
+
+// catalog is a snapshot of the published courses. Publishing builds a new one and swaps it in,
+// so requests never see a half-updated list.
+type catalog struct {
 	order    []string
 	parsed   map[string]*course.Course
 	courses  map[string][]byte
 	listJSON []byte
-	limiter  *limiter
+	soon     []Soon
 }
 
-// New returns the HTTP handler. Published courses are read from the store once here.
+// Soon is a course that exists but was never published: the catalog shows it as «Скоро».
+type Soon struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Metal string `json:"metal"`
+}
+
+// New returns the HTTP handler.
 func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	if cfg.AccessCode == "" {
 		return nil, errors.New("access code is empty")
 	}
-	courses, err := cfg.Store.Published(ctx)
-	if err != nil {
+	s := &server{cfg: cfg, log: cfg.Log, limiter: newLimiter(10, 10*time.Minute)}
+	if err := s.reload(ctx); err != nil {
 		return nil, err
 	}
-	s := &server{cfg: cfg, log: cfg.Log, parsed: map[string]*course.Course{}, courses: map[string][]byte{}, limiter: newLimiter(10, 10*time.Minute)}
-	list := make([]Summary, 0, len(courses))
-	for _, c := range courses {
-		data, err := json.Marshal(c)
-		if err != nil {
-			return nil, err
-		}
-		s.parsed[c.ID] = c
-		s.courses[c.ID] = data
-		s.order = append(s.order, c.ID)
-		list = append(list, summarize(c))
-	}
-	s.listJSON, _ = json.Marshal(list)
 
 	static, err := fs.Sub(web.FS, "static")
 	if err != nil {
@@ -95,6 +97,8 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.Handle("GET /{$}", s.page(sitePage("catalog.html")))
 	mux.Handle("GET /profile", s.page(sitePage("profile.html")))
 	mux.Handle("GET /review", s.page(sitePage("review.html")))
+	// admins only
+	s.adminRoutes(mux)
 	return s.logRequests(mux), nil
 }
 
@@ -128,12 +132,44 @@ func summarize(c *course.Course) Summary {
 	return sum
 }
 
+// reload reads the published courses from the store into a fresh catalog snapshot.
+func (s *server) reload(ctx context.Context) error {
+	courses, err := s.cfg.Store.Published(ctx)
+	if err != nil {
+		return err
+	}
+	all, err := s.cfg.Store.Courses(ctx)
+	if err != nil {
+		return err
+	}
+	c := &catalog{parsed: map[string]*course.Course{}, courses: map[string][]byte{}, soon: []Soon{}}
+	list := make([]Summary, 0, len(courses))
+	for _, cr := range courses {
+		data, err := json.Marshal(cr)
+		if err != nil {
+			return err
+		}
+		c.parsed[cr.ID] = cr
+		c.courses[cr.ID] = data
+		c.order = append(c.order, cr.ID)
+		list = append(list, summarize(cr))
+	}
+	for _, ci := range all {
+		if ci.Published == 0 {
+			c.soon = append(c.soon, Soon{ID: ci.ID, Title: ci.Title, Metal: ci.Metal})
+		}
+	}
+	c.listJSON, _ = json.Marshal(list)
+	s.cat.Store(c)
+	return nil
+}
+
 func (s *server) listCourses(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.listJSON)
+	writeJSON(w, s.cat.Load().listJSON)
 }
 
 func (s *server) getCourse(w http.ResponseWriter, r *http.Request) {
-	data, ok := s.courses[r.PathValue("id")]
+	data, ok := s.cat.Load().courses[r.PathValue("id")]
 	if !ok {
 		jsonError(w, http.StatusNotFound, "course not found")
 		return
@@ -147,7 +183,7 @@ func (s *server) listBlocks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) coursePage(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.courses[r.PathValue("id")]; !ok {
+	if _, ok := s.cat.Load().courses[r.PathValue("id")]; !ok {
 		http.NotFound(w, r)
 		return
 	}

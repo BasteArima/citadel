@@ -68,7 +68,7 @@ export function start(course, user, catalog) {
       '<button type="button" class="tb-ic tb-menu" data-act="menu" aria-controls="side" aria-expanded="' + side.classList.contains('open') + '" aria-label="Меню уроков">' + ic(IC.menu, 20) + '</button>' +
       lessonHead +
       '<a class="tb-home" href="/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg><span>Citadel</span></a>' +
-      '<nav class="tb-nav" aria-label="Разделы"><a href="/" aria-current="page">Курсы</a><a href="/review">Повторения</a><a href="/profile">Профиль</a></nav>' +
+      '<nav class="tb-nav" aria-label="Разделы"><a href="/" aria-current="page">Курсы</a><a href="/review">Повторения</a><a href="/profile">Профиль</a>' + (user.role === 'admin' ? '<a href="/admin">Админка</a>' : '') + '</nav>' +
       '<div class="tb-tools">' +
         '<button type="button" class="tb-search" data-act="search" aria-label="Поиск по курсу, Ctrl K">' + ic('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', 16) +
           '<span>Поиск</span><span class="kbd">Ctrl K</span></button>' +
@@ -874,7 +874,7 @@ export function start(course, user, catalog) {
   function renderExam() {
     const secs = X.sections.map((s) => {
       const qs = [];
-      s.lessons.filter((l) => X.ready(l.id)).forEach((l) => X.lesson(l.id).questions.forEach((q) => qs.push({ q, lesson: l })));
+      s.lessons.filter((l) => X.ready(l.id)).forEach((l) => X.lesson(l.id).questions.filter((q) => q.exam !== false).forEach((q) => qs.push({ q, lesson: l })));
       return { sec: s, qs, lessons: s.lessons.filter((l) => X.ready(l.id)) };
     }).filter((x) => x.qs.length);
     const box = refHead('exam', 'Контрольная', 'Вопросы раздела вперемешку. Считается первый ответ. Ошибки не штрафуют — они уходят в повторения и в список «что повторить».');

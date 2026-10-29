@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -27,16 +28,65 @@ type User struct {
 // ErrNoSession means the token is unknown or expired.
 var ErrNoSession = errors.New("no session")
 
-// SignIn finds the user by name (case-insensitive) or creates one, and sets the role.
-// The role comes from the server config on every sign-in, so it follows CITADEL_ADMINS.
-func (s *Store) SignIn(ctx context.Context, name, role string) (User, error) {
+// SignIn finds the user by name (case-insensitive) or creates one. A name from CITADEL_ADMINS
+// (configAdmin) is always an admin; anyone else keeps the role given in the admin panel,
+// a new user starts as a student.
+func (s *Store) SignIn(ctx context.Context, name string, configAdmin bool) (User, error) {
+	role := RoleStudent
+	if configAdmin {
+		role = RoleAdmin
+	}
 	var u User
 	t := now()
 	err := s.db.QueryRowContext(ctx, `
 		INSERT INTO users (name, role, created_at, last_seen_at) VALUES (?, ?, ?, ?)
-		ON CONFLICT (name) DO UPDATE SET role = excluded.role, last_seen_at = excluded.last_seen_at
-		RETURNING id, name, role`, name, role, t, t).Scan(&u.ID, &u.Name, &u.Role)
+		ON CONFLICT (name) DO UPDATE SET
+			role = CASE WHEN ? THEN 'admin' ELSE users.role END,
+			last_seen_at = excluded.last_seen_at
+		RETURNING id, name, role`, name, role, t, t, configAdmin).Scan(&u.ID, &u.Name, &u.Role)
 	return u, err
+}
+
+// UserInfo is a user as the admin list sees it.
+type UserInfo struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
+	Created  string `json:"createdAt"`
+	LastSeen string `json:"lastSeenAt"`
+}
+
+// Users lists everyone who has signed in.
+func (s *Store) Users(ctx context.Context) ([]UserInfo, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, role, created_at, COALESCE(last_seen_at, '') FROM users ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []UserInfo
+	for rows.Next() {
+		var u UserInfo
+		if err := rows.Scan(&u.ID, &u.Name, &u.Role, &u.Created, &u.LastSeen); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// SetRole changes a user's role.
+func (s *Store) SetRole(ctx context.Context, id int64, role string) error {
+	if role != RoleAdmin && role != RoleStudent {
+		return fmt.Errorf("unknown role %q", role)
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE users SET role = ? WHERE id = ?`, role, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // CreateSession returns a new random session token for the user. Only its hash is stored.
