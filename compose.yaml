@@ -1,5 +1,5 @@
 # Пока сервис живёт на Docker Desktop на ПК владельца: http://localhost:8080.
-# Поднять: task up (или docker compose up -d --build).
+# Поднять: task up (или docker compose up -d --build). Настройки — в .env (см. .env.example).
 services:
   citadel:
     build: .
@@ -7,6 +7,9 @@ services:
     container_name: citadel
     ports:
       - "8080:8080"
+    env_file: .env
+    volumes:
+      - citadel-data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
@@ -14,4 +17,7 @@ services:
       timeout: 3s
       start_period: 5s
       retries: 3
-    # Этап 2: том для SQLite — volumes: ["citadel-data:/app/data"]
+
+volumes:
+  # база SQLite: курсы с версиями, пользователи, прогресс. Бэкап — task backup.
+  citadel-data:

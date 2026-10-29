@@ -1101,6 +1101,17 @@
       'Один урок за заход. Пропустил неделю — ничего не сгорело, продолжаешь с того же места.'
     ].forEach(function (t) { how.appendChild(el('li', null, t)); });
     page.appendChild(how);
+
+    // перенос в Citadel: файл с прогрессом, его принимает новая версия курса на главной
+    var ex = el('p', null, '<button type="button" class="btn">Скачать прогресс для Citadel</button> — чтобы перенести отметки в новую версию курса.');
+    ex.querySelector('button').addEventListener('click', function () {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' }));
+      a.download = 'gocourse-progress.json';
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    });
+    page.appendChild(ex);
   }
 
   // ── словарь ──

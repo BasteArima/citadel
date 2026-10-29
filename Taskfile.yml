@@ -58,3 +58,13 @@ tasks:
     desc: Логи контейнера
     cmds:
       - docker compose logs -f --tail 100
+
+  backup:
+    desc: Бэкап базы из контейнера в ./backups (согласованная копия через SQLite, можно на ходу)
+    vars:
+      NAME: citadel-{{now | date "2006-01-02-150405"}}.db
+    cmds:
+      - docker compose exec citadel citadel backup -out /app/data/{{.NAME}}
+      - mkdir -p backups
+      - docker compose cp citadel:/app/data/{{.NAME}} backups/{{.NAME}}
+      - docker compose exec citadel rm /app/data/{{.NAME}}

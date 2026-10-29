@@ -12,12 +12,14 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/citadel ./cmd/cita
 
 # Запуск: бинарник и курсы, без компилятора и исходников.
 FROM alpine:3.22
-RUN adduser -D -H -u 10001 citadel
+RUN adduser -D -H -u 10001 citadel && mkdir -p /app/data && chown citadel /app/data
 COPY --from=build /out/citadel /usr/local/bin/citadel
 COPY content /app/content
 WORKDIR /app
 USER citadel
 ENV CITADEL_ADDR=:8080 \
-    CITADEL_CONTENT=/app/content
+    CITADEL_CONTENT=/app/content \
+    CITADEL_DATA=/app/data
+VOLUME /app/data
 EXPOSE 8080
 ENTRYPOINT ["citadel", "serve"]

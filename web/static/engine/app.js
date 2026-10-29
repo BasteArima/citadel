@@ -6,12 +6,16 @@ import { indexCourse } from './course.js';
 import { loadState } from './progress.js';
 import { initRich, rich, trackTerms, takeTerms } from './rich.js';
 
-export function start(course) {
+export function start(course, user) {
   const X = indexCourse(course);
   const C = course;
-  const S = loadState(C.id);
-  const save = S.save;
   const STAGES = X.review;
+  const S = loadState(C.id, STAGES, {
+    onRemote: () => route(),
+    onStatus: () => syncUi(),
+    onSignedOut: () => { location.href = '/login?next=' + encodeURIComponent(location.pathname + location.hash); }
+  });
+  const save = S.save;
   const ALL = X.all, TOTAL = X.total;
   const lessonLabel = (C.labels && C.labels.lesson) || 'Урок';
   const blockCtx = { tool: C.tool };
@@ -153,9 +157,30 @@ export function start(course) {
         ic(open ? IC.down : IC.chev, 14) + '<span class="sd-t">' + esc(sec.name) + '</span><span class="sd-cnt">' + doneCount(sec.lessons) + ' / ' + sec.lessons.length + '</span></button>' +
         (open ? '<ul class="sd-list">' + sectionItems(sec) + '</ul>' : '') + '</div>';
     });
+    h += '<div class="sd-user"><div class="sd-user-t"><span class="sd-user-n">' + esc(user.name) + '</span>' +
+      '<span class="sd-sync" id="sd-sync" role="status"></span></div>' +
+      '<button type="button" class="btn sd-out" data-act="logout">Выйти</button></div>';
     side.innerHTML = h;
+    syncUi();
+  }
+  // состояние синхронизации прогресса — под именем в меню
+  function syncUi() {
+    const s = document.getElementById('sd-sync');
+    if (!s) return;
+    const st = S.sync.state;
+    s.className = 'sd-sync' + (st === 'offline' || st === 'signed-out' ? ' warn' : '');
+    s.textContent = {
+      busy: 'синхронизирую…',
+      ok: 'прогресс сохранён на сервере',
+      offline: 'нет связи: прогресс сохранён здесь и уйдёт позже',
+      'signed-out': 'нужно войти снова'
+    }[st] || '';
   }
   side.addEventListener('click', (e) => {
+    if (e.target.closest('[data-act="logout"]')) {
+      fetch('/api/logout', { method: 'POST' }).finally(() => { location.href = '/login'; });
+      return;
+    }
     const s = e.target.closest('[data-sec]');
     if (s) { const sec = X.sections.find((x) => x.id === s.getAttribute('data-sec')); S.ui.open[sec.id] = !secOpen(sec); save(); renderSide(); return; }
     const r = e.target.closest('[data-run]');
@@ -584,6 +609,27 @@ export function start(course) {
       C.howto.forEach((t) => how.appendChild(el('li', null, rich(t))));
       page.appendChild(how);
     }
+    page.appendChild(importBox());
+  }
+
+  // Перенос прогресса из прежней версии курса: в ней на главной есть кнопка «Скачать прогресс».
+  function importBox() {
+    const box = el('details', 'terms import');
+    box.innerHTML = '<summary>Перенести прогресс из прежней версии курса</summary>' +
+      '<p>В прежней версии на главной нажми «Скачать прогресс для Citadel» и выбери этот файл. Отметки добавятся к текущим, ничего не сотрётся.</p>' +
+      '<label class="btn import-f">Выбрать файл<input type="file" accept="application/json,.json" hidden></label>' +
+      '<p class="import-r" role="status"></p>';
+    const out = box.querySelector('.import-r');
+    box.querySelector('input').addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      f.text().then((txt) => {
+        const n = S.importV0(JSON.parse(txt), (id) => ready(id));
+        out.textContent = n ? 'Перенесено отметок: ' + n + '.' : 'Новых отметок в файле нет.';
+        if (n) { renderSide(); renderTop(); }
+      }).catch(() => { out.textContent = 'Не получилось прочитать файл: это должен быть файл прогресса из прежней версии курса.'; });
+    });
+    return box;
   }
 
   // ── словарь ──
@@ -692,4 +738,5 @@ export function start(course) {
   window.addEventListener('hashchange', route);
   applyTheme();
   route();
+  S.startSync();
 }

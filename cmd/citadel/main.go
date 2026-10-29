@@ -3,6 +3,7 @@
 //	citadel serve       run the server
 //	citadel check       validate courses in the content directory
 //	citadel convert-v0  convert the legacy Go course to format v1
+//	citadel backup      write a consistent copy of the database
 package main
 
 import (
@@ -23,6 +24,7 @@ import (
 	"citadel/internal/course"
 	"citadel/internal/legacy"
 	"citadel/internal/server"
+	"citadel/internal/store"
 )
 
 func main() {
@@ -38,6 +40,8 @@ func main() {
 		err = check(os.Args[2:])
 	case "convert-v0":
 		err = convertV0(os.Args[2:])
+	case "backup":
+		err = backup(os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
@@ -49,16 +53,34 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: citadel serve | check | convert-v0 [flags]")
+	fmt.Fprintln(os.Stderr, "usage: citadel serve | check | convert-v0 | backup [flags]")
 }
+
+func dbPath(dataDir string) string { return filepath.Join(dataDir, "citadel.db") }
 
 func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", envOr("CITADEL_ADDR", ":8080"), "listen address")
 	content := fs.String("content", envOr("CITADEL_CONTENT", "content"), "directory with <id>/course.json")
+	data := fs.String("data", envOr("CITADEL_DATA", "data"), "directory for the database")
+	envFile := fs.String("env", ".env", "file with KEY=VALUE settings; real environment variables win")
 	fs.Parse(args)
 
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if err := loadEnvFile(*envFile); err != nil {
+		return err
+	}
+	code := os.Getenv("CITADEL_ACCESS_CODE")
+	if code == "" {
+		return errors.New("CITADEL_ACCESS_CODE is not set: put it in .env (see .env.example)")
+	}
+	var admins []string
+	for _, a := range strings.Split(os.Getenv("CITADEL_ADMINS"), ",") {
+		if a = strings.TrimSpace(a); a != "" {
+			admins = append(admins, a)
+		}
+	}
+
 	courses, err := course.LoadDir(*content)
 	if err != nil {
 		return err
@@ -68,26 +90,65 @@ func serve(args []string) error {
 			return fmt.Errorf("course %s is invalid: %v (run citadel check)", c.ID, errs[0])
 		}
 	}
-	log.Info("courses loaded", "count", len(courses), "dir", *content)
-
-	srv := &http.Server{
-		Addr:              *addr,
-		Handler:           server.New(courses, log),
-		ReadHeaderTimeout: 5 * time.Second,
+	if err := os.MkdirAll(*data, 0o755); err != nil {
+		return err
 	}
+	st, err := store.Open(dbPath(*data))
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	imported, err := st.ImportContent(ctx, courses)
+	if err != nil {
+		return err
+	}
+	for _, im := range imported {
+		log.Info("course", "id", im.ID, "version", im.Version, "new_version", im.New)
+	}
+
+	h, err := server.New(ctx, server.Config{Store: st, AccessCode: code, Admins: admins, Log: log})
+	if err != nil {
+		return err
+	}
+	srv := &http.Server{Addr: *addr, Handler: h, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		srv.Shutdown(shutdown)
 	}()
-	log.Info("listening", "addr", *addr)
+	log.Info("listening", "addr", *addr, "db", dbPath(*data), "admins", len(admins))
 	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	log.Info("stopped")
+	return nil
+}
+
+func backup(args []string) error {
+	fs := flag.NewFlagSet("backup", flag.ExitOnError)
+	data := fs.String("data", envOr("CITADEL_DATA", "data"), "directory with the database")
+	out := fs.String("out", "", "output file (default: <data>/backup-<time>.db)")
+	fs.Parse(args)
+
+	if *out == "" {
+		*out = filepath.Join(*data, "backup-"+time.Now().Format("2006-01-02-150405")+".db")
+	}
+	if _, err := os.Stat(dbPath(*data)); err != nil {
+		return fmt.Errorf("no database: %w", err)
+	}
+	st, err := store.Open(dbPath(*data))
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	if err := st.Backup(context.Background(), *out); err != nil {
+		return err
+	}
+	fmt.Println("wrote", *out)
 	return nil
 }
 
@@ -160,6 +221,33 @@ func convertV0(args []string) error {
 		return err
 	}
 	fmt.Printf("wrote %s (%d bytes)\n", *out, len(data))
+	return nil
+}
+
+// loadEnvFile sets variables from a KEY=VALUE file for local runs. A missing file is fine:
+// in Docker the variables come from compose. Variables already set are not overwritten.
+func loadEnvFile(path string) error {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for i, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if !ok {
+			return fmt.Errorf("%s:%d: expected KEY=VALUE", path, i+1)
+		}
+		key, val = strings.TrimSpace(key), strings.Trim(strings.TrimSpace(val), `"'`)
+		if _, set := os.LookupEnv(key); !set {
+			os.Setenv(key, val)
+		}
+	}
 	return nil
 }
 

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Вход · Citadel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+<script>
+  try {
+    var th = JSON.parse(localStorage.getItem('citadel-ui') || '{}').theme;
+    if (th === 'light' || th === 'dark') document.documentElement.setAttribute('data-theme', th);
+  } catch (e) {}
+</script>
+<style>
+  body { margin: 0; background: var(--bg); color: var(--txt); font-family: var(--body); }
+  .lg { min-height: 100vh; display: flex; flex-wrap: wrap; }
+  .lg-brand { flex: 1 1 480px; min-width: 0; padding: 56px 64px; background: #111418; color: #e3e7ec; display: flex; flex-direction: column; justify-content: space-between; gap: 48px; }
+  .lg-logo { display: inline-flex; align-items: center; gap: 12px; font-weight: 700; font-size: 22px; }
+  .lg-pitch { display: flex; flex-direction: column; gap: 24px; max-width: 560px; }
+  .lg-pitch h1 { margin: 0; font-size: 40px; line-height: 1.15; letter-spacing: -.02em; color: #fff; }
+  .lg-pitch p { margin: 0; font-size: 18px; line-height: 1.5; color: #9aa4b0; }
+  .lg-foot { margin: 0; font-size: 14px; color: #7f8994; }
+  .lg-main { flex: 1 1 420px; min-width: 0; padding: 56px 24px; display: flex; align-items: center; justify-content: center; }
+  .lg-form { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 22px; }
+  .lg-form h2 { margin: 0; font-size: 28px; letter-spacing: -.01em; }
+  .lg-sub { margin: 6px 0 0; color: var(--mut); }
+  .lg-f { display: flex; flex-direction: column; gap: 8px; }
+  .lg-f label { font-size: 14px; font-weight: 600; }
+  .lg-f input { height: 48px; padding: 0 14px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); color: var(--txt); font: 400 16px var(--body); }
+  .lg-f input:focus { outline: 2px solid var(--acc-fill); outline-offset: 1px; border-color: var(--acc-fill); }
+  .lg-rem { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; color: var(--mut); }
+  .lg-rem input { width: 18px; height: 18px; accent-color: var(--acc-fill); }
+  .lg-err { margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--rose-soft); color: var(--rose); font-size: 15px; }
+  .lg-go { min-height: 48px; border: 0; border-radius: 8px; background: var(--acc-fill); color: var(--acc-ink); font: 600 16px var(--body); cursor: pointer; }
+  .lg-go:disabled { opacity: .6; cursor: default; }
+  .lg-note { margin: 0; font-size: 14px; color: var(--mut); }
+  @media (max-width: 640px) { .lg-brand { padding: 32px 24px; gap: 28px; } .lg-pitch h1 { font-size: 30px; } }
+</style>
+</head>
+<body>
+<div class="lg">
+  <section class="lg-brand" aria-label="О Цитадели">
+    <div class="lg-logo"><svg width="36" height="24" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="#9aa4b0" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="#8ab4f8" stroke-width="2.5"/></svg>Citadel</div>
+    <div class="lg-pitch">
+      <svg viewBox="0 0 520 90" width="100%" role="img" aria-label="Цепь из звеньев разных металлов">
+        <rect x="6" y="20" width="110" height="50" rx="25" fill="none" stroke="#9aa4b0" stroke-width="9"/>
+        <rect x="96" y="20" width="110" height="50" rx="25" fill="none" stroke="#d08a5e" stroke-width="9"/>
+        <rect x="186" y="20" width="110" height="50" rx="25" fill="none" stroke="#c9a45a" stroke-width="9"/>
+        <rect x="276" y="20" width="110" height="50" rx="25" fill="none" stroke="#c3cad3" stroke-width="9"/>
+        <rect x="366" y="20" width="110" height="50" rx="25" fill="none" stroke="#343c47" stroke-width="9" stroke-dasharray="12 10"/>
+      </svg>
+      <h1>Курсы с объяснением почему</h1>
+      <p>За каждую освоенную науку мейстер Цитадели куёт звено своей цепи. Здесь звено — это пройденный курс.</p>
+    </div>
+    <p class="lg-foot">Учебные курсы: проходишь, повторяешь, собираешь цепь.</p>
+  </section>
+
+  <main class="lg-main">
+    <form class="lg-form" id="form" novalidate>
+      <div>
+        <h2>Вход</h2>
+        <p class="lg-sub">Имя и код доступа. Код выдаёт владелец сервиса.</p>
+      </div>
+      <div class="lg-f"><label for="name">Имя</label><input id="name" name="name" type="text" autocomplete="username" maxlength="40" required></div>
+      <div class="lg-f"><label for="code">Код доступа</label><input id="code" name="code" type="password" autocomplete="current-password" required></div>
+      <label class="lg-rem"><input id="remember" type="checkbox" checked>Запомнить на этом устройстве</label>
+      <p class="lg-err" id="err" role="alert" hidden></p>
+      <button class="lg-go" id="go" type="submit">Войти</button>
+      <p class="lg-note">Прогресс хранится и на сервере, и в браузере: без сети курс тоже работает, отметки догонят сервер при подключении.</p>
+    </form>
+  </main>
+</div>
+<script>
+  (function () {
+    var form = document.getElementById('form'), err = document.getElementById('err'), go = document.getElementById('go');
+    var name = document.getElementById('name');
+    try { name.value = localStorage.getItem('citadel-name') || ''; } catch (e) {}
+    (name.value ? document.getElementById('code') : name).focus();
+    // куда вернуться после входа: только свой адрес
+    var next = new URLSearchParams(location.search).get('next') || '/';
+    if (next.charAt(0) !== '/' || next.charAt(1) === '/') next = '/';
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      err.hidden = true; go.disabled = true;
+      fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.value, code: document.getElementById('code').value, remember: document.getElementById('remember').checked })
+      }).then(function (r) {
+        return r.json().then(function (body) {
+          if (!r.ok) throw new Error(body.error || ('сервер ответил ' + r.status));
+          try { localStorage.setItem('citadel-name', body.name); } catch (e) {}
+          location.replace(next);
+        });
+      }).catch(function (e) {
+        err.textContent = e.message; err.hidden = false; go.disabled = false;
+      });
+    });
+  })();
+</script>
+</body>
+</html>

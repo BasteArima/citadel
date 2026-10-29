@@ -30,11 +30,13 @@
 | `cmd/citadel/` | программа: `serve`, `check`, `convert-v0` |
 | `internal/course/` | формат v1: типы, реестр блоков, проверка курса |
 | `internal/legacy/` | конвертер Go-курса из v0 в v1 |
-| `internal/server/` | HTTP: API курсов и встроенный фронтенд |
+| `internal/server/` | HTTP: вход и сессии, API курсов и прогресса, встроенный фронтенд |
+| `internal/store/` | SQLite: версии курсов, пользователи, сессии, прогресс, бэкап |
+| `.env.example` | настройки сервиса: код доступа, админы. Свои значения — в `.env`, он не в git |
 | `web/` | фронтенд, встраивается в бинарник: `course.html`, движок на ES-модулях в `static/engine/` (типы блоков — `blocks/`), стили |
 | `content/<id>/course.json` | курсы в формате v1. Go-курс собирается из `legacy/go-course/` командой `task convert` — уроки пока пишутся там |
 | `Taskfile.yml` | команды разработки |
-| `Dockerfile`, `compose.yaml` | образ и запуск на Docker Desktop |
+| `Dockerfile`, `compose.yaml` | образ и запуск на Docker Desktop; база — в томе `citadel-data`. Как поднять у себя — `docs/guides/self-hosting.md` |
 
 **Справочник вне репозитория.** База знаний Go Mafia — `K:\Obsidian\Go-Mafia\backend\theory\` и `...\backend\questions\` — источник для чек-листа покрытия уроков Go-курса. Только чтение.
 

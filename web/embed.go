@@ -6,5 +6,5 @@ import "embed"
 
 // FS is the frontend file tree.
 //
-//go:embed course.html ladder.html static
+//go:embed course.html login.html ladder.html static
 var FS embed.FS
