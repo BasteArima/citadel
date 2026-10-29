@@ -76,7 +76,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	// open to everyone
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
+	mux.Handle("GET /static/", noCache(http.StripPrefix("/static/", http.FileServerFS(static))))
 	mux.HandleFunc("GET /login", s.loginPage)
 	mux.HandleFunc("POST /api/login", s.login)
 	mux.HandleFunc("POST /api/logout", s.logout)
@@ -95,6 +95,15 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.Handle("GET /{$}", s.page(sitePage("catalog.html")))
 	mux.Handle("GET /profile", s.page(sitePage("profile.html")))
 	return s.logRequests(mux), nil
+}
+
+// noCache makes the browser re-check static files: embedded files carry no modification
+// time, so without it an update of the service could leave a stale engine in the cache.
+func noCache(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		h.ServeHTTP(w, r)
+	})
 }
 
 // sitePage serves a page of the site around the courses: the catalog, the profile.

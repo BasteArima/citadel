@@ -50,25 +50,22 @@ export function start(course, user, catalog) {
   const side = document.getElementById('side');
   const page = document.getElementById('page');
   let current = '', currentPart = 1;
-  let crumbs = []; // [{ t, href }] — «где я» для шапки, ставит страница
 
   function renderTop() {
     const due = dueList().length, isLesson = !!(current && ready(current));
     const themes = [['auto', 'Авто', ''], ['light', 'Светлая', IC.sun], ['dark', 'Тёмная', IC.moon]];
+    // общая шапка сайта, как в каталоге и профиле; курс и путь внутри него — в меню слева
     top.innerHTML =
       '<button type="button" class="tb-ic tb-menu" data-act="menu" aria-controls="side" aria-expanded="' + side.classList.contains('open') + '" aria-label="Меню уроков">' + ic(IC.menu, 20) + '</button>' +
-      '<a class="tb-brand" href="#"><span class="tb-logo">' + esc(C.id.slice(0, 3)) + '</span><span class="tb-name">' + esc(C.title) + '</span></a>' +
-      '<nav class="tb-crumbs" aria-label="Где я">' + crumbs.map((c, i) => {
-        const last = i === crumbs.length - 1;
-        return '<span class="tb-cr' + (last ? ' last' : '') + '">' + (i ? ic(IC.chev, 14) : '') +
-          (c.href && !last ? '<a href="' + c.href + '">' + esc(c.t) + '</a>' : '<span' + (last ? ' aria-current="page"' : '') + '>' + esc(c.t) + '</span>') + '</span>';
-      }).join('') + '</nav>' +
+      '<a class="tb-home" href="/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg><span>Citadel</span></a>' +
+      '<nav class="tb-nav" aria-label="Разделы"><a href="/" aria-current="page">Курсы</a><a href="/profile">Профиль</a></nav>' +
       '<div class="tb-tools">' +
-        (due ? '<a class="tb-due" href="#" title="Повторить сегодня">' + ic(IC.repeat) + '<span>Повторить</span><b>' + due + '</b></a>' : '') +
+        (due ? '<a class="tb-due" href="#review" title="Повторить сегодня">' + ic(IC.repeat) + '<span>Повторить</span><b>' + due + '</b></a>' : '') +
         (isLesson ? '<button type="button" class="tb-ic tb-focus" data-act="focus" aria-pressed="' + !!S.ui.focus + '" aria-label="Режим чтения: скрыть меню" title="Режим чтения">' + ic(IC.focus, 18) + '</button>' : '') +
         '<div class="tb-theme" role="group" aria-label="Тема">' + themes.map((t) =>
           '<button type="button" data-theme-set="' + t[0] + '" aria-pressed="' + (S.theme === t[0]) + '"' +
           (t[2] ? ' aria-label="' + t[1] + '" title="' + t[1] + '">' + ic(t[2]) : '>' + t[1]) + '</button>').join('') + '</div>' +
+        '<a class="tb-me" href="/profile" aria-label="Профиль: ' + esc(user.name) + '">' + esc(user.name.slice(0, 1).toUpperCase()) + '</a>' +
       '</div>';
   }
   top.addEventListener('click', (e) => {
@@ -151,7 +148,7 @@ export function start(course, user, catalog) {
     let h = '<div class="sd-prog"><div class="sd-prog-t"><span>Курс</span><span>' + done + ' из ' + TOTAL + '</span></div>' +
       '<div class="bar"><i style="width:' + (done / TOTAL * 100) + '%"></i></div></div>' +
       '<ul class="sd-links"><li><a class="sd-a" href="/">' + ic(IC.back) + '<span class="sd-t">Все курсы</span></a></li>' +
-      sideLink('', IC.home, 'О курсе') +
+      '<li><a class="sd-a sd-course" href="#"' + (current === '' ? ' aria-current="page"' : '') + '>' + ic(IC.home) + '<span class="sd-t">' + esc(C.title) + '</span></a></li>' +
       X.pages.map((p) => sideLink(p.id, IC[p.icon] || IC.book, esc(p.title))).join('') +
       (X.hasGlossary ? sideLink('glossary', IC.book, 'Словарь') : '') + '</ul>';
     X.sections.forEach((sec) => {
@@ -233,27 +230,56 @@ export function start(course, user, catalog) {
     return Math.max(1, Math.round(words / 150));
   }
 
-  // «Простыми словами» и отдельно «Скажи на собесе». Фразу берём из les.say или из абзаца simple,
-  // который начинается с «Как сказать на собесе:». Возвращает элементы для озвучки.
+  // «Простыми словами» — в начале урока. Фраза «Скажи на собесе» живёт в правой колонке:
+  // берём её из les.say или из абзаца simple, который начинается с «Как сказать на собесе:».
   const SAY_RE = /^\s*<b>\s*Как сказать на собесе:?\s*<\/b>\s*/;
+  function sayOf(les) {
+    if (les.say) return les.say;
+    const p = (les.simple || []).find((x) => SAY_RE.test(x));
+    return p ? p.replace(SAY_RE, '') : '';
+  }
+  // Возвращает элементы для озвучки.
   function appendSimple(to, les) {
     const lead = el('p', 'lead', rich(les.lead));
     to.appendChild(lead);
-    if (!les.simple) return [lead];
-    let say = les.say || '';
-    const paras = les.simple.filter((p) => {
-      if (SAY_RE.test(p)) { say = say || p.replace(SAY_RE, ''); return false; }
-      return true;
-    });
+    const paras = (les.simple || []).filter((p) => !SAY_RE.test(p));
+    if (!paras.length) return [lead];
     const box = el('section', 'simple');
     box.setAttribute('aria-label', 'Коротко');
-    box.innerHTML = '<div class="simple-b"><div class="kind">Простыми словами</div>' + paras.map((p) => '<p>' + rich(p) + '</p>').join('') + '</div>' +
-      (say ? '<div class="say"><div class="say-t"><div class="kind">Скажи на собесе</div><p>' + rich(say) + '</p></div>' +
-        '<button type="button" class="btn say-cp">' + ic(IC.copy) + '<span>Скопировать</span></button></div>' : '');
-    const cp = box.querySelector('.say-cp');
-    if (cp) cp.addEventListener('click', () => copyText(box.querySelector('.say p').innerText, cp, box.querySelector('.say p')));
+    box.innerHTML = '<div class="simple-b"><div class="kind">Простыми словами</div>' + paras.map((p) => '<p>' + rich(p) + '</p>').join('') + '</div>';
     to.appendChild(box);
     return [lead].concat(readable(box.querySelector('.simple-b')));
+  }
+
+  // Урок: колонка текста и правая колонка. На узком экране правая уходит под текст.
+  function lessonFrame() {
+    const frame = el('div', 'ls'), main = el('div', 'ls-main'), rail = el('aside', 'ls-rail');
+    rail.setAttribute('aria-label', 'К уроку');
+    frame.appendChild(main); frame.appendChild(rail);
+    page.appendChild(frame);
+    return { main, rail };
+  }
+
+  // Правая колонка: на что опирается урок, термины на странице, фраза для собеса.
+  function fillRail(rail, les, termsLabel) {
+    const deps = (les.node.deps || []).map(meta).filter(Boolean);
+    if (deps.length) {
+      rail.appendChild(el('section', 'card rail-card', '<h2 class="lbl">Опирается на</h2>' +
+        deps.map((d) => ready(d.id) ? '<a href="#' + d.id + '">' + lessonLabel + ' ' + d.n + ' · ' + esc(d.t) + '</a>' : '<span>' + lessonLabel + ' ' + d.n + ' · ' + esc(d.t) + ' (скоро)</span>').join('') + '</section>'));
+    }
+    const keys = takeTerms();
+    if (keys.length) {
+      rail.appendChild(el('section', 'card rail-card', '<h2 class="lbl">' + termsLabel + ' · ' + keys.length + '</h2><div class="rail-terms">' +
+        keys.map((k) => '<button type="button" class="term chip" data-k="' + k + '">' + esc(C.glossary[k].t) + '</button>').join('') + '</div>'));
+    }
+    const say = sayOf(les);
+    if (say) {
+      const card = el('section', 'card rail-card rail-say', '<h2 class="lbl">Скажи на собесе</h2><p>' + rich(say) + '</p>' +
+        '<button type="button" class="btn say-cp">' + ic(IC.copy) + '<span>Скопировать</span></button>');
+      const cp = card.querySelector('.say-cp');
+      cp.addEventListener('click', () => copyText(card.querySelector('p').innerText, cp, card.querySelector('p')));
+      rail.appendChild(card);
+    }
   }
 
   // Блоки по порядку; возвращает элементы, которые читает озвучка.
@@ -332,22 +358,14 @@ export function start(course, user, catalog) {
     to.appendChild(sec);
   }
 
-  function fillTerms(slot, label) {
-    const keys = takeTerms();
-    if (keys.length) {
-      slot.innerHTML = '<details class="terms"><summary>' + label + ': ' + keys.length + ' ' + plural(keys.length, 'термин', 'термина', 'терминов') + '</summary><ul>' +
-        keys.map((k) => '<li><button type="button" class="term" data-k="' + k + '">' + esc(C.glossary[k].t) + '</button></li>').join('') + '</ul></details>';
-    }
-  }
-
-  // полоса частей: отрезок на часть — зелёный засчитана, синий — ты здесь
+  // части урока таблетками: засчитанная — зелёная с галочкой, текущая — залитая
   function partBar(les, k) {
-    const nav = el('nav', 'segbar', les.parts.map((p, i) => {
+    const nav = el('nav', 'pills', '<ol>' + les.parts.map((p, i) => {
       const ok = partDone(les, i);
-      return '<a class="seg-i' + (ok ? ' ok' : '') + (i === k ? ' cur' : '') + '" href="#' + les.id + '/' + (i + 1) + '"' + (i === k ? ' aria-current="step"' : '') + '>' +
-        '<span class="seg-line"></span><span class="seg-k">' + (p.kind === 'theory' ? 'Теория' : 'Практика') + ' · ' + (i + 1) +
-        (ok ? ' · засчитана' : i === k ? ' · сейчас' : '') + '</span><span class="seg-t">' + esc(p.title) + '</span></a>';
-    }).join(''));
+      return '<li><a class="pill' + (ok ? ' ok' : '') + (i === k ? ' cur' : '') + '" href="#' + les.id + '/' + (i + 1) + '"' + (i === k ? ' aria-current="step"' : '') +
+        ' title="' + (p.kind === 'theory' ? 'Теория' : 'Практика') + (ok ? ', засчитана' : '') + '">' +
+        (ok ? ic(IC.check, 13) : '') + '<span>' + (i + 1) + ' ' + esc(p.title) + '</span></a></li>';
+    }).join('') + '</ol>');
     nav.setAttribute('aria-label', 'Части урока');
     return nav;
   }
@@ -426,20 +444,19 @@ export function start(course, user, catalog) {
     const les = X.lesson(id), m = meta(id), st = S.lesson(id), parts = les.parts;
     trackTerms();
     page.innerHTML = '';
-    crumbs = [{ t: m.sec.name, href: '#' }, { t: lessonLabel + ' ' + m.n, href: '#' + id }];
-    page.appendChild(el('div', 'crumb', '<span>' + lessonLabel + ' ' + m.n + ' · ' + esc(m.sec.name) + '</span>' + (les.time ? '<span>' + esc(les.time) + '</span>' : '')));
-    page.appendChild(el('h1', 'title', esc(m.t)));
+    const { main, rail } = lessonFrame();
+    main.appendChild(el('div', 'crumb', '<span>' + esc(m.sec.name) + ' · ' + lessonLabel + ' ' + m.n + '</span>' + (les.time ? '<span>' + esc(les.time) + '</span>' : '')));
+    main.appendChild(el('h1', 'title', esc(m.t)));
 
     if (!parts) {
       rememberPlace('#' + id, lessonLabel + ' ' + m.n + '. ' + m.t);
-      appendSimple(page, les);
-      const slot = el('div'); page.appendChild(slot);
-      appendBlocks(page, les.blocks);
-      if (les.hands) page.appendChild(renderHands(les.hands, st, () => renderSide()));
-      appendTest(page, les, st, false);
-      appendVideos(page, les, 0);
-      appendNextLesson(page, m);
-      fillTerms(slot, 'Словарь урока');
+      appendSimple(main, les);
+      appendBlocks(main, les.blocks);
+      if (les.hands) main.appendChild(renderHands(les.hands, st, () => renderSide()));
+      appendTest(main, les, st, false);
+      appendVideos(main, les, 0);
+      appendNextLesson(main, m);
+      fillRail(rail, les, 'Термины урока');
       return;
     }
 
@@ -447,17 +464,15 @@ export function start(course, user, catalog) {
     rememberPlace('#' + id + '/' + (k + 1), lessonLabel + ' ' + m.n + '. ' + m.t + ' · часть ' + (k + 1));
     const min = partMin(les, k);
     st.seen = st.seen || {};
-    crumbs.push({ t: 'Часть ' + (k + 1) });
 
     let bar = partBar(les, k);
-    page.appendChild(bar);
-    const body = el('div', 'part-body'); page.appendChild(body);
+    main.appendChild(bar);
+    const body = el('div', 'part-body'); main.appendChild(body);
     body.appendChild(el('div', 'pt-meta', 'Часть ' + (k + 1) + ' из ' + parts.length + ' · ' + (part.kind === 'theory' ? 'теория' : 'практика') + ' · ≈ ' + min + ' мин'));
     body.appendChild(el('h2', 'pt-title', esc(part.title)));
     const voice = [];
     if (part.kind === 'theory') { const lr = listenRow(min, voice); if (lr) body.appendChild(lr); }
     if (k === 0) voice.push(...appendSimple(body, les));
-    const termsSlot = el('div'); body.appendChild(termsSlot);
 
     const foot = el('div', 'pt-foot');
     const status = el('div', 'pt-status');
@@ -510,14 +525,19 @@ export function start(course, user, catalog) {
     }
     appendVideos(body, les, k);
 
-    const nav = el('div', 'part-nav');
-    if (k > 0) nav.appendChild(el('a', 'back', '<small>← Часть ' + k + '</small><b>' + esc(parts[k - 1].title) + '</b>')).href = '#' + id + '/' + k;
-    if (k < parts.length - 1) {
-      const nx = parts[k + 1];
-      nav.appendChild(el('a', 'fwd', '<span><small>Дальше · часть ' + (k + 2) + ' · ≈ ' + partMin(les, k + 1) + ' мин</small><b>' + esc(nx.title) + '</b></span>' + ic(IC.arrow, 20))).href = '#' + id + '/' + (k + 2);
+    // низ части одной строкой: назад · что осталось · дальше
+    if (k > 0) {
+      const back = foot.appendChild(el('a', 'btn pf-back', '← Часть ' + k));
+      back.href = '#' + id + '/' + k;
+      back.title = parts[k - 1].title;
     }
     foot.appendChild(status);
-    foot.appendChild(nav);
+    if (k < parts.length - 1) {
+      const nx = parts[k + 1];
+      const fwd = foot.appendChild(el('a', 'btn pri pf-fwd', '<span>Часть ' + (k + 2) + '<span class="pf-t"> · ' + esc(nx.title) + '</span></span>' + ic(IC.arrow, 18)));
+      fwd.href = '#' + id + '/' + (k + 2);
+      fwd.title = 'Дальше · ≈ ' + partMin(les, k + 1) + ' мин';
+    }
     body.appendChild(foot);
     setStatus();
     if (k === parts.length - 1) appendNextLesson(body, m);
@@ -533,7 +553,7 @@ export function start(course, user, catalog) {
       onLeave(() => io.disconnect());
     }
 
-    fillTerms(termsSlot, 'Термины этой части');
+    fillRail(rail, les, 'Термины части');
   }
 
   function renderHands(hd, st, onChange) {
@@ -805,12 +825,11 @@ export function start(course, user, catalog) {
     const id = seg[0];
     current = id;
     currentPart = parseInt(seg[1], 10) || 1;
-    crumbs = [];
     const pg = X.page(id);
-    if (id === 'glossary' && X.hasGlossary) { crumbs = [{ t: 'Словарь' }]; renderGlossary(); }
-    else if (pg) { crumbs = [{ t: pg.title }]; renderPage(pg); }
+    if (id === 'glossary' && X.hasGlossary) renderGlossary();
+    else if (pg) renderPage(pg);
     else if (id && ready(id)) renderLesson(id, currentPart);
-    else { current = ''; crumbs = [{ t: 'О курсе' }]; renderHome(); }
+    else { current = ''; renderHome(); }
     renderSide();
     renderTop();
     applyFocus();
