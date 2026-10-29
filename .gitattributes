@@ -1,0 +1,2 @@
+# Везде LF: content/go/course.json сверяется тестом побайтно, а образ собирается под Linux.
+* text=auto eol=lf
