@@ -50,10 +50,10 @@ func TestRoutes(t *testing.T) {
 		{"/api/courses/go", 200, `"id":"go"`},
 		{"/api/courses/nope", 404, "not found"},
 		{"/api/blocks", 200, `"predict"`},
-		{"/c/go/", 200, "citadelV1ToV0"},
+		{"/c/go/", 200, "/static/engine/main.js"},
 		{"/c/nope/", 404, ""},
-		{"/static/engine/app.js", 200, "function"},
-		{"/static/engine/adapter.js", 200, "citadelV1ToV0"},
+		{"/static/engine/app.js", 200, "export function start"},
+		{"/static/engine/blocks/index.js", 200, "register("},
 		{"/ladder.html", 200, "<meta charset"},
 	}
 	for _, tt := range tests {

@@ -17,7 +17,7 @@ func validCourse() *Course {
 			Children: []*Node{
 				{ID: "a", Kind: KindLesson, Title: "Урок А", Blocks: []Block{
 					{"type": "text", "html": "Про {{iface}} и {{iface|интерфейсы}}, дальше — {{>b}}."},
-					{"type": "question", "kind": "choice", "q": "Да?", "opts": []any{"да", "нет"}, "a": 0.0},
+					{"type": "question", "id": "a.q1", "kind": "choice", "q": "Да?", "opts": []any{"да", "нет"}, "a": 0.0},
 				}},
 				{ID: "b", Kind: KindLesson, Title: "Урок Б", Planned: true, Deps: []string{"a"}},
 			},
@@ -48,6 +48,10 @@ func TestValidateProblems(t *testing.T) {
 			lessonA(c).Blocks[0] = Block{"type": "predict", "code": "fmt.Println(1)"}
 		}, "нет ни вывода, ни ошибки"},
 		{"no tool version", func(c *Course) { c.Tool.Version = "" }, "версия"},
+		{"question without id", func(c *Course) { delete(lessonA(c).Blocks[1], "id") }, `нет обязательного поля "id"`},
+		{"duplicate question id", func(c *Course) {
+			lessonA(c).Blocks = append(lessonA(c).Blocks, Block{"type": "question", "id": "a.q1", "kind": "text", "q": "?", "a": []any{"x"}})
+		}, `id вопроса "a.q1" повторяется`},
 		{"children and blocks", func(c *Course) {
 			lessonA(c).Children = []*Node{{ID: "p", Kind: KindPart, Title: "Ч", Blocks: []Block{{"type": "text", "html": "x"}}}}
 		}, "одновременно"},

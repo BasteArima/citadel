@@ -34,6 +34,25 @@ type v0Course struct {
 	Sections []v0Section            `json:"sections"`
 	Lessons  map[string]v0Lesson    `json:"lessons"`
 	Glossary map[string]course.Term `json:"glossary"`
+	Platform *v0Platform            `json:"platform"`
+}
+
+// v0Platform holds what the old engine kept in its own code: the home page texts
+// and course pages. It lives in data/platform.js; the old engine ignores it.
+type v0Platform struct {
+	About string   `json:"about"`
+	Howto []string `json:"howto"`
+	Pages []v0Page `json:"pages"`
+}
+
+type v0Page struct {
+	ID     string           `json:"id"`
+	Title  string           `json:"title"`
+	Icon   string           `json:"icon"`
+	Tag    string           `json:"tag"`
+	Lead   string           `json:"lead"`
+	About  string           `json:"about"`
+	Blocks []map[string]any `json:"blocks"`
 }
 
 type v0Section struct {
@@ -155,6 +174,20 @@ func Convert(raw []byte, opt Options) (*course.Course, error) {
 			return nil, fmt.Errorf("lesson %s has content but is not in any section", id)
 		}
 	}
+	if p := src.Platform; p != nil {
+		c.About, c.Howto = p.About, p.Howto
+		for _, pg := range p.Pages {
+			node := &course.Node{ID: pg.ID, Kind: course.KindPage, Title: pg.Title, Icon: pg.Icon, Tag: pg.Tag, Lead: pg.Lead, About: pg.About}
+			for i, b := range pg.Blocks {
+				nb, err := convertBlock(b)
+				if err != nil {
+					return nil, fmt.Errorf("page %s, block %d: %w", pg.ID, i+1, err)
+				}
+				node.Blocks = append(node.Blocks, nb)
+			}
+			c.Root = append(c.Root, node)
+		}
+	}
 	return c, nil
 }
 
@@ -198,18 +231,20 @@ func convertLesson(node *course.Node, les v0Lesson) error {
 	var hands course.Block
 	if les.Hands != nil {
 		var err error
-		if hands, err = convertHands(les.Hands); err != nil {
+		if hands, err = convertHands(node.ID, les.Hands); err != nil {
 			return fmt.Errorf("hands: %w", err)
 		}
 	}
 
 	// Questions: "check yourself" ones go to their part, the rest to the final check.
+	// The id keeps the v0 position, so old progress (stored by position) maps onto it.
 	var final []course.Block
 	for i, q := range les.Test {
 		nq, partN, err := convertQuestion(q, split)
 		if err != nil {
 			return fmt.Errorf("test %d: %w", i+1, err)
 		}
+		nq["id"] = fmt.Sprintf("%s.q%d", node.ID, i+1)
 		if split && partN > 0 {
 			if partN > len(parts) {
 				return fmt.Errorf("test %d: part %d does not exist", i+1, partN)
@@ -351,7 +386,7 @@ func convertQuestion(q map[string]any, split bool) (course.Block, int, error) {
 
 var handsFields = []string{"title", "goal", "steps", "trouble", "check"}
 
-func convertHands(h map[string]any) (course.Block, error) {
+func convertHands(lessonID string, h map[string]any) (course.Block, error) {
 	out := course.Block{"type": "hands"}
 	for k, val := range h {
 		if !slices.Contains(handsFields, k) {
@@ -371,6 +406,7 @@ func convertHands(h map[string]any) (course.Block, error) {
 				return nil, fmt.Errorf("check %d: %w", i+1, err)
 			}
 			delete(nq, "type")
+			nq["id"] = fmt.Sprintf("%s.h%d", lessonID, i+1)
 			conv[i] = map[string]any(nq)
 		}
 		out["check"] = conv

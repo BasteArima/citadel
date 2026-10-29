@@ -43,7 +43,7 @@ var nodeKinds = []string{KindSection, KindLesson, KindPart, KindPage}
 // Validate checks the course: passport, tree shape, block types and fields,
 // links to terms and nodes, and questions.
 func Validate(c *Course) []Problem {
-	v := &validator{c: c, ids: map[string]bool{}}
+	v := &validator{c: c, ids: map[string]bool{}, qids: map[string]bool{}}
 	v.passport()
 	c.Walk(func(n *Node, _ *Node) {
 		if n.ID == "" {
@@ -58,13 +58,17 @@ func Validate(c *Course) []Problem {
 	for key, t := range c.Glossary {
 		v.text("словарь "+key, t.Text)
 	}
+	for _, s := range append([]string{c.About}, c.Howto...) {
+		v.text("паспорт", s)
+	}
 	return v.out
 }
 
 type validator struct {
-	c   *Course
-	ids map[string]bool
-	out []Problem
+	c    *Course
+	ids  map[string]bool
+	qids map[string]bool // question ids: progress is stored by them
+	out  []Problem
 }
 
 func (v *validator) errf(path, format string, args ...any) {
@@ -156,9 +160,15 @@ func (v *validator) block(path string, b Block) {
 	case "hands":
 		if check, ok := b["check"].([]any); ok {
 			for i, q := range check {
-				if m, ok := q.(map[string]any); ok {
-					v.question(fmt.Sprintf("%s, вопрос %d", path, i+1), m)
+				m, ok := q.(map[string]any)
+				if !ok {
+					continue
 				}
+				qpath := fmt.Sprintf("%s, вопрос %d", path, i+1)
+				if isEmpty(m["id"]) {
+					v.errf(qpath, "у вопроса нет id: по нему хранится прогресс")
+				}
+				v.question(qpath, m)
 			}
 		}
 	}
@@ -166,10 +176,14 @@ func (v *validator) block(path string, b Block) {
 }
 
 func (v *validator) question(path string, q map[string]any) {
-	kind, _ := q["kind"].(string)
-	if kind == "" {
-		kind, _ = q["type"].(string)
+	// A missing id of a question block is already reported as a required field.
+	if id, _ := q["id"].(string); id != "" {
+		if v.qids[id] {
+			v.errf(path, "id вопроса %q повторяется", id)
+		}
+		v.qids[id] = true
 	}
+	kind, _ := q["kind"].(string)
 	switch kind {
 	case "choice":
 		opts, _ := q["opts"].([]any)

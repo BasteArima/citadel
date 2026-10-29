@@ -20,7 +20,7 @@ var Blocks = []BlockSpec{
 	{Type: "steps", Title: "Пошагово", Required: []string{"items"}},
 	{Type: "anim", Title: "Анимация", Required: []string{"els", "steps"}},
 	{Type: "predict", Title: "Предскажи и запусти", Required: []string{"code"}},
-	{Type: "question", Title: "Вопрос", Required: []string{"kind", "q"}},
+	{Type: "question", Title: "Вопрос", Required: []string{"id", "kind", "q"}},
 	{Type: "hands", Title: "Сделай руками", Required: []string{"steps"}},
 	{Type: "embed", Title: "Свой компонент", Required: []string{"src"}},
 }

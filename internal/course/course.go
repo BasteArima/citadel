@@ -25,6 +25,8 @@ type Course struct {
 	Labels   map[string]string `json:"labels,omitempty"`
 	Review   []int             `json:"review"`
 	Pages    []string          `json:"pages,omitempty"`
+	About    string            `json:"about,omitempty"`
+	Howto    []string          `json:"howto,omitempty"`
 	Glossary map[string]Term   `json:"glossary"`
 	Root     []*Node           `json:"root"`
 }
@@ -64,6 +66,7 @@ type Node struct {
 	Title    string `json:"title"`
 	N        int    `json:"n,omitempty"`
 	Tag      string `json:"tag,omitempty"`
+	Icon     string `json:"icon,omitempty"`
 	About    string `json:"about,omitempty"`
 	Planned  bool   `json:"planned,omitempty"`
 	Practice string `json:"practice,omitempty"`

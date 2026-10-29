@@ -24,6 +24,15 @@
     "exam",
     "tools"
   ],
+  "about": "Курс по Go от слайсов до рантайма, бэкенда и system design: 60 уроков, в каждом — объяснение «почему», схемы, задание руками и проверка. Плюс практикум, где ты строишь сервисы.",
+  "howto": [
+    "Цель — понять, а не прочитать. Схема на каждый урок: прочитал → сделал задание руками → ответил на вопросы «Проверь, что понял» → прошёл проверку урока.",
+    "Слова, подчёркнутые пунктиром, — термины. Нажми на такое слово — появится определение. Все термины собраны в \u003ca href=\"#glossary\"\u003eсловаре курса\u003c/a\u003e.",
+    "Задания руками лежат в папке \u003ccode\u003estudy/practice\u003c/code\u003e репозитория. Запускай из неё: \u003ccode\u003ego run ./i1\u003c/code\u003e. Каждый вывод в уроках получен запуском.",
+    "После каждого ответа в проверке показывается объяснение — и когда ответ верный, и когда нет.",
+    "Через 1, 3 и 7 дней после того, как урок пройден, здесь появится «Повторить сегодня» — 3 вопроса из этого урока.",
+    "Один урок за заход. Пропустил неделю — ничего не сгорело, продолжаешь с того же места."
+  ],
   "glossary": {
     "addressable": {
       "t": "Адресуемое значение",
@@ -352,6 +361,7 @@
                 {
                   "type": "question",
                   "a": 1,
+                  "id": "interfaces.q1",
                   "kind": "choice",
                   "opts": [
                     "Ключевым словом implements после имени типа",
@@ -365,6 +375,7 @@
                 {
                   "type": "question",
                   "a": 2,
+                  "id": "interfaces.q12",
                   "kind": "choice",
                   "opts": [
                     "Только структура",
@@ -861,6 +872,7 @@
                 {
                   "type": "question",
                   "a": 1,
+                  "id": "interfaces.q2",
                   "kind": "choice",
                   "opts": [
                     "var s Shape = Circle{R: 1}",
@@ -874,6 +886,7 @@
                 {
                   "type": "question",
                   "a": 1,
+                  "id": "interfaces.q4",
                   "kind": "choice",
                   "opts": [
                     "Мапы нельзя использовать с методами",
@@ -974,6 +987,7 @@
                 {
                   "type": "question",
                   "a": 1,
+                  "id": "interfaces.q9",
                   "kind": "choice",
                   "opts": [
                     "any быстрее, потому что не хранит тип",
@@ -987,6 +1001,7 @@
                 {
                   "type": "question",
                   "a": 1,
+                  "id": "interfaces.q11",
                   "kind": "choice",
                   "opts": [
                     "Нет: методы нужно объявить у Admin заново",
@@ -1010,6 +1025,7 @@
                   "check": [
                     {
                       "a": 1,
+                      "id": "interfaces.h1",
                       "kind": "choice",
                       "opts": [
                         "fmt не умеет вызывать методы у значений, только у указателей",
@@ -1022,6 +1038,7 @@
                     },
                     {
                       "a": 0,
+                      "id": "interfaces.h2",
                       "kind": "choice",
                       "opts": [
                         "В набор методов *T входят и методы с ресивером T",
@@ -1034,6 +1051,7 @@
                     },
                     {
                       "a": 1,
+                      "id": "interfaces.h3",
                       "kind": "choice",
                       "opts": [
                         "Программа стала печатать «°C»",
@@ -1093,6 +1111,7 @@
                 {
                   "type": "question",
                   "a": 1,
+                  "id": "interfaces.q3",
                   "kind": "choice",
                   "opts": [
                     "Нет, указатель реализует только методы с ресивером *T",
@@ -1109,6 +1128,7 @@
                     "набор методов",
                     "method set"
                   ],
+                  "id": "interfaces.q5",
                   "kind": "text",
                   "q": "Как называется список методов, которые можно вызвать у значения данного типа? Два слова.",
                   "why": "Набор методов (method set). Именно с ним компилятор сверяет интерфейс."
@@ -1116,6 +1136,7 @@
                 {
                   "type": "question",
                   "a": 1,
+                  "id": "interfaces.q6",
                   "kind": "choice",
                   "opts": [
                     "Создаёт глобальный логгер со значением nil",
@@ -1129,6 +1150,7 @@
                 {
                   "type": "question",
                   "a": 2,
+                  "id": "interfaces.q7",
                   "kind": "choice",
                   "opts": [
                     "Рядом с реализацией, чтобы её было проще найти",
@@ -1141,6 +1163,7 @@
                 },
                 {
                   "type": "question",
+                  "id": "interfaces.q8",
                   "items": [
                     "Определяет набор методов интерфейса Shape",
                     "Определяет тип значения справа — Circle или *Circle",
@@ -1155,6 +1178,7 @@
                 {
                   "type": "question",
                   "a": 1,
+                  "id": "interfaces.q10",
                   "kind": "choice",
                   "opts": [
                     "Скомпилируется: имя совпало",
@@ -1652,6 +1676,7 @@
               "check": [
                 {
                   "a": 1,
+                  "id": "iface-design.h1",
                   "kind": "choice",
                   "opts": [
                     "В тесте ошибка в фейке",
@@ -1664,6 +1689,7 @@
                 },
                 {
                   "a": 1,
+                  "id": "iface-design.h2",
                   "kind": "choice",
                   "opts": [
                     "Потому что он лежит в том же пакете",
@@ -1676,6 +1702,7 @@
                 },
                 {
                   "a": 1,
+                  "id": "iface-design.h3",
                   "kind": "choice",
                   "opts": [
                     "Ничем, так даже надёжнее",
@@ -1727,6 +1754,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-design.q1",
               "kind": "choice",
               "opts": [
                 "Интерфейсы ускоряют вызовы методов",
@@ -1740,6 +1768,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-design.q2",
               "kind": "choice",
               "opts": [
                 "Функции должны принимать и возвращать только интерфейсы",
@@ -1753,6 +1782,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-design.q3",
               "kind": "choice",
               "opts": [
                 "Всегда, так код гибче",
@@ -1766,6 +1796,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-design.q4",
               "kind": "choice",
               "opts": [
                 "Рядом с реализацией",
@@ -1779,6 +1810,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-design.q5",
               "kind": "choice",
               "opts": [
                 "Они медленнее",
@@ -1792,6 +1824,7 @@
             {
               "type": "question",
               "a": 2,
+              "id": "iface-design.q6",
               "kind": "choice",
               "opts": [
                 "io.Writer в функции, которая пишет отчёт",
@@ -1805,6 +1838,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-design.q7",
               "kind": "choice",
               "opts": [
                 "Структуру заказа с полями",
@@ -1818,6 +1852,7 @@
             {
               "type": "question",
               "a": 2,
+              "id": "iface-design.q8",
               "kind": "choice",
               "opts": [
                 "Да, в нём есть классы и наследование",
@@ -1834,12 +1869,14 @@
                 "внедрение зависимостей",
                 "dependency injection"
               ],
+              "id": "iface-design.q9",
               "kind": "text",
               "q": "Как называется подход, при котором объект получает зависимость снаружи — через конструктор, а не создаёт её сам? Два слова.",
               "why": "Внедрение зависимостей (dependency injection, DI). В Go его обычно делают руками в main, без контейнеров."
             },
             {
               "type": "question",
+              "id": "iface-design.q10",
               "items": [
                 "Посмотреть, какие методы зависимости сервис реально вызывает",
                 "Объявить у сервиса интерфейс ровно с этими методами",
@@ -2578,6 +2615,7 @@
               "check": [
                 {
                   "a": 1,
+                  "id": "iface-inside.h1",
                   "kind": "choice",
                   "opts": [
                     "5 меньше слова, а 1000 — больше",
@@ -2590,6 +2628,7 @@
                 },
                 {
                   "a": 0,
+                  "id": "iface-inside.h2",
                   "kind": "choice",
                   "opts": [
                     "Указатель уже является адресом и кладётся в слово data как есть; значение же нужно куда-то скопировать",
@@ -2602,6 +2641,7 @@
                 },
                 {
                   "a": 1,
+                  "id": "iface-inside.h3",
                   "kind": "choice",
                   "opts": [
                     "8 и 16: у io.Reader есть методы",
@@ -2644,6 +2684,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-inside.q1",
               "kind": "choice",
               "opts": [
                 "8",
@@ -2657,6 +2698,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-inside.q2",
               "kind": "choice",
               "opts": [
                 "iface хранит данные прямо в себе, eface — по указателю",
@@ -2670,6 +2712,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-inside.q3",
               "kind": "choice",
               "opts": [
                 "Список всех интерфейсов, которые реализует тип",
@@ -2686,6 +2729,7 @@
                 "динамическая диспетчеризация",
                 "dynamic dispatch"
               ],
+              "id": "iface-inside.q4",
               "kind": "text",
               "q": "Как называется вызов метода, при котором конкретная реализация выбирается во время работы программы, а не при компиляции? Два слова.",
               "why": "Динамическая диспетчеризация. В Go она идёт через поле Fun в itab."
@@ -2693,6 +2737,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-inside.q5",
               "kind": "choice",
               "opts": [
                 "Каждый вызов создаёт новый itab",
@@ -2706,6 +2751,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-inside.q6",
               "kind": "choice",
               "opts": [
                 "var r io.Reader = existingPtr, где existingPtr — уже созданный указатель",
@@ -2719,6 +2765,7 @@
             {
               "type": "question",
               "a": 2,
+              "id": "iface-inside.q7",
               "kind": "choice",
               "opts": [
                 "f станет nil",
@@ -2731,6 +2778,7 @@
             },
             {
               "type": "question",
+              "id": "iface-inside.q8",
               "items": [
                 "Прочитать из w указатель на itab",
                 "Взять из itab адрес метода Write в поле Fun",
@@ -2744,6 +2792,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-inside.q9",
               "kind": "choice",
               "opts": [
                 "case *strings.Reader — более точная",
@@ -2757,6 +2806,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-inside.q10",
               "kind": "choice",
               "opts": [
                 "200",
@@ -2770,6 +2820,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-inside.q11",
               "kind": "choice",
               "opts": [
                 "Потому что int не реализует any",
@@ -2783,6 +2834,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-inside.q12",
               "kind": "choice",
               "opts": [
                 "При каждом присваивании значения в интерфейс",
@@ -2796,6 +2848,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "iface-inside.q13",
               "kind": "choice",
               "opts": [
                 "Поиск по всем методам типа",
@@ -3446,6 +3499,7 @@
               "check": [
                 {
                   "a": 1,
+                  "id": "typed-nil.h1",
                   "kind": "choice",
                   "opts": [
                     "find(5) на самом деле создавала ошибку",
@@ -3458,6 +3512,7 @@
                 },
                 {
                   "a": 1,
+                  "id": "typed-nil.h2",
                   "kind": "choice",
                   "opts": [
                     "Интерфейсы нельзя сравнивать",
@@ -3470,6 +3525,7 @@
                 },
                 {
                   "a": 1,
+                  "id": "typed-nil.h3",
                   "kind": "choice",
                   "opts": [
                     "В строке 3 слайс короче",
@@ -3511,6 +3567,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "typed-nil.q1",
               "kind": "choice",
               "opts": [
                 "Когда данные внутри равны nil",
@@ -3524,6 +3581,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "typed-nil.q2",
               "kind": "choice",
               "opts": [
                 "true",
@@ -3537,6 +3595,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "typed-nil.q3",
               "kind": "choice",
               "opts": [
                 "Панику nil pointer dereference",
@@ -3550,6 +3609,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "typed-nil.q4",
               "kind": "choice",
               "opts": [
                 "var err *MyErr; if bad { err = \u0026MyErr{} }; return err",
@@ -3565,6 +3625,7 @@
               "a": [
                 "typed nil"
               ],
+              "id": "typed-nil.q5",
               "kind": "text",
               "q": "Как называется интерфейс, в котором записан тип, а данные — nil-указатель? Два слова, латиницей.",
               "why": "Typed nil. На русском иногда говорят «типизированный nil»."
@@ -3572,6 +3633,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "typed-nil.q6",
               "kind": "choice",
               "opts": [
                 "true",
@@ -3585,6 +3647,7 @@
             {
               "type": "question",
               "a": 3,
+              "id": "typed-nil.q7",
               "kind": "choice",
               "opts": [
                 "true",
@@ -3598,6 +3661,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "typed-nil.q8",
               "kind": "choice",
               "opts": [
                 "if err.(*NotFound) != nil",
@@ -3610,6 +3674,7 @@
             },
             {
               "type": "question",
+              "id": "typed-nil.q9",
               "items": [
                 "var err *NotFound — переменная получает нулевое значение nil",
                 "Ветка if не выполняется",
@@ -3623,6 +3688,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "typed-nil.q10",
               "kind": "choice",
               "opts": [
                 "Ничего: метод вызовется с пустым Object",
@@ -3636,6 +3702,7 @@
             {
               "type": "question",
               "a": 1,
+              "id": "typed-nil.q11",
               "kind": "choice",
               "opts": [
                 "true",
@@ -4003,6 +4070,94 @@
           "title": "Разбор: такси",
           "n": 60,
           "planned": true
+        }
+      ]
+    },
+    {
+      "id": "practice",
+      "kind": "page",
+      "title": "Практикум",
+      "tag": "backend",
+      "icon": "code",
+      "about": "Лестница: 8 уровней по 8 шагов, от первого endpoint до профилирования. Плюс задачи «предскажи вывод» и задания из уроков.",
+      "lead": "Здесь ты не читаешь, а пишешь код. Всё лежит у тебя в репозитории и работает без интернета.",
+      "blocks": [
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "Лестница — сервисы с нуля"
+        },
+        {
+          "type": "text",
+          "html": "8 уровней по 8 шагов: каталог товаров, корзина на Redis, заказы и транзакции, гонки на складе, Kafka, индексы, саги, профилирование. У каждого шага — ТЗ, критерий готовности и вопросы на защиту."
+        },
+        {
+          "type": "text",
+          "html": "\u003ca class=\"start\" href=\"/ladder.html\"\u003e\u003csmall\u003eОткрыть\u003c/small\u003e\u003cb\u003eЛестница бэкендера →\u003c/b\u003e\u003c/a\u003e"
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "Задания к урокам"
+        },
+        {
+          "type": "text",
+          "html": "Запускай из папки \u003ccode\u003estudy/practice\u003c/code\u003e. Сначала предскажи или напиши, потом запусти."
+        },
+        {
+          "type": "table",
+          "head": [
+            "Команда",
+            "Тема",
+            "Урок"
+          ],
+          "rows": [
+            [
+              "\u003ccode\u003ego run ./s1\u003c/code\u003e",
+              "Модель слайса: заголовок, len и cap",
+              "3"
+            ],
+            [
+              "\u003ccode\u003ego run ./s2\u003c/code\u003e",
+              "Нарезка и общий массив",
+              "4"
+            ],
+            [
+              "\u003ccode\u003ego run ./s3\u003c/code\u003e",
+              "append и функции",
+              "5"
+            ],
+            [
+              "\u003ccode\u003ego run ./s4\u003c/code\u003e",
+              "copy, удаление, nil, range",
+              "5"
+            ],
+            [
+              "\u003ccode\u003ego run ./s5\u003c/code\u003e",
+              "Слайсы и память",
+              "26"
+            ],
+            [
+              "\u003ccode\u003ego run ./i1\u003c/code\u003e",
+              "Stringer и наборы методов",
+              "\u003ca href=\"#interfaces\"\u003e10\u003c/a\u003e"
+            ],
+            [
+              "\u003ccode\u003ego test ./i2\u003c/code\u003e",
+              "Развязать сервис и базу: интерфейс и фейк",
+              "\u003ca href=\"#iface-design\"\u003e11\u003c/a\u003e"
+            ],
+            [
+              "\u003ccode\u003ego run ./i3\u003c/code\u003e",
+              "Цена упаковки и type switch",
+              "\u003ca href=\"#iface-inside\"\u003e12\u003c/a\u003e"
+            ],
+            [
+              "\u003ccode\u003ego run ./i4\u003c/code\u003e",
+              "typed nil и сравнение интерфейсов",
+              "\u003ca href=\"#typed-nil\"\u003e13\u003c/a\u003e"
+            ]
+          ]
         }
       ]
     }

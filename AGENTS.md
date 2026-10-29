@@ -31,8 +31,8 @@
 | `internal/course/` | формат v1: типы, реестр блоков, проверка курса |
 | `internal/legacy/` | конвертер Go-курса из v0 в v1 |
 | `internal/server/` | HTTP: API курсов и встроенный фронтенд |
-| `web/` | фронтенд, встраивается в бинарник: `course.html`, движок в `static/engine/`, стили |
-| `content/<id>/course.json` | курсы в формате v1. Go-курс собирается из `legacy/` командой `task convert` |
+| `web/` | фронтенд, встраивается в бинарник: `course.html`, движок на ES-модулях в `static/engine/` (типы блоков — `blocks/`), стили |
+| `content/<id>/course.json` | курсы в формате v1. Go-курс собирается из `legacy/go-course/` командой `task convert` — уроки пока пишутся там |
 | `Taskfile.yml` | команды разработки |
 | `Dockerfile`, `compose.yaml` | образ и запуск на Docker Desktop |
 

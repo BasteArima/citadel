@@ -2,27 +2,24 @@ package legacy
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/dop251/goja"
 
 	"citadel/internal/course"
 )
 
-var (
-	legacyDir   = filepath.Join("..", "..", "legacy", "go-course")
-	adapterPath = filepath.Join("..", "..", "web", "static", "engine", "adapter.js")
-)
+var legacyDir = filepath.Join("..", "..", "legacy", "go-course")
 
-var goOptions = Options{ID: "go", Metal: "iron", Review: []int{1, 3, 7}}
+var goOptions = Options{ID: "go", Metal: "iron", Review: []int{1, 3, 7}, Pages: []string{"glossary", "notes", "exam", "tools"}}
 
-// TestRoundTrip converts the real v0 course to v1, turns it back with the browser
-// adapter and checks that nothing was lost: every block, question and field.
+// TestRoundTrip converts the real v0 course to v1, turns it back with toV0
+// and checks that nothing was lost: every block, question and field.
 func TestRoundTrip(t *testing.T) {
 	raw, err := Load(legacyDir)
 	if err != nil {
@@ -39,82 +36,284 @@ func TestRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	back := runAdapter(t, v1)
-
-	want, got := normalize(t, raw), normalize(t, back)
-	for _, key := range []string{"title", "sub", "go", "sections", "glossary"} {
-		if !reflect.DeepEqual(want[key], got[key]) {
-			t.Errorf("%s differs after round trip", key)
-		}
+	var want, back map[string]any
+	if err := json.Unmarshal(raw, &want); err != nil {
+		t.Fatal(err)
 	}
-	wl, gl := want["lessons"].(map[string]any), got["lessons"].(map[string]any)
-	if len(wl) != len(gl) {
-		t.Fatalf("lessons: %d before, %d after", len(wl), len(gl))
-	}
-	for id, w := range wl {
-		wm, gm := w.(map[string]any), gl[id].(map[string]any)
-		for field := range union(wm, gm) {
-			if !reflect.DeepEqual(wm[field], gm[field]) {
-				t.Errorf("lesson %s: field %q differs after round trip", id, field)
-			}
-		}
+	back = roundJSON(t, toV0(roundJSON(t, v1)))
+	if path := diff("", want, back); path != "" {
+		t.Fatalf("v0 → v1 → v0 differs at %s", path)
 	}
 }
 
-func runAdapter(t *testing.T, v1 []byte) []byte {
+func roundJSON(t *testing.T, v any) map[string]any {
 	t.Helper()
-	src, err := os.ReadFile(adapterPath)
-	if err != nil {
-		t.Fatal(err)
+	data, ok := v.([]byte)
+	if !ok {
+		var err error
+		if data, err = json.Marshal(v); err != nil {
+			t.Fatal(err)
+		}
 	}
-	vm := goja.New()
-	if _, err := vm.RunScript("adapter.js", string(src)); err != nil {
-		t.Fatal(err)
-	}
-	vm.Set("v1json", string(v1))
-	out, err := vm.RunString("JSON.stringify(citadelV1ToV0(JSON.parse(v1json)))")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return []byte(out.String())
-}
-
-// normalize decodes v0 JSON, drops empty fields and sorts each lesson's questions:
-// v1 groups questions by part, so their order in the flat v0 list may change.
-func normalize(t *testing.T, data []byte) map[string]any {
-	t.Helper()
 	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatal(err)
 	}
-	for _, les := range m["lessons"].(map[string]any) {
-		lm := les.(map[string]any)
-		for k, v := range lm {
-			if v == nil || reflect.DeepEqual(v, []any{}) {
-				delete(lm, k)
-			}
-		}
-		if test, ok := lm["test"].([]any); ok {
-			sort.Slice(test, func(i, j int) bool { return jsonString(test[i]) < jsonString(test[j]) })
-		}
-	}
 	return m
 }
 
-func jsonString(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
+// toV0 is the inverse of Convert, written only for this test.
+func toV0(c map[string]any) map[string]any {
+	tool := c["tool"].(map[string]any)
+	out := map[string]any{"title": c["title"], "go": tool["version"], "glossary": c["glossary"]}
+	if s, ok := c["subtitle"]; ok {
+		out["sub"] = s
+	}
+	lessons := map[string]any{}
+	var sections, pages []any
+	for _, n := range c["root"].([]any) {
+		node := n.(map[string]any)
+		switch node["kind"] {
+		case course.KindSection:
+			var list []any
+			for _, l := range node["children"].([]any) {
+				les := l.(map[string]any)
+				list = append(list, map[string]any{"n": les["n"], "id": les["id"], "t": les["title"]})
+				if les["planned"] != true {
+					lessons[les["id"].(string)] = lessonToV0(les)
+				}
+			}
+			sections = append(sections, map[string]any{"id": node["id"], "name": node["title"], "kind": node["tag"], "about": node["about"], "lessons": list})
+		case course.KindPage:
+			pg := pick(node, "id", "title", "icon", "tag", "lead", "about")
+			var blocks []any
+			for _, b := range node["blocks"].([]any) {
+				blocks = append(blocks, blockToV0(b.(map[string]any)))
+			}
+			pg["blocks"] = blocks
+			pages = append(pages, pg)
+		}
+	}
+	out["sections"], out["lessons"] = sections, lessons
+	if pages != nil || c["about"] != nil {
+		out["platform"] = map[string]any{"about": c["about"], "howto": c["howto"], "pages": pages}
+	}
+	return out
 }
 
-func union(a, b map[string]any) map[string]bool {
-	keys := map[string]bool{}
-	for k := range a {
-		keys[k] = true
+func lessonToV0(l map[string]any) map[string]any {
+	les := pick(l, "time", "lead", "simple", "say", "summary", "videos")
+	blocks := []any{}
+	var test []map[string]any
+	addQ := func(b map[string]any, part int) {
+		q := without(b, "type", "kind")
+		q["type"] = b["kind"]
+		if part > 0 {
+			q["part"] = float64(part)
+		}
+		test = append(test, q)
 	}
-	for k := range b {
-		keys[k] = true
+	if children, ok := l["children"].([]any); ok {
+		k := 0
+		for _, p := range children {
+			part := p.(map[string]any)
+			pb, _ := part["blocks"].([]any)
+			switch part["practice"] {
+			case course.PracticeHands:
+				les["hands"] = handsToV0(pb[0].(map[string]any))
+			case course.PracticeTest:
+				for _, b := range pb {
+					addQ(b.(map[string]any), 0)
+				}
+			default:
+				k++
+				blocks = append(blocks, map[string]any{"part": part["title"]})
+				for _, b := range pb {
+					bm := b.(map[string]any)
+					if bm["type"] == "question" {
+						addQ(bm, k)
+					} else {
+						blocks = append(blocks, blockToV0(bm))
+					}
+				}
+			}
+		}
+	} else {
+		for _, b := range l["blocks"].([]any) {
+			bm := b.(map[string]any)
+			switch bm["type"] {
+			case "hands":
+				les["hands"] = handsToV0(bm)
+			case "question":
+				addQ(bm, 0)
+			default:
+				blocks = append(blocks, blockToV0(bm))
+			}
+		}
 	}
-	return keys
+	// The id keeps the v0 position: lesson.qN is test[N-1].
+	sort.Slice(test, func(i, j int) bool { return qnum(test[i]["id"]) < qnum(test[j]["id"]) })
+	tl := make([]any, len(test))
+	for i, q := range test {
+		delete(q, "id")
+		tl[i] = q
+	}
+	les["blocks"], les["test"] = blocks, tl
+	return les
+}
+
+func qnum(id any) int {
+	s := id.(string)
+	n, _ := strconv.Atoi(s[strings.LastIndex(s, ".q")+2:])
+	return n
+}
+
+func blockToV0(b map[string]any) map[string]any {
+	switch b["type"] {
+	case "heading":
+		if b["level"] == float64(3) {
+			return map[string]any{"h3": b["text"]}
+		}
+		return map[string]any{"h": b["text"]}
+	case "text":
+		return map[string]any{"p": b["html"]}
+	case "list":
+		r := map[string]any{"list": b["items"]}
+		if o, ok := b["ordered"]; ok {
+			r["ordered"] = o
+		}
+		return r
+	case "code":
+		return without(b, "type")
+	case "callout":
+		r := map[string]any{b["kind"].(string): b["html"]}
+		if t, ok := b["title"]; ok {
+			r["title"] = t
+		}
+		return r
+	}
+	return map[string]any{b["type"].(string): without(b, "type")}
+}
+
+func handsToV0(b map[string]any) map[string]any {
+	h := without(b, "type")
+	if check, ok := h["check"].([]any); ok {
+		out := make([]any, len(check))
+		for i, q := range check {
+			qm := q.(map[string]any)
+			r := without(qm, "kind", "id")
+			r["type"] = qm["kind"]
+			out[i] = r
+		}
+		h["check"] = out
+	}
+	return h
+}
+
+func pick(m map[string]any, keys ...string) map[string]any {
+	out := map[string]any{}
+	for _, k := range keys {
+		if v, ok := m[k]; ok {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func without(m map[string]any, keys ...string) map[string]any {
+	out := map[string]any{}
+	for k, v := range m {
+		out[k] = v
+	}
+	for _, k := range keys {
+		delete(out, k)
+	}
+	return out
+}
+
+// diff returns the path of the first difference between a and b, or "".
+func diff(path string, a, b any) string {
+	switch av := a.(type) {
+	case map[string]any:
+		bv, ok := b.(map[string]any)
+		if !ok {
+			return path
+		}
+		keys := map[string]bool{}
+		for k := range av {
+			keys[k] = true
+		}
+		for k := range bv {
+			keys[k] = true
+		}
+		sorted := make([]string, 0, len(keys))
+		for k := range keys {
+			sorted = append(sorted, k)
+		}
+		sort.Strings(sorted)
+		for _, k := range sorted {
+			if p := diff(path+"."+k, av[k], bv[k]); p != "" {
+				return p
+			}
+		}
+		return ""
+	case []any:
+		bv, ok := b.([]any)
+		if !ok || len(av) != len(bv) {
+			return fmt.Sprintf("%s (length %d vs %v)", path, len(av), lenOf(b))
+		}
+		for i := range av {
+			if p := diff(fmt.Sprintf("%s[%d]", path, i), av[i], bv[i]); p != "" {
+				return p
+			}
+		}
+		return ""
+	}
+	if !reflect.DeepEqual(a, b) {
+		return fmt.Sprintf("%s (%v vs %v)", path, a, b)
+	}
+	return ""
+}
+
+func lenOf(v any) any {
+	if s, ok := v.([]any); ok {
+		return len(s)
+	}
+	return v
+}
+
+func TestQuestionIDs(t *testing.T) {
+	c, err := ConvertDir(legacyDir, goOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lesson *course.Node
+	c.Walk(func(n *course.Node, _ *course.Node) {
+		if n.ID == "interfaces" {
+			lesson = n
+		}
+	})
+	if lesson == nil {
+		t.Fatal("lesson interfaces not found")
+	}
+	ids := map[string]bool{}
+	for _, p := range lesson.Children {
+		for _, b := range p.Blocks {
+			if b.Type() == "question" {
+				ids[b["id"].(string)] = true
+			}
+			if b.Type() == "hands" {
+				for _, q := range b["check"].([]any) {
+					ids[q.(map[string]any)["id"].(string)] = true
+				}
+			}
+		}
+	}
+	for _, id := range []string{"interfaces.q1", "interfaces.h1"} {
+		if !ids[id] {
+			t.Errorf("question %s not found, have %v", id, ids)
+		}
+	}
 }
 
 func TestConvertBlock(t *testing.T) {
@@ -152,7 +351,8 @@ func TestConvertBlock(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if s := jsonString(got); s != tt.want {
+			data, _ := json.Marshal(got)
+			if s := string(data); s != tt.want {
 				t.Errorf("got  %s\nwant %s", s, tt.want)
 			}
 		})
@@ -162,7 +362,7 @@ func TestConvertBlock(t *testing.T) {
 // TestContentUpToDate fails when content/go/course.json was not regenerated after
 // a change in legacy/go-course or in the converter.
 func TestContentUpToDate(t *testing.T) {
-	c, err := ConvertDir(legacyDir, Options{ID: "go", Metal: "iron", Review: []int{1, 3, 7}, Pages: []string{"glossary", "notes", "exam", "tools"}})
+	c, err := ConvertDir(legacyDir, goOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
