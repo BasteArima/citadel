@@ -28,6 +28,10 @@
 .top-card { padding: 22px; display: flex; flex-direction: column; gap: 14px; }
 .top-card p { margin: 0; color: var(--mut); font-size: 15px; }
 .top-card h2 { font-size: 20px; }
+.cont-strip { display: flex; gap: 6px; }
+.cont-strip i { flex: 1; height: 6px; border-radius: 3px; background: var(--line-2); }
+.cont-strip i.ok { background: var(--good); }
+.cont-strip i.cur { background: var(--acc-fill); }
 .segs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--panel-2); flex-wrap: wrap; }
 .segs button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 7px; background: transparent; color: var(--mut); font: 500 14px var(--body); cursor: pointer; }
 .segs button[aria-pressed="true"] { background: var(--panel); color: var(--txt); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
@@ -63,6 +67,7 @@
 .panels { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
 .panel { flex: 1 1 380px; min-width: 0; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
 .panel p { margin: 0; color: var(--mut); font-size: 15px; }
+.sel { display: block; height: 44px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); color: var(--txt); font: 400 15px var(--body); }
 .note-ok { padding: 10px 14px; border-radius: 9px; background: var(--good-soft); font-size: 15px; }
 .note-bad { padding: 10px 14px; border-radius: 9px; background: var(--rose-soft); color: var(--rose); font-size: 15px; }
 

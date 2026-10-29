@@ -57,8 +57,12 @@ function continueCard(courses, byId) {
   const last = lastPlace();
   let c = last && byId[last.course];
   if (c && last.label) {
+    // полоска частей урока: зелёная — засчитана, синяя — где остановился
+    const parts = Array.isArray(last.parts) ? last.parts : [];
+    const strip = parts.length ? '<div class="cont-strip" role="img" aria-label="Закрыто частей: ' + parts.filter((p) => p === 'ok').length + ' из ' + parts.length + '">' +
+      parts.map((p) => '<i class="' + (p === 'ok' ? 'ok' : p === 'cur' ? 'cur' : '') + '"></i>').join('') + '</div>' : '';
     return '<section class="card top-card" aria-labelledby="ct"><div class="lbl" id="ct">Продолжить с того же места</div>' +
-      '<div><p>' + esc(c.title) + '</p><h2>' + esc(last.label) + '</h2></div>' +
+      '<div><p>' + esc(c.title) + '</p><h2>' + esc(last.label) + '</h2></div>' + strip +
       '<div class="row"><a class="btn btn-l pri" href="/c/' + encodeURIComponent(c.id) + '/' + esc(last.hash || '') + '">Продолжить</a></div></section>';
   }
   // на этом устройстве ещё не открывали уроков — предлагаем первый непройденный в начатом курсе

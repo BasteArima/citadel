@@ -54,9 +54,20 @@ export function start(course, user, catalog) {
   function renderTop() {
     const due = dueList().length, isLesson = !!(current && ready(current));
     const themes = [['auto', 'Авто', ''], ['light', 'Светлая', IC.sun], ['dark', 'Тёмная', IC.moon]];
+    // На телефоне в уроке шапка компактная: где ты («Урок 13 · Часть 2 из 4»), озвучка и полоска частей.
+    // На широком экране этих элементов не видно — там то же есть в меню и над текстом.
+    let lessonHead = '', strip = '';
+    if (isLesson) {
+      const m = meta(current), les = X.lesson(current), ps = les.parts;
+      const k = ps ? Math.min(Math.max(currentPart, 1), ps.length) - 1 : 0;
+      lessonHead = '<div class="tb-lesson"><small>' + lessonLabel + ' ' + m.n + (ps ? ' · часть ' + (k + 1) + ' из ' + ps.length : '') + '</small><b>' + esc(m.t) + '</b></div>' +
+        (ps && ps[k].kind === 'theory' && canSpeak ? '<button type="button" class="tb-ic tb-listen" data-act="listen" aria-label="Слушать часть">' + ic(IC.sound, 18) + '</button>' : '');
+      if (ps) strip = '<div class="tb-strip" aria-hidden="true">' + ps.map((p, i) => '<i class="' + (partDone(les, i) ? 'ok' : '') + (i === k ? ' cur' : '') + '"></i>').join('') + '</div>';
+    }
     // общая шапка сайта, как в каталоге и профиле; курс и путь внутри него — в меню слева
     top.innerHTML =
       '<button type="button" class="tb-ic tb-menu" data-act="menu" aria-controls="side" aria-expanded="' + side.classList.contains('open') + '" aria-label="Меню уроков">' + ic(IC.menu, 20) + '</button>' +
+      lessonHead +
       '<a class="tb-home" href="/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg><span>Citadel</span></a>' +
       '<nav class="tb-nav" aria-label="Разделы"><a href="/" aria-current="page">Курсы</a><a href="/profile">Профиль</a></nav>' +
       '<div class="tb-tools">' +
@@ -66,7 +77,8 @@ export function start(course, user, catalog) {
           '<button type="button" data-theme-set="' + t[0] + '" aria-pressed="' + (S.theme === t[0]) + '"' +
           (t[2] ? ' aria-label="' + t[1] + '" title="' + t[1] + '">' + ic(t[2]) : '>' + t[1]) + '</button>').join('') + '</div>' +
         '<a class="tb-me" href="/profile" aria-label="Профиль: ' + esc(user.name) + '">' + esc(user.name.slice(0, 1).toUpperCase()) + '</a>' +
-      '</div>';
+      '</div>' + strip;
+    document.body.classList.toggle('in-lesson', isLesson);
   }
   top.addEventListener('click', (e) => {
     const b = e.target.closest('[data-theme-set]');
@@ -79,6 +91,8 @@ export function start(course, user, catalog) {
       a.setAttribute('aria-expanded', String(open));
     }
     if (a.getAttribute('data-act') === 'focus') { S.ui.focus = !S.ui.focus; save(); applyFocus(); renderTop(); }
+    // озвучка из шапки на телефоне — та же кнопка, что над текстом части
+    if (a.getAttribute('data-act') === 'listen') { const p = page.querySelector('.listen [data-sp="play"]'); if (p) p.click(); }
   });
   function closeMenu() {
     side.classList.remove('open');
@@ -461,7 +475,10 @@ export function start(course, user, catalog) {
     }
 
     const k = Math.min(Math.max(pn || 1, 1), parts.length) - 1, part = parts[k];
-    rememberPlace('#' + id + '/' + (k + 1), lessonLabel + ' ' + m.n + '. ' + m.t + ' · часть ' + (k + 1));
+    // для «Продолжить с того же места» в каталоге: место и состояние частей урока
+    const remember = () => rememberPlace('#' + id + '/' + (k + 1), lessonLabel + ' ' + m.n + '. ' + m.t + ' · часть ' + (k + 1),
+      parts.map((p, i) => partDone(les, i) ? 'ok' : i === k ? 'cur' : ''));
+    remember();
     const min = partMin(les, k);
     st.seen = st.seen || {};
 
@@ -500,6 +517,8 @@ export function start(course, user, catalog) {
       bar.replaceWith(nb); bar = nb;
       setStatus();
       renderSide();
+      renderTop();
+      remember();
     }
 
     if (part.type === 'hands') body.appendChild(renderHands(part.hands, st, refreshBar));
@@ -578,7 +597,7 @@ export function start(course, user, catalog) {
   // ── страница курса: паспорт, прогресс, повторения, разделы; сбоку — связи с другими курсами ──
   function renderHome() {
     page.innerHTML = '';
-    page.appendChild(el('div', 'crumb', '<span>О курсе</span>'));
+    page.appendChild(el('nav', 'crumb', '<a href="/">Курсы</a> / <span aria-current="page">' + esc(C.title) + '</span>')).setAttribute('aria-label', 'Путь');
     const done = doneCount(ALL), pct = TOTAL ? Math.round(done / TOTAL * 100) : 0;
     const hero = el('section', 'cp-hero metal-' + esc(C.metal));
     hero.innerHTML = '<div class="cp-title">' + linkIcon(C.metal, TOTAL ? done / TOTAL : 0, 64) + '<h1 class="title">' + esc(C.title) + '</h1></div>' +
@@ -712,8 +731,8 @@ export function start(course, user, catalog) {
       return l && l.course === C.id && l.hash && ready(l.hash.replace(/^#/, '').split('/')[0]) ? l : null;
     } catch (e) { return null; }
   }
-  function rememberPlace(hash, label) {
-    try { localStorage.setItem('citadel-last', JSON.stringify({ course: C.id, hash, label, at: Date.now() })); } catch (e) { /* не страшно */ }
+  function rememberPlace(hash, label, parts) {
+    try { localStorage.setItem('citadel-last', JSON.stringify({ course: C.id, hash, label, parts: parts || null, at: Date.now() })); } catch (e) { /* не страшно */ }
   }
 
   // Перенос прогресса из прежней версии курса: в ней на главной есть кнопка «Скачать прогресс».

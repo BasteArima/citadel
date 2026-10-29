@@ -99,12 +99,27 @@ button { font: inherit; color: inherit; }
 body.reading .layout { grid-template-columns: minmax(0, 1fr); }
 body.reading .side { display: none; }
 
+/* компактная шапка урока — только на телефоне (макет «Урок · телефон») */
+.tb-lesson, .tb-listen, .tb-strip { display: none; }
+.tb-lesson { flex: 1; min-width: 0; flex-direction: column; line-height: 1.25; }
+.tb-lesson small { font-size: 12px; color: var(--mut); }
+.tb-lesson b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-strip { flex-basis: 100%; gap: 4px; margin: 2px 0 -2px; }
+.tb-strip i { flex: 1; height: 4px; border-radius: 2px; background: var(--line-2); }
+.tb-strip i.cur { background: var(--acc-fill); }
+.tb-strip i.ok { background: var(--good); }
+
 @media (max-width: 880px) {
   .tb-menu { display: inline-grid; }
   .top { padding: 6px 10px; gap: 6px 10px; }
   .tb-due span, .tb-nav, .tb-focus { display: none; }
   .tb-home { font-size: 16px; }
   .tb-theme button:first-child { display: none; }
+  body.in-lesson .tb-lesson { display: flex; }
+  body.in-lesson .tb-listen { display: inline-grid; }
+  body.in-lesson .tb-strip { display: flex; }
+  body.in-lesson .tb-home, body.in-lesson .tb-theme, body.in-lesson .tb-me, body.in-lesson .tb-due { display: none; }
+  body.in-lesson .tb-tools { margin-left: 0; }
   .layout, body.reading .layout { grid-template-columns: 1fr; }
   .side, body.reading .side { display: block; position: fixed; top: var(--top-h); bottom: 0; left: 0; height: auto;
           width: min(330px, 90vw); z-index: 25; transform: translateX(-102%); transition: transform .2s ease;
@@ -207,6 +222,8 @@ body.reading .side { display: none; }
 /* ── страница ── */
 .crumb { font-size: 12.5px; color: var(--mut); margin-bottom: 10px; }
 .crumb span + span::before { content: " · "; }
+.crumb a { color: var(--mut); }
+.crumb a:hover { color: var(--txt); }
 h1.title { font-size: clamp(30px, 5vw, 40px); line-height: 1.12; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
 .lead { font-size: 18px; color: var(--mut); margin: 14px 0 0; }
 #page h2 { font-size: 24px; line-height: 1.25; margin: 46px 0 0; letter-spacing: -.01em; text-wrap: balance; }

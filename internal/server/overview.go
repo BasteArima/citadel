@@ -17,6 +17,7 @@ type Overview struct {
 	Summary
 	Done    int        `json:"done"`    // lessons passed
 	Solved  int        `json:"solved"`  // questions solved
+	Parts   int        `json:"parts"`   // parts closed; a one-page lesson counts as one part when passed
 	Due     int        `json:"due"`     // lessons with a review due today
 	Started bool       `json:"started"` // any progress at all
 	Next    *LessonRef `json:"next,omitempty"`
@@ -65,6 +66,7 @@ func overviewOf(c *course.Course, items map[string]store.Item, today time.Time) 
 		if n.Kind != course.KindLesson || n.Planned {
 			return
 		}
+		o.Parts += partsClosed(n, items)
 		doneItem, ok := items["done:"+n.ID]
 		if !ok {
 			if o.Next == nil {
@@ -93,4 +95,55 @@ func overviewOf(c *course.Course, items map[string]store.Item, today time.Time) 
 		}
 	})
 	return o
+}
+
+// partsClosed counts the closed parts of a lesson by the same rules as the engine:
+// the final check — when the lesson is passed; a part with questions — when all are answered;
+// a part without them — when it was read to the end.
+func partsClosed(les *course.Node, items map[string]store.Item) int {
+	has := func(key string) bool { _, ok := items[key]; return ok }
+	if len(les.Children) == 0 {
+		if has("done:" + les.ID) {
+			return 1
+		}
+		return 0
+	}
+	n := 0
+	for k, p := range les.Children {
+		if p.Practice == course.PracticeTest {
+			if has("done:" + les.ID) {
+				n++
+			}
+			continue
+		}
+		var ids []string
+		for _, b := range p.Blocks {
+			switch b.Type() {
+			case "question":
+				if id, ok := b["id"].(string); ok {
+					ids = append(ids, id)
+				}
+			case "hands":
+				check, _ := b["check"].([]any)
+				for _, q := range check {
+					if m, ok := q.(map[string]any); ok {
+						if id, ok := m["id"].(string); ok {
+							ids = append(ids, id)
+						}
+					}
+				}
+			}
+		}
+		closed := len(ids) > 0
+		for _, id := range ids {
+			closed = closed && has("q:"+les.ID+":"+id)
+		}
+		if len(ids) == 0 {
+			closed = has("seen:" + les.ID + ":" + strconv.Itoa(k))
+		}
+		if closed {
+			n++
+		}
+	}
+	return n
 }
