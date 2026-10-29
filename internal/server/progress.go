@@ -11,11 +11,12 @@ import (
 
 // Progress keys:
 //
-//	q:<lesson>:<question id> solved question
-//	seen:<lesson>:<part>     read part without questions
-//	done:<lesson>            date the lesson was passed
-//	rev:<lesson>:<n>         review n passed
-var progressKey = regexp.MustCompile(`^(q|seen|done|rev):[A-Za-z0-9._:-]{1,200}$`)
+//	q:<lesson>:<question id>  answered question: 1 — first attempt right, 2 — wrong (decision 0008)
+//	seen:<lesson>:<part>      read part without questions
+//	done:<lesson>             date the lesson was passed
+//	card:<lesson>:<ref>       review card { d: due date, i: interval, s: «remember» streak }
+//	rev:<lesson>:<n>          old lesson review, kept for marks made before decision 0008
+var progressKey = regexp.MustCompile(`^(q|seen|done|card|rev):[A-Za-z0-9._:-]{1,200}$`)
 
 const (
 	maxProgressItems = 10000

@@ -94,6 +94,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	}))
 	mux.Handle("GET /{$}", s.page(sitePage("catalog.html")))
 	mux.Handle("GET /profile", s.page(sitePage("profile.html")))
+	mux.Handle("GET /review", s.page(sitePage("review.html")))
 	return s.logRequests(mux), nil
 }
 

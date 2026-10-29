@@ -21,7 +21,8 @@ function render() {
   const sum = (f) => courses.reduce((s, c) => s + f(c), 0);
   const forged = courses.filter((c) => courseState(c) === 'done').length;
   const forging = courses.filter((c) => courseState(c) === 'active').length;
-  app.innerHTML = header(user, 'profile') +
+  const answered = sum((c) => c.solved), right = sum((c) => c.firstRight);
+  app.innerHTML = header(user, 'profile', sum((c) => c.due)) +
     '<main class="site-main">' +
       '<div class="me-h"><span class="me-av" aria-hidden="true">' + esc(user.name.slice(0, 1).toUpperCase()) + '</span>' +
         '<div><h1>' + esc(user.name) + '</h1><p class="site-sub">' + (user.role === 'admin' ? 'Ученик и админ' : 'Ученик') + '</p></div></div>' +
@@ -29,8 +30,9 @@ function render() {
       '<div class="stats">' +
         stat('Уроков пройдено', sum((c) => c.done)) +
         stat('Частей закрыто', sum((c) => c.parts)) +
-        stat('Вопросов решено', sum((c) => c.solved)) +
-        stat('Повторить сегодня', sum((c) => c.due)) +
+        stat('Вопросов отвечено', answered) +
+        stat('Первых ответов верно', answered ? Math.round(right / answered * 100) + '%' : '—') +
+        stat('Карточек на сегодня', sum((c) => c.due) + ' из ' + sum((c) => c.cards)) +
         stat('Звеньев выковано', forged + ' из ' + courses.length) +
       '</div>' +
       '<div class="panels">' +

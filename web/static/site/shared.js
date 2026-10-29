@@ -17,6 +17,32 @@ export function today() {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
 
+export function addDays(iso, n) {
+  const p = iso.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2] + n), z = (x) => (x < 10 ? '0' : '') + x;
+  return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+}
+
+// Следующий показ карточки по оценке (решение 0008): «Забыл» и «С трудом» — первый и второй
+// интервал курса, «Помню» — третий, а «Помню» подряд — вдвое дольше прошлого интервала.
+export function nextCard(card, grade, review) {
+  const R = review && review.length >= 3 ? review : [1, 3, 7];
+  let i, s = 0;
+  if (grade === 'again') i = R[0];
+  else if (grade === 'hard') i = R[1];
+  else { s = (card.s || 0) + 1; i = s >= 2 ? Math.max(R[2], (card.i || R[2]) * 2) : R[2]; }
+  return { d: addDays(today(), i), i, s };
+}
+
+export function inDays(n) {
+  return n === 1 ? 'завтра' : 'через ' + n + ' ' + plural(n, 'день', 'дня', 'дней');
+}
+
+// Текст курса вне движка: ссылки на уроки и термины становятся просто словами.
+export function courseText(html, course) {
+  return String(html || '').replace(/\{\{>([a-z0-9-]+)(?:\|([^}]+))?\}\}/g, (m, id, txt) => txt || id)
+    .replace(/\{\{([a-z0-9-]+)(?:\|([^}]+))?\}\}/g, (m, k, txt) => txt || (course.glossary[k] ? course.glossary[k].t : k));
+}
+
 // Запрос к API; без сессии — на страницу входа и обратно.
 export async function api(url, opts) {
   const r = await fetch(url, opts);
@@ -47,13 +73,14 @@ export function linkIcon(metal, part, size) {
     (part > 0 ? '<rect class="lk-metal" x="4" y="6" width="48" height="28" rx="14" stroke-width="5"' + dash + '/>' : '') + '</svg>';
 }
 
-// Шапка сайта: логотип, разделы, кто вошёл.
-export function header(user, current) {
-  const nav = [['/', 'Курсы', 'catalog'], ['/profile', 'Профиль', 'profile']];
+// Шапка сайта: логотип, разделы (у «Повторений» — сколько карточек на сегодня), кто вошёл.
+export function header(user, current, due) {
+  const nav = [['/', 'Курсы', 'catalog'], ['/review', 'Повторения', 'review'], ['/profile', 'Профиль', 'profile']];
   return '<header class="site-top">' +
-    '<a class="site-brand" href="/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg>Citadel</a>' +
+    '<a class="site-brand" href="/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg><span class="site-brand-t">Citadel</span></a>' +
     '<nav class="site-nav" aria-label="Разделы">' + nav.map((n) =>
-      '<a href="' + n[0] + '"' + (n[2] === current ? ' aria-current="page"' : '') + '>' + n[1] + '</a>').join('') + '</nav>' +
+      '<a href="' + n[0] + '"' + (n[2] === current ? ' aria-current="page"' : '') + '>' + n[1] +
+      (n[2] === 'review' && due ? ' <b class="nav-badge">' + due + '</b>' : '') + '</a>').join('') + '</nav>' +
     '<span class="site-sp"></span>' +
     '<a class="site-me" href="/profile" aria-label="Профиль: ' + esc(user.name) + '">' + esc(user.name.slice(0, 1).toUpperCase()) + '</a>' +
     '</header>';

@@ -1,7 +1,7 @@
 // Движок курса: шапка, меню, маршруты, страницы урока, главная, словарь, страницы курса,
 // озвучка и повторения. Курс приходит из API в формате v1, блоки рисуют модули из blocks/.
-import { el, esc, ic, IC, today, addDays, hash, seeded, shuffle, plural, copyText, reduceMotion, onLeave, leave, readable } from './util.js';
-import { renderBlock, speakables, questionsOf, renderQuestion } from './blocks/index.js';
+import { el, esc, ic, IC, today, addDays, plural, copyText, reduceMotion, onLeave, leave, readable } from './util.js';
+import { renderBlock, speakables, questionsOf } from './blocks/index.js';
 import { indexCourse } from './course.js';
 import { loadState } from './progress.js';
 import { initRich, rich, trackTerms, takeTerms } from './rich.js';
@@ -11,8 +11,8 @@ import { linkIcon, metalName } from '../site/shared.js';
 export function start(course, user, catalog) {
   const X = indexCourse(course);
   const C = course;
-  const STAGES = X.review;
-  const S = loadState(C.id, STAGES, {
+  const STAGES = X.review; // интервалы карточек: «Забыл», «С трудом», «Помню»
+  const S = loadState(C.id, {
     onRemote: () => route(),
     onStatus: () => syncUi(),
     onSignedOut: () => { location.href = '/login?next=' + encodeURIComponent(location.pathname + location.hash); }
@@ -34,8 +34,7 @@ export function start(course, user, catalog) {
     for (let i = 0; i < ALL.length; i++) if (ready(ALL[i].id) && !isDone(ALL[i].id)) return ALL[i];
     return null;
   }
-  // «через день, потом ещё через 3 и 7 дней» — из интервалов повторений курса
-  function daysList(ds) { return ds.length > 1 ? ds.slice(0, -1).join(', ') + ' и ' + ds[ds.length - 1] : String(ds[0]); }
+  // «через день», «через 3 дня» — из интервалов повторений курса
   function inDays(d) { return d === 1 ? 'через день' : 'через ' + d + ' ' + plural(d, 'день', 'дня', 'дней'); }
 
   // ── тема ──
@@ -52,7 +51,7 @@ export function start(course, user, catalog) {
   let current = '', currentPart = 1;
 
   function renderTop() {
-    const due = dueList().length, isLesson = !!(current && ready(current));
+    const due = cardsDue(), isLesson = !!(current && ready(current));
     const themes = [['auto', 'Авто', ''], ['light', 'Светлая', IC.sun], ['dark', 'Тёмная', IC.moon]];
     // На телефоне в уроке шапка компактная: где ты («Урок 13 · Часть 2 из 4»), озвучка и полоска частей.
     // На широком экране этих элементов не видно — там то же есть в меню и над текстом.
@@ -69,9 +68,11 @@ export function start(course, user, catalog) {
       '<button type="button" class="tb-ic tb-menu" data-act="menu" aria-controls="side" aria-expanded="' + side.classList.contains('open') + '" aria-label="Меню уроков">' + ic(IC.menu, 20) + '</button>' +
       lessonHead +
       '<a class="tb-home" href="/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg><span>Citadel</span></a>' +
-      '<nav class="tb-nav" aria-label="Разделы"><a href="/" aria-current="page">Курсы</a><a href="/profile">Профиль</a></nav>' +
+      '<nav class="tb-nav" aria-label="Разделы"><a href="/" aria-current="page">Курсы</a><a href="/review">Повторения</a><a href="/profile">Профиль</a></nav>' +
       '<div class="tb-tools">' +
-        (due ? '<a class="tb-due" href="#review" title="Повторить сегодня">' + ic(IC.repeat) + '<span>Повторить</span><b>' + due + '</b></a>' : '') +
+        '<button type="button" class="tb-search" data-act="search" aria-label="Поиск по курсу, Ctrl K">' + ic('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', 16) +
+          '<span>Поиск</span><span class="kbd">Ctrl K</span></button>' +
+        (due ? '<a class="tb-due" href="/review" title="Повторить сегодня">' + ic(IC.repeat) + '<span>Повторить</span><b>' + due + '</b></a>' : '') +
         (isLesson ? '<button type="button" class="tb-ic tb-focus" data-act="focus" aria-pressed="' + !!S.ui.focus + '" aria-label="Режим чтения: скрыть меню" title="Режим чтения">' + ic(IC.focus, 18) + '</button>' : '') +
         '<div class="tb-theme" role="group" aria-label="Тема">' + themes.map((t) =>
           '<button type="button" data-theme-set="' + t[0] + '" aria-pressed="' + (S.theme === t[0]) + '"' +
@@ -93,6 +94,7 @@ export function start(course, user, catalog) {
     if (a.getAttribute('data-act') === 'focus') { S.ui.focus = !S.ui.focus; save(); applyFocus(); renderTop(); }
     // озвучка из шапки на телефоне — та же кнопка, что над текстом части
     if (a.getAttribute('data-act') === 'listen') { const p = page.querySelector('.listen [data-sp="play"]'); if (p) p.click(); }
+    if (a.getAttribute('data-act') === 'search') openSearch();
   });
   function closeMenu() {
     side.classList.remove('open');
@@ -109,6 +111,13 @@ export function start(course, user, catalog) {
     if (sec.id in S.ui.open) return S.ui.open[sec.id];
     const m = meta(current);
     return m ? m.sec === sec : sec === X.sections[0];
+  }
+  // «Справочник» в меню ведёт на первую его вкладку и подсвечен на любой из них
+  function refLink() {
+    const first = X.hasNotes ? 'notes' : X.hasGlossary ? 'glossary' : X.hasExam ? 'exam' : '';
+    if (!first) return '';
+    const here = ['notes', 'glossary', 'exam', 'tools'].includes(current);
+    return '<li><a class="sd-a" href="#' + first + '"' + (here ? ' aria-current="page"' : '') + '>' + ic(IC.book) + '<span class="sd-t">Справочник</span></a></li>';
   }
   function sideLink(id, d, t, extra) {
     return '<li><a class="sd-a" href="#' + id + '"' + (current === id ? ' aria-current="page"' : '') + '>' + ic(d) +
@@ -164,7 +173,7 @@ export function start(course, user, catalog) {
       '<ul class="sd-links"><li><a class="sd-a" href="/">' + ic(IC.back) + '<span class="sd-t">Все курсы</span></a></li>' +
       '<li><a class="sd-a sd-course" href="#"' + (current === '' ? ' aria-current="page"' : '') + '>' + ic(IC.home) + '<span class="sd-t">' + esc(C.title) + '</span></a></li>' +
       X.pages.map((p) => sideLink(p.id, IC[p.icon] || IC.book, esc(p.title))).join('') +
-      (X.hasGlossary ? sideLink('glossary', IC.book, 'Словарь') : '') + '</ul>';
+      refLink() + '</ul>';
     X.sections.forEach((sec) => {
       const open = secOpen(sec);
       h += '<div class="sd-sec"><button type="button" class="sd-sec-h" data-sec="' + sec.id + '" aria-expanded="' + open + '">' +
@@ -203,9 +212,33 @@ export function start(course, user, catalog) {
   });
 
   // ── прохождение ──
-  // хранилище вопроса: решённые вопросы урока лежат в st.t по id вопроса
-  function qStore(st, q) {
-    return { solved: () => !!st.t[q.id], solve: () => { st.t[q.id] = 1; save(); } };
+  // Хранилище вопроса: отвеченные вопросы урока лежат в st.t по id — 1, если первая попытка верна,
+  // 2 — если с ошибкой. Ошибка первой попытки сразу становится карточкой повторения (решение 0008).
+  function qStore(st, q, lessonId) {
+    return {
+      state: () => st.t[q.id] || 0,
+      answer: (ok) => {
+        st.t[q.id] = ok ? 1 : 2;
+        save();
+        if (!ok) addCard(lessonId, q.id);
+        renderTop();
+      }
+    };
+  }
+
+  // ── карточки повторения ──
+  // card:<урок>:<id вопроса | say> = { d: когда показать, i: интервал, s: «Помню» подряд }.
+  // Первый показ — через первый интервал курса (по умолчанию завтра). Повторяют на странице «Повторения».
+  function addCard(lessonId, ref) {
+    const key = 'card:' + lessonId + ':' + ref;
+    if (S.cards[key]) return false;
+    S.putCard(key, { d: addDays(today(), STAGES[0]), i: STAGES[0], s: 0 });
+    return true;
+  }
+  const hasCard = (lessonId, ref) => !!S.cards['card:' + lessonId + ':' + ref];
+  function cardsDue() {
+    const t = today();
+    return Object.keys(S.cards).filter((k) => S.cards[k].d <= t).length;
   }
   // Часть теории засчитывается ответами на её вопросы «Проверь себя» (их отдают модули блоков).
   // Если своих вопросов у части нет — когда страница дочитана до конца, но не в момент открытия.
@@ -225,7 +258,7 @@ export function start(course, user, catalog) {
   }
   function markIfDone(les, st) {
     if (!st.done && les.questions.every((q) => st.t[q.id])) {
-      st.done = today(); st.rev = STAGES.map(() => 0); save();
+      st.done = today(); save();
     }
   }
 
@@ -289,9 +322,19 @@ export function start(course, user, catalog) {
     const say = sayOf(les);
     if (say) {
       const card = el('section', 'card rail-card rail-say', '<h2 class="lbl">Скажи на собесе</h2><p>' + rich(say) + '</p>' +
-        '<button type="button" class="btn say-cp">' + ic(IC.copy) + '<span>Скопировать</span></button>');
+        '<div class="rail-say-b"><button type="button" class="btn say-card"></button>' +
+        '<button type="button" class="btn say-cp">' + ic(IC.copy) + '<span>Скопировать</span></button></div>');
       const cp = card.querySelector('.say-cp');
       cp.addEventListener('click', () => copyText(card.querySelector('p').innerText, cp, card.querySelector('p')));
+      // «+ В карточки»: фраза уйдёт в повторения — вспомнить её своими словами
+      const add = card.querySelector('.say-card');
+      const drawAdd = () => {
+        const has = hasCard(les.id, 'say');
+        add.disabled = has;
+        add.innerHTML = has ? ic(IC.check) + '<span>В карточках</span>' : '<span>+ В карточки</span>';
+      };
+      add.addEventListener('click', () => { addCard(les.id, 'say'); drawAdd(); renderTop(); });
+      drawAdd();
       rail.appendChild(card);
     }
   }
@@ -308,7 +351,7 @@ export function start(course, user, catalog) {
   }
 
   // partsMode: вопросы, привязанные к частям теории, на финальной странице не повторяются,
-  // но считаются в общем «Решено N из M».
+  // но считаются в общем «Отвечено N из M».
   function appendTest(to, les, st, partsMode, onChange) {
     if (les.summary) {
       to.appendChild(el('h2', null, 'Главное из урока'));
@@ -326,14 +369,15 @@ export function start(course, user, catalog) {
     const doneBox = el('div');
     function upd() {
       const solved = les.questions.filter((q) => st.t[q.id]).length;
-      tally.textContent = 'Решено ' + solved + ' из ' + les.questions.length + (inParts ? ' — вместе с вопросами в частях теории' : '');
+      const right = les.questions.filter((q) => st.t[q.id] === 1).length;
+      tally.textContent = 'Отвечено ' + solved + ' из ' + les.questions.length + (inParts ? ' — вместе с вопросами в частях теории' : '') + (solved ? ' · верно с первой попытки: ' + right : '');
       markIfDone(les, st);
       renderSide();
       if (onChange) onChange();
-      doneBox.innerHTML = st.done ? '<div class="done-msg"><b>Урок пройден.</b> Его вопросы вернутся на главную через ' + daysList(STAGES) + ' ' + plural(STAGES[STAGES.length - 1], 'день', 'дня', 'дней') + ' — в блоке «Повторить сегодня».</div>' : '';
+      doneBox.innerHTML = st.done ? '<div class="done-msg"><b>Урок пройден.</b> Вопросы, где первая попытка была с ошибкой, уже в <a href="/review">повторениях</a>.</div>' : '';
     }
     shown.forEach((q, j) => {
-      to.appendChild(renderBlock(q, Object.assign({}, blockCtx, { label: 'Вопрос ' + (j + 1) + ' из ' + shown.length, store: qStore(st, q), onSolve: upd })));
+      to.appendChild(renderBlock(q, Object.assign({}, blockCtx, { label: 'Вопрос ' + (j + 1) + ' из ' + shown.length, store: qStore(st, q, les.id), onSolve: upd })));
     });
     to.appendChild(tally); to.appendChild(doneBox); upd();
     if (inParts) {
@@ -466,7 +510,7 @@ export function start(course, user, catalog) {
       rememberPlace('#' + id, lessonLabel + ' ' + m.n + '. ' + m.t);
       appendSimple(main, les);
       appendBlocks(main, les.blocks);
-      if (les.hands) main.appendChild(renderHands(les.hands, st, () => renderSide()));
+      if (les.hands) main.appendChild(renderHands(les.hands, st, les.id, () => renderSide()));
       appendTest(main, les, st, false);
       appendVideos(main, les, 0);
       appendNextLesson(main, m);
@@ -521,7 +565,7 @@ export function start(course, user, catalog) {
       remember();
     }
 
-    if (part.type === 'hands') body.appendChild(renderHands(part.hands, st, refreshBar));
+    if (part.type === 'hands') body.appendChild(renderHands(part.hands, st, les.id, refreshBar));
     else if (part.type === 'test') appendTest(body, les, st, true, refreshBar);
     else {
       voice.push(...appendBlocks(body, part.blocks));
@@ -536,7 +580,7 @@ export function start(course, user, catalog) {
         own.forEach((q, j) => {
           body.appendChild(renderBlock(q, Object.assign({}, blockCtx, {
             label: 'Вопрос ' + (j + 1) + ' из ' + own.length,
-            store: qStore(st, q),
+            store: qStore(st, q, les.id),
             onSolve: () => { markIfDone(les, st); refreshBar(); }
           })));
         });
@@ -575,23 +619,8 @@ export function start(course, user, catalog) {
     fillRail(rail, les, 'Термины части');
   }
 
-  function renderHands(hd, st, onChange) {
-    return renderBlock(hd, Object.assign({}, blockCtx, { store: (q) => qStore(st, q), onChange }));
-  }
-
-  // ── главная ──
-  const revMem = {};
-  function dueList() {
-    const t = today(), out = [];
-    Object.keys(S.lessons).forEach((id) => {
-      const st = S.lessons[id];
-      if (!st.done || !ready(id)) return;
-      st.rev = st.rev || STAGES.map(() => 0);
-      const k = st.rev.indexOf(0);
-      if (k < 0) return;
-      if (t >= addDays(st.done, STAGES[k])) out.push({ id, k });
-    });
-    return out;
+  function renderHands(hd, st, lessonId, onChange) {
+    return renderBlock(hd, Object.assign({}, blockCtx, { store: (q) => qStore(st, q, lessonId), onChange }));
   }
 
   // ── страница курса: паспорт, прогресс, повторения, разделы; сбоку — связи с другими курсами ──
@@ -607,20 +636,21 @@ export function start(course, user, catalog) {
         '<li class="chip">' + X.sections.length + ' ' + plural(X.sections.length, 'раздел', 'раздела', 'разделов') + '</li>' +
         '<li class="chip">' + TOTAL + ' ' + plural(TOTAL, 'урок', 'урока', 'уроков') + '</li>' +
         '<li class="chip"><span class="dot"></span>звено: ' + esc(metalName(C.metal)) + '</li>' +
-        '<li class="chip">повторения: ' + STAGES.join(' · ') + ' ' + plural(STAGES[STAGES.length - 1], 'день', 'дня', 'дней') + '</li>' +
       '</ul>';
     page.appendChild(hero);
 
     // прогресс и куда идти дальше
-    const todo = firstTodo(), last = lastPlace(), due = dueList();
+    const todo = firstTodo(), last = lastPlace(), due = cardsDue();
     const prog = el('section', 'card cp-prog');
     let go = '';
     if (last) go = '<a class="btn pri" href="' + esc(last.hash) + '">Продолжить: ' + esc(last.label) + '</a>';
     else if (todo) go = '<a class="btn pri" href="#' + todo.id + '">' + (done ? 'Продолжить' : 'Начать') + ': ' + lessonLabel.toLowerCase() + ' ' + todo.n + '</a>';
     prog.innerHTML = '<div class="prog"><div class="prog-t"><span>Пройдено ' + done + ' из ' + TOTAL + ' ' + plural(TOTAL, 'урока', 'уроков', 'уроков') + '</span><span>' + pct + '%</span></div>' +
       '<div class="bar" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" aria-label="Прогресс курса"><i style="width:' + pct + '%"></i></div></div>' +
-      '<div class="cp-go">' + go + (due.length ? '<a class="btn" href="#review">Повторить сегодня · ' + due.length + '</a>' : '') +
+      '<div class="cp-go">' + go + (due ? '<a class="btn" href="/review">Повторить сегодня · ' + due + '</a>' : '') +
+      (X.hasNotes ? '<a class="btn" href="#notes">' + ic(IC.book) + ' Конспект</a>' : '') +
       (X.hasGlossary ? '<a class="btn" href="#glossary">' + ic(IC.book) + ' Словарь</a>' : '') +
+      (X.hasExam ? '<a class="btn" href="#exam">' + ic(IC.check) + ' Контрольная</a>' : '') +
       X.pages.map((p) => '<a class="btn" href="#' + p.id + '">' + ic(IC[p.icon] || IC.book) + ' ' + esc(p.title) + '</a>').join('') + '</div>';
     page.appendChild(prog);
 
@@ -630,32 +660,15 @@ export function start(course, user, catalog) {
     grid.appendChild(courseAside());
     page.appendChild(grid);
 
+    // повторения живут на своей странице; здесь — сколько карточек курса и куда идти
+    const nCards = Object.keys(S.cards).length;
     const rev = el('section', 'cp-rev');
     rev.id = 'rev';
-    rev.appendChild(el('h2', null, 'Повторить сегодня'));
+    rev.appendChild(el('h2', null, 'Повторения'));
+    rev.appendChild(el('div', 'review-empty', nCards ?
+      'Карточек в курсе: ' + nCards + (due ? ', на сегодня — ' + due + '. <a href="/review">Повторить сейчас →</a>' : '. На сегодня всё повторено.') :
+      'Карточек пока нет. Они появятся из ошибок первой попытки и из фраз «Скажи на собесе», которые ты отправишь кнопкой «+ В карточки».'));
     main.appendChild(rev);
-    if (!due.length) {
-      rev.appendChild(el('div', 'review-empty', 'Сегодня повторять нечего. Пройди урок — ' + inDays(STAGES[0]) + ' его вопросы появятся здесь' +
-        (STAGES.length > 1 ? ', потом ещё через ' + daysList(STAGES.slice(1)) + ' ' + plural(STAGES[STAGES.length - 1], 'день', 'дня', 'дней') + ' после прохождения' : '') + '.'));
-    }
-    due.forEach((d) => {
-      const les = X.lesson(d.id), m = meta(d.id);
-      const key = d.id + ':' + d.k + ':' + today();
-      revMem[key] = revMem[key] || {};
-      const rnd = seeded(hash(key));
-      const pick = shuffle(les.questions, rnd).slice(0, Math.min(3, les.questions.length));
-      const card = el('div', 'rev-card', '<div class="kind">Повтор ' + (d.k + 1) + ' из ' + STAGES.length + '</div><div class="w-title">' + lessonLabel + ' ' + m.n + '. ' + esc(m.t) + '</div>');
-      pick.forEach((q, j) => {
-        card.appendChild(renderQuestion(q, 'Вопрос ' + (j + 1) + ' из ' + pick.length, {
-          solved: () => !!revMem[key][q.id],
-          solve: () => {
-            revMem[key][q.id] = 1;
-            if (pick.every((x) => revMem[key][x.id])) { S.lessons[d.id].rev[d.k] = 1; save(); card.appendChild(el('div', 'done-msg', '<b>Повтор засчитан.</b>')); renderTop(); }
-          }
-        }));
-      });
-      rev.appendChild(card);
-    });
 
     // разделы: раскрыт тот, где ты сейчас (первый непройденный)
     main.appendChild(el('h2', null, 'Разделы'));
@@ -719,7 +732,8 @@ export function start(course, user, catalog) {
         '<li>Часть — когда ответил на её вопросы «Проверь себя» или дочитал её до конца.</li>' +
         '<li>Урок — когда решены все его вопросы.</li>' +
         '<li>Курс — когда пройдены все уроки. Тогда звено выковано.</li>' +
-        '<li>Пройденный урок возвращается на повторение через ' + daysList(STAGES) + ' ' + plural(STAGES[STAGES.length - 1], 'день', 'дня', 'дней') + '.</li>' +
+        '<li>Считается первая попытка ответа. Ошибка не мешает пройти часть, но вопрос становится карточкой повторения.</li>' +
+        '<li>Карточка возвращается по твоей оценке: «Забыл» — ' + inDays(STAGES[0]) + ', «С трудом» — ' + inDays(STAGES[1] || STAGES[0]) + ', «Помню» — ' + inDays(STAGES[2] || STAGES[0]) + '.</li>' +
       '</ul></section>';
     return aside;
   }
@@ -755,7 +769,29 @@ export function start(course, user, catalog) {
     return box;
   }
 
-  // ── словарь ──
+  // ── справочник: вкладки Конспект · Словарь · Контрольная · Инструменты ──
+  function refTabs(cur) {
+    const tabs = [];
+    if (X.hasNotes) tabs.push(['notes', 'Конспект']);
+    if (X.hasGlossary) tabs.push(['glossary', 'Словарь']);
+    if (X.hasExam) tabs.push(['exam', 'Контрольная']);
+    if (X.page('tools')) tabs.push(['tools', X.page('tools').title]);
+    const nav = el('nav', 'ref-tabs', tabs.map((t) => '<a href="#' + t[0] + '"' + (t[0] === cur ? ' aria-current="page"' : '') + '>' + esc(t[1]) + '</a>').join(''));
+    nav.setAttribute('aria-label', 'Справочник курса');
+    return nav;
+  }
+  function refHead(cur, title, lead) {
+    page.innerHTML = '';
+    page.appendChild(el('nav', 'crumb', '<a href="/">Курсы</a> / <a href="#">' + esc(C.title) + '</a> / <span aria-current="page">Справочник</span>')).setAttribute('aria-label', 'Путь');
+    page.appendChild(refTabs(cur));
+    const box = el('div', 'ref-page');
+    box.appendChild(el('h1', 'title', title));
+    if (lead) box.appendChild(el('p', 'lead', lead));
+    page.appendChild(box);
+    return box;
+  }
+
+  // ── словарь: поиск по-русски и по-английски, где термин встречается ──
   function renderGlossary() {
     const refs = {};
     ALL.filter((l) => ready(l.id)).forEach((l) => {
@@ -763,29 +799,248 @@ export function start(course, user, catalog) {
       let m;
       while ((m = re.exec(txt))) { (refs[m[1]] = refs[m[1]] || {})[l.id] = 1; }
     });
-    page.innerHTML = '';
-    page.appendChild(el('div', 'crumb', '<span>Словарь</span>'));
-    page.appendChild(el('h1', 'title', 'Словарь курса'));
     const keys = Object.keys(C.glossary).sort((a, b) => C.glossary[a].t.localeCompare(C.glossary[b].t, 'ru'));
-    page.appendChild(el('p', 'lead', keys.length + ' ' + plural(keys.length, 'термин', 'термина', 'терминов') + '. Словарь пополняется вместе с уроками.'));
+    const box = refHead('glossary', 'Словарь', 'Термины курса. В тексте уроков они подчёркнуты пунктиром — нажми, и откроется определение.');
+    const find = el('div', 'gl-find', '<label for="gl-q" class="sr-only">Поиск по словарю</label>' + ic('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', 18) +
+      '<input id="gl-q" type="search" autocomplete="off" placeholder="Термин по-русски или по-английски"><span class="gl-n" aria-live="polite"></span>');
+    box.appendChild(find);
     const dl = el('dl', 'gloss');
     keys.forEach((k) => {
       const g = C.glossary[k];
       const r = refs[k] ? Object.keys(refs[k]).map((id) => '<a href="#' + id + '">урок ' + meta(id).n + '</a>').join(', ') : '';
-      dl.appendChild(el('dt', null, esc(g.t) + (g.en ? '<small>' + esc(g.en) + '</small>' : '')));
-      dl.appendChild(el('dd', null, esc(g.d) + (r ? '<span class="ref">Встречается: ' + r + '</span>' : '')));
+      const dt = el('dt', null, esc(g.t) + (g.en ? '<small>' + esc(g.en) + '</small>' : ''));
+      const dd = el('dd', null, esc(g.d) + (r ? '<span class="ref">Встречается: ' + r + '</span>' : ''));
+      dt.dataset.k = dd.dataset.k = (g.t + ' ' + (g.en || '') + ' ' + k).toLowerCase().replace(/ё/g, 'е');
+      dl.appendChild(dt); dl.appendChild(dd);
     });
-    page.appendChild(dl);
+    box.appendChild(dl);
+    const empty = el('p', 'gl-empty', 'Такого термина в словаре нет.');
+    empty.hidden = true;
+    box.appendChild(empty);
+    const inp = find.querySelector('input'), cnt = find.querySelector('.gl-n');
+    const filter = () => {
+      const q = inp.value.trim().toLowerCase().replace(/ё/g, 'е');
+      let n = 0;
+      [].forEach.call(dl.children, (x) => { const hit = !q || x.dataset.k.includes(q); x.hidden = !hit; if (hit && x.tagName === 'DT') n++; });
+      cnt.textContent = n + ' из ' + keys.length;
+      empty.hidden = n > 0;
+    };
+    inp.addEventListener('input', filter);
+    // пришли из поиска по термину — сразу отфильтровать
+    if (glossaryQuery) { inp.value = glossaryQuery; glossaryQuery = ''; }
+    filter();
+  }
+
+  // ── конспект: «Главное» и «Скажи на собесе» всех уроков, фильтр, печать ──
+  function renderNotes() {
+    const box = refHead('notes', 'Конспект', '«Главное» каждого урока на одной странице — чтобы освежить перед собесом.');
+    const avail = ALL.filter((l) => ready(l.id));
+    const passed = avail.filter((l) => isDone(l.id));
+    let all = !passed.length;
+    const tools = el('div', 'nt-tools', '<div class="segs" role="group" aria-label="Какие уроки показать">' +
+      '<button type="button" data-f="done">Пройденные · ' + passed.length + '</button><button type="button" data-f="all">Все готовые · ' + avail.length + '</button></div>' +
+      '<button type="button" class="btn" data-print>Печать в PDF</button>');
+    box.appendChild(tools);
+    const list = el('div', 'nt-list');
+    box.appendChild(list);
+    const draw = () => {
+      tools.querySelectorAll('[data-f]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.f === 'all') === all)));
+      const shown = all ? avail : passed;
+      list.innerHTML = '';
+      let sec = null;
+      shown.forEach((l) => {
+        if (l.sec !== sec) { sec = l.sec; list.appendChild(el('h2', 'nt-sec', esc(sec.name))); }
+        const les = X.lesson(l.id), say = sayOf(les);
+        const art = el('article', 'card nt-l');
+        art.innerHTML = '<div class="nt-h"><h3><span>' + l.n + '</span><a href="#' + l.id + '">' + esc(l.t) + '</a></h3>' +
+          '<span class="nt-st' + (isDone(l.id) ? ' ok' : '') + '">' + (isDone(l.id) ? 'пройден' : 'не пройден') + '</span></div>' +
+          (les.summary && les.summary.length ? '<ul class="list">' + les.summary.map((s) => '<li>' + rich(s) + '</li>').join('') + '</ul>' : '') +
+          (say ? '<div class="nt-say"><span class="lbl">Скажи на собесе</span><p>' + rich(say) + '</p></div>' : '');
+        list.appendChild(art);
+      });
+      if (!all && avail.length > passed.length) {
+        list.appendChild(el('p', 'nt-more', 'Ещё ' + (avail.length - passed.length) + ' ' + plural(avail.length - passed.length, 'урок появится', 'урока появятся', 'уроков появятся') + ' здесь, когда ты их пройдёшь.'));
+      }
+    };
+    tools.addEventListener('click', (e) => {
+      const f = e.target.closest('[data-f]');
+      if (f) { all = f.dataset.f === 'all'; draw(); }
+      if (e.target.closest('[data-print]')) window.print();
+    });
+    draw();
+  }
+
+  // ── контрольная по разделу: N вопросов, засчитывается первая попытка, ошибки — в карточки ──
+  function renderExam() {
+    const secs = X.sections.map((s) => {
+      const qs = [];
+      s.lessons.filter((l) => X.ready(l.id)).forEach((l) => X.lesson(l.id).questions.forEach((q) => qs.push({ q, lesson: l })));
+      return { sec: s, qs, lessons: s.lessons.filter((l) => X.ready(l.id)) };
+    }).filter((x) => x.qs.length);
+    const box = refHead('exam', 'Контрольная', 'Вопросы раздела вперемешку. Считается первый ответ. Ошибки не штрафуют — они уходят в повторения и в список «что повторить».');
+    if (!secs.length) { box.appendChild(el('p', 'review-empty', 'В курсе пока нет готовых уроков с вопросами.')); return; }
+    const start = el('div', 'card ex-start');
+    start.innerHTML = '<div class="ex-f"><label for="ex-sec" class="lbl">Раздел</label><select id="ex-sec" class="sel">' +
+      secs.map((s, i) => '<option value="' + i + '">' + esc(s.sec.name) + ' · ' + s.qs.length + ' ' + plural(s.qs.length, 'вопрос', 'вопроса', 'вопросов') + '</option>').join('') + '</select></div>' +
+      '<div class="ex-f"><label for="ex-n" class="lbl">Вопросов</label><select id="ex-n" class="sel"></select></div>' +
+      '<button type="button" class="btn pri" id="ex-go">Начать</button>';
+    box.appendChild(start);
+    const secSel = start.querySelector('#ex-sec'), nSel = start.querySelector('#ex-n');
+    const fillN = () => {
+      const max = secs[+secSel.value].qs.length;
+      nSel.innerHTML = [5, 8, 12, 20].filter((n) => n < max).concat([max]).map((n) => '<option' + (n === Math.min(8, max) ? ' selected' : '') + '>' + n + '</option>').join('');
+    };
+    secSel.addEventListener('change', fillN);
+    fillN();
+    start.querySelector('#ex-go').addEventListener('click', () => {
+      const s = secs[+secSel.value], n = +nSel.value;
+      const pool = s.qs.slice();
+      for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+      runExam(box, s, pool.slice(0, n));
+    });
+  }
+
+  function runExam(box, s, qs) {
+    const res = []; // по вопросу: true — верно, false — ошибка
+    let k = 0;
+    box.querySelectorAll('.ex-start, .ex-run').forEach((x) => x.remove());
+    const run = el('div', 'ex-run');
+    box.appendChild(run);
+    const nums = s.lessons.map((l) => l.n);
+    const draw = () => {
+      run.innerHTML = '';
+      run.appendChild(el('p', 'ex-meta', esc(s.sec.name) + ' · уроки ' + nums[0] + (nums.length > 1 ? '–' + nums[nums.length - 1] : '') + ' · ' + qs.length + ' ' + plural(qs.length, 'вопрос', 'вопроса', 'вопросов')));
+      run.appendChild(el('ol', 'ex-bar', qs.map((x, i) => '<li class="' + (i < res.length ? (res[i] ? 'ok' : 'no') : i === k ? 'cur' : '') + '" aria-label="Вопрос ' + (i + 1) + (i < res.length ? (res[i] ? ': верно' : ': ошибка') : '') + '"></li>').join('')));
+      const grid = el('div', 'ex-grid'), main = el('div', 'ex-main'), side = el('aside', 'ex-side');
+      grid.appendChild(main); grid.appendChild(side); run.appendChild(grid);
+      const right = res.filter(Boolean).length;
+      const miss = qs.filter((x, i) => res[i] === false);
+      const drawSide = () => {
+        const r = res.filter(Boolean).length, m = qs.filter((x, i) => res[i] === false);
+        side.innerHTML = '<section class="card rail-card"><h2 class="lbl">Счёт</h2><p class="ex-score"><b>' + r + '</b> из ' + res.length + '</p></section>' +
+          '<section class="card rail-card"><h2 class="lbl">Что повторить</h2>' + (m.length ?
+            '<ul class="ex-miss">' + m.map((x) => '<li><a href="#' + x.lesson.id + '">' + lessonLabel + ' ' + x.lesson.n + ' · ' + esc(x.lesson.t) + '</a></li>').join('') + '</ul><p>Эти вопросы уже в повторениях.</p>' :
+            '<p>' + (res.length ? 'Пока без ошибок.' : 'Здесь появятся уроки, где ошибся.') + '</p>') + '</section>';
+        run.querySelectorAll('.ex-bar li').forEach((li, i) => { li.className = i < res.length ? (res[i] ? 'ok' : 'no') : i === k ? 'cur' : ''; });
+      };
+      drawSide();
+      if (k >= qs.length) {
+        main.appendChild(el('div', 'card ex-done', '<h2>' + (right === qs.length ? 'Всё верно' : 'Контрольная пройдена') + '</h2>' +
+          '<p>Верно с первой попытки: ' + right + ' из ' + qs.length + '.' + (miss.length ? ' Ошибки — в «Что повторить» и в повторениях.' : '') + '</p>' +
+          '<div class="cp-go"><button type="button" class="btn pri" data-again>Ещё раз</button><a class="btn" href="/review">Повторения</a></div>'));
+        main.querySelector('[data-again]').addEventListener('click', () => renderExam());
+        return;
+      }
+      const x = qs[k];
+      let answered = 0;
+      const store = {
+        state: () => answered,
+        answer: (ok) => {
+          answered = ok ? 1 : 2;
+          res.push(ok);
+          if (!ok) addCard(x.lesson.id, x.q.id);
+          next.disabled = false;
+          drawSide();
+          renderTop();
+        }
+      };
+      main.appendChild(renderBlock(x.q, Object.assign({}, blockCtx, { label: 'Вопрос ' + (k + 1) + ' из ' + qs.length + ' · ' + lessonLabel.toLowerCase() + ' ' + x.lesson.n, store, onSolve: () => {} })));
+      const foot = el('div', 'ex-foot', '<span class="ex-hint">Цифры 1–4 выбирают ответ</span>');
+      const next = foot.appendChild(el('button', 'btn pri', k + 1 < qs.length ? 'Следующий вопрос →' : 'Итог →'));
+      next.type = 'button';
+      next.disabled = true;
+      next.addEventListener('click', () => { k++; draw(); window.scrollTo(0, 0); });
+      main.appendChild(foot);
+    };
+    draw();
   }
 
   // ── страница курса (практикум, инструменты…) — те же блоки, что в уроках ──
   function renderPage(p) {
+    // «Инструменты» — вкладка справочника, остальные страницы — сами по себе
+    if (p.id === 'tools') {
+      const box = refHead('tools', esc(p.title), p.lead ? rich(p.lead) : '');
+      appendBlocks(box, p.blocks || []);
+      return;
+    }
     page.innerHTML = '';
     page.appendChild(el('div', 'crumb', '<span>' + esc(p.title) + '</span>'));
     page.appendChild(el('h1', 'title', esc(p.title)));
     if (p.lead) page.appendChild(el('p', 'lead', rich(p.lead)));
     appendBlocks(page, p.blocks || []);
   }
+
+  // ── поиск по Ctrl K: уроки, части, страницы курса, термины ──
+  // Пока ищет по этому курсу; фильтр «все курсы» появится, когда курсов станет несколько.
+  let glossaryQuery = '';
+  const norm = (s) => String(s || '').replace(/<[^>]+>/g, ' ').toLowerCase().replace(/ё/g, 'е');
+  function searchIndex() {
+    const out = [];
+    ALL.filter((l) => ready(l.id)).forEach((l) => {
+      out.push({ g: 'les', t: l.t, sub: l.sec.name + ' · ' + lessonLabel + ' ' + l.n, href: '#' + l.id, k: norm(l.t) });
+      (X.lesson(l.id).parts || []).forEach((p, i) => out.push({ g: 'les', t: p.title, sub: lessonLabel + ' ' + l.n + ' · часть ' + (i + 1), href: '#' + l.id + '/' + (i + 1), k: norm(p.title) }));
+    });
+    X.pages.forEach((p) => out.push({ g: 'les', t: p.title, sub: 'Страница курса', href: '#' + p.id, k: norm(p.title) }));
+    Object.keys(C.glossary).forEach((key) => {
+      const g = C.glossary[key];
+      out.push({ g: 'term', t: g.t, sub: g.d, term: g.t, href: '#glossary', k: norm(g.t + ' ' + (g.en || '')), kd: norm(g.d) });
+    });
+    return out;
+  }
+  let searchBox = null;
+  function openSearch() {
+    if (searchBox) return;
+    const idx = searchIndex();
+    searchBox = el('div', 'sk-back');
+    searchBox.innerHTML = '<div class="sk" role="dialog" aria-modal="true" aria-label="Поиск по курсу">' +
+      '<div class="sk-in">' + ic('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', 20) +
+      '<label for="sk-q" class="sr-only">Поиск по урокам и терминам</label>' +
+      '<input id="sk-q" type="search" autocomplete="off" placeholder="Урок, часть или термин"><span class="kbd">Esc</span></div>' +
+      '<div class="sk-scope"><span class="chip acc">' + esc(C.title) + '</span></div>' +
+      '<div class="sk-res" role="listbox" aria-label="Результаты"></div>' +
+      '<div class="sk-foot"><span><span class="kbd">↑</span> <span class="kbd">↓</span> выбрать</span><span><span class="kbd">Enter</span> открыть</span><span><span class="kbd">Ctrl K</span> поиск откуда угодно</span></div></div>';
+    document.body.appendChild(searchBox);
+    const inp = searchBox.querySelector('input'), res = searchBox.querySelector('.sk-res');
+    let hits = [], act = 0;
+    const draw = () => {
+      const q = norm(inp.value).trim();
+      hits = q ? idx.filter((x) => x.k.includes(q)).concat(idx.filter((x) => x.kd && !x.k.includes(q) && x.kd.includes(q))) : idx.filter((x) => x.g === 'les').slice(0, 8);
+      const les = hits.filter((x) => x.g === 'les').slice(0, 8), terms = hits.filter((x) => x.g === 'term').slice(0, 6);
+      hits = les.concat(terms);
+      act = Math.min(act, Math.max(hits.length - 1, 0));
+      const row = (x, i) => '<a class="sk-r' + (i === act ? ' on' : '') + '" role="option" aria-selected="' + (i === act) + '" data-i="' + i + '" href="' + x.href + '">' +
+        '<span class="sk-ic ' + x.g + '">' + (x.g === 'term' ? 'Aa' : ic(IC.book, 16)) + '</span>' +
+        '<span class="sk-t"><b>' + esc(x.t) + '</b><small>' + esc(String(x.sub).slice(0, 110)) + '</small></span></a>';
+      res.innerHTML = (les.length ? '<div class="lbl sk-g">' + (q ? 'Уроки и части' : 'Уроки') + '</div>' + les.map(row).join('') : '') +
+        (terms.length ? '<div class="lbl sk-g">Термины</div>' + terms.map((x, j) => row(x, les.length + j)).join('') : '') +
+        (!hits.length ? '<p class="sk-none">Ничего не нашлось. Поиск идёт по названиям уроков, частей и словарю курса.</p>' : '');
+    };
+    const go = (x) => {
+      if (!x) return;
+      if (x.g === 'term') glossaryQuery = x.term;
+      closeSearch();
+      if (location.hash === x.href) route(); else location.hash = x.href;
+    };
+    inp.addEventListener('input', () => { act = 0; draw(); });
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); act = Math.min(act + 1, hits.length - 1); draw(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); act = Math.max(act - 1, 0); draw(); }
+      else if (e.key === 'Enter') { e.preventDefault(); go(hits[act]); }
+    });
+    res.addEventListener('click', (e) => { const a = e.target.closest('[data-i]'); if (a) { e.preventDefault(); go(hits[+a.dataset.i]); } });
+    searchBox.addEventListener('click', (e) => { if (e.target === searchBox) closeSearch(); });
+    draw();
+    inp.focus();
+  }
+  function closeSearch() {
+    if (!searchBox) return;
+    searchBox.remove();
+    searchBox = null;
+  }
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K' || e.key === 'л' || e.key === 'Л')) { e.preventDefault(); if (searchBox) closeSearch(); else openSearch(); }
+    else if (e.key === 'Escape' && searchBox) closeSearch();
+  });
 
   // ── всплывающее определение ──
   const pop = document.getElementById('pop');
@@ -846,6 +1101,8 @@ export function start(course, user, catalog) {
     currentPart = parseInt(seg[1], 10) || 1;
     const pg = X.page(id);
     if (id === 'glossary' && X.hasGlossary) renderGlossary();
+    else if (id === 'notes' && X.hasNotes) renderNotes();
+    else if (id === 'exam' && X.hasExam) renderExam();
     else if (pg) renderPage(pg);
     else if (id && ready(id)) renderLesson(id, currentPart);
     else { current = ''; renderHome(); }
@@ -855,7 +1112,8 @@ export function start(course, user, catalog) {
     closeMenu();
     window.scrollTo(0, 0);
     // #review — страница курса сразу на повторениях (ссылка из каталога)
-    if (id === 'review') { const r = document.getElementById('rev'); if (r) r.scrollIntoView(); }
+    // старая ссылка #review ведёт на страницу «Повторения»
+    if (id === 'review') { location.href = '/review'; return; }
     const m = meta(current);
     document.title = (m ? m.t + ' · ' : '') + C.title;
   }

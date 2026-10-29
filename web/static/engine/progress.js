@@ -2,13 +2,15 @@
 //
 // Настройки (тема, скорость озвучки, режим чтения) — в браузере, общие для всех курсов: ключ citadel-ui.
 // Прогресс курса — набор отметок { ключ: { v, at } }, at — когда поставлена (мс).
-// Ключи: q:<урок>:<id вопроса>, seen:<урок>:<часть>, done:<урок>, rev:<урок>:<повтор>.
+// Ключи: q:<урок>:<id вопроса> — отвечен (1 — первая попытка верна, 2 — с ошибкой, решение 0008),
+// seen:<урок>:<часть> — дочитана, done:<урок> — дата прохождения,
+// card:<урок>:<id вопроса | say> — карточка повторения { d: когда показать, i: интервал в днях, s: «Помню» подряд }.
 // Отметки лежат в localStorage (citadel-progress:<курс>) и синхронизируются с сервером:
 // клиент отправляет все свои, сервер сливает по ключам (более свежая побеждает) и возвращает итог.
 // Без сети всё работает, отметки уходят при подключении.
 //
-// Движок работает с привычной формой S.lessons[урок] = { t, seen, done, rev };
-// save() сравнивает её с отметками и ставит время только изменившимся.
+// Движок работает с формой S.lessons[урок] = { t, seen, done } и S.cards[ключ];
+// save() сравнивает уроки с отметками и ставит время только изменившимся, карточки ставит putCard.
 export const UI_KEY = 'citadel-ui';
 
 function read(key) {
@@ -24,31 +26,35 @@ function flatten(lessons) {
   const out = {};
   Object.keys(lessons).forEach((lid) => {
     const st = lessons[lid];
-    Object.keys(st.t || {}).forEach((qid) => { if (st.t[qid]) out['q:' + lid + ':' + qid] = 1; });
+    Object.keys(st.t || {}).forEach((qid) => { if (st.t[qid]) out['q:' + lid + ':' + qid] = st.t[qid] === 2 ? 2 : 1; });
     Object.keys(st.seen || {}).forEach((k) => { if (st.seen[k]) out['seen:' + lid + ':' + k] = 1; });
     if (st.done) out['done:' + lid] = st.done;
-    (st.rev || []).forEach((r, k) => { if (r) out['rev:' + lid + ':' + k] = 1; });
   });
   return out;
 }
 
-function toLessons(items, stages) {
+// Старые отметки q без первой попытки (значение 1) считаются верными.
+function toLessons(items) {
   const L = {};
   const st = (lid) => L[lid] || (L[lid] = { t: {}, seen: {} });
   Object.keys(items).forEach((key) => {
     const p = key.split(':'), v = items[key].v;
-    if (p[0] === 'q') st(p[1]).t[p.slice(2).join(':')] = 1;
+    if (p[0] === 'q') st(p[1]).t[p.slice(2).join(':')] = v === 2 ? 2 : 1;
     else if (p[0] === 'seen') st(p[1]).seen[p[2]] = 1;
     else if (p[0] === 'done') st(p[1]).done = v;
-    else if (p[0] === 'rev') { const s = st(p[1]); s.rev = s.rev || stages.map(() => 0); s.rev[+p[2]] = 1; }
   });
-  Object.keys(L).forEach((lid) => { if (L[lid].done && !L[lid].rev) L[lid].rev = stages.map(() => 0); });
   return L;
 }
 
-// courseId — курс; stages — интервалы повторений; hooks.onRemote — пришли отметки с другого устройства,
+function cardsOf(items) {
+  const C = {};
+  Object.keys(items).forEach((key) => { if (key.startsWith('card:') && items[key].v && items[key].v.d) C[key] = items[key].v; });
+  return C;
+}
+
+// courseId — курс; hooks.onRemote — пришли отметки с другого устройства,
 // hooks.onStatus — сменилось состояние синхронизации, hooks.onSignedOut — сессия закончилась.
-export function loadState(courseId, stages, hooks) {
+export function loadState(courseId, hooks) {
   const KEY = 'citadel-progress:' + courseId;
   const ui = read(UI_KEY), pr = read(KEY);
   let items = pr.items || {};
@@ -58,7 +64,8 @@ export function loadState(courseId, stages, hooks) {
     Object.keys(flat).forEach((k) => { items[k] = { v: flat[k], at: now }; });
   }
   const S = {
-    lessons: toLessons(items, stages),
+    lessons: toLessons(items),
+    cards: cardsOf(items),
     theme: ui.theme || 'auto',
     ui: { open: pr.open || {}, runs: pr.runs || {}, rate: ui.rate || 1, focus: !!ui.focus },
     sync: { state: 'idle', at: pr.syncedAt || 0 }
@@ -88,6 +95,15 @@ export function loadState(courseId, stages, hooks) {
     persist();
   };
 
+  // карточка повторения: key = card:<урок>:<id вопроса | say>, val = { d, i, s }
+  S.putCard = function (key, val) {
+    items[key] = { v: val, at: Date.now() };
+    S.cards[key] = val;
+    dirty = true; gen++;
+    persist();
+    schedule(1000);
+  };
+
   S.lesson = function (id) {
     const st = S.lessons[id] || (S.lessons[id] = {});
     st.t = st.t || {};
@@ -107,7 +123,7 @@ export function loadState(courseId, stages, hooks) {
       Object.keys(st.h || {}).forEach((i) => { if (st.h[i]) put('q:' + lid + ':' + lid + '.h' + (+i + 1), 1); });
       Object.keys(st.seen || {}).forEach((k) => { if (st.seen[k]) put('seen:' + lid + ':' + k, 1); });
       if (st.done) put('done:' + lid, st.done);
-      (st.rev || []).forEach((r, k) => { if (r) put('rev:' + lid + ':' + k, 1); });
+
     });
     if (n) {
       replaceLessons();
@@ -120,9 +136,10 @@ export function loadState(courseId, stages, hooks) {
   };
 
   function replaceLessons() {
-    const fresh = toLessons(items, stages);
+    const fresh = toLessons(items);
     Object.keys(S.lessons).forEach((k) => delete S.lessons[k]);
     Object.assign(S.lessons, fresh);
+    S.cards = cardsOf(items);
   }
 
   // ── синхронизация ──

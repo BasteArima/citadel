@@ -17,7 +17,7 @@ try {
 
 function render(user, courses) {
   const byId = Object.fromEntries(courses.map((c) => [c.id, c]));
-  app.innerHTML = header(user, 'catalog') +
+  app.innerHTML = header(user, 'catalog', courses.reduce((s, c) => s + c.due, 0)) +
     '<main class="site-main">' +
       '<div><h1>Курсы</h1><p class="site-sub">Каждый пройденный курс — звено твоей цепи.</p></div>' +
       '<div class="top-cards">' + reviewCard(courses) + continueCard(courses, byId) + '</div>' +
@@ -46,10 +46,10 @@ function render(user, courses) {
 function reviewCard(courses) {
   const due = courses.filter((c) => c.due > 0), total = due.reduce((s, c) => s + c.due, 0);
   const body = total ?
-    '<p>' + total + ' ' + plural(total, 'урок ждёт', 'урока ждут', 'уроков ждут') + ' повторения. Одна очередь на все курсы: начни с любого.</p>' +
+    '<p>' + total + ' ' + plural(total, 'карточка ждёт', 'карточки ждут', 'карточек ждут') + ' повторения. Одна очередь на все курсы.</p>' +
     '<ul class="chips">' + due.map((c) => '<li class="chip metal-' + esc(c.metal) + '"><span class="dot"></span>' + esc(c.title) + ' · ' + c.due + '</li>').join('') + '</ul>' +
-    '<div class="row">' + due.map((c, i) => '<a class="btn btn-l' + (i ? '' : ' pri') + '" href="/c/' + encodeURIComponent(c.id) + '/#review">Повторить: ' + esc(c.title) + '</a>').join('') + '</div>' :
-    '<p>Сегодня повторять нечего. Пройденные уроки возвращаются сюда через несколько дней — чтобы не забылись.</p>';
+    '<div class="row"><a class="btn btn-l pri" href="/review">Начать повторение</a></div>' :
+    '<p>Сегодня повторять нечего. Сюда возвращаются вопросы, где первая попытка была с ошибкой, и фразы «Скажи на собесе», отправленные в карточки.</p>';
   return '<section class="card top-card" aria-labelledby="rv"><h2 id="rv">Повторить сегодня</h2>' + body + '</section>';
 }
 

@@ -14,6 +14,7 @@
 .site-main { max-width: 1120px; margin: 0 auto; padding: 36px 24px 72px; display: flex; flex-direction: column; gap: 28px; }
 .site-main h1 { margin: 0; font-size: 34px; line-height: 1.15; letter-spacing: -.02em; }
 .site-main h2 { margin: 0; font-size: 22px; line-height: 1.25; }
+.site-main h2.lbl { font-size: 12px; line-height: 1.4; }
 .site-sub { margin: 6px 0 0; color: var(--mut); }
 .site-err { padding: 14px 16px; border-radius: 10px; background: var(--rose-soft); color: var(--rose); }
 
@@ -32,9 +33,6 @@
 .cont-strip i { flex: 1; height: 6px; border-radius: 3px; background: var(--line-2); }
 .cont-strip i.ok { background: var(--good); }
 .cont-strip i.cur { background: var(--acc-fill); }
-.segs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--panel-2); flex-wrap: wrap; }
-.segs button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 7px; background: transparent; color: var(--mut); font: 500 14px var(--body); cursor: pointer; }
-.segs button[aria-pressed="true"] { background: var(--panel); color: var(--txt); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .tile { padding: 22px; display: flex; flex-direction: column; gap: 16px; }
 .tile-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -44,6 +42,41 @@
 .tile p { margin: 0; color: var(--mut); font-size: 15px; }
 
 .empty { padding: 40px 24px; border: 1px dashed var(--line-2); border-radius: 12px; text-align: center; color: var(--mut); }
+
+.nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; margin-left: 6px; padding: 0 6px;
+              border-radius: 999px; background: var(--acc-fill); color: var(--acc-ink); font-size: 12px; font-weight: 600; }
+
+/* повторения */
+.rv-grid { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.rv-main { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+.rv-aside { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.rv-aside .panel { flex: none; padding: 18px; gap: 10px; }
+.rv-aside .panel p { font-size: 14px; }
+.rv-bar { margin-top: 0; height: 6px; }
+.rv-bar i { background: var(--acc-fill); }
+.rv-card { min-height: 360px; padding: 28px; display: flex; flex-direction: column; gap: 20px; }
+.rv-q { font-size: 23px !important; line-height: 1.4; font-weight: 600; }
+.rv-a { padding: 16px 20px; border-radius: 12px; background: var(--panel-2); display: flex; flex-direction: column; gap: 8px; }
+.rv-a p { margin: 0; font-size: 17px; line-height: 1.6; }
+.rv-a .rv-right { font-weight: 600; }
+.rv-a a { font-size: 14px; }
+.rv-sp { flex: 1; }
+.rv-grades { display: flex; flex-wrap: wrap; gap: 8px; }
+.rv-grades .btn { flex: 1 1 150px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 64px; position: relative; }
+.rv-grades small { font-size: 13px; color: var(--mut); }
+.rv-grades kbd, .rv kbd { font: 500 11px var(--mono); padding: 1px 5px; border: 1px solid var(--line-2); border-radius: 4px; color: var(--mut); }
+.rv-grades kbd { position: absolute; top: 6px; right: 8px; }
+.rv-done { padding: 40px 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.rv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
+.rv-list li { display: flex; justify-content: space-between; gap: 8px; }
+.rv-list li > span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+.chip-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--metal, var(--dim)); }
+.rv-week { display: flex; gap: 6px; align-items: flex-end; height: 112px; }
+.rv-week div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; justify-content: flex-end; height: 100%; }
+.rv-week b { display: block; width: 100%; border-radius: 4px; background: var(--acc-soft); }
+.rv-week b.now { background: var(--acc-fill); }
+.rv-week b.none { background: var(--line-2); }
+.rv-week span, .rv-week small { font-size: 12px; color: var(--mut); line-height: 1.2; }
 
 /* профиль */
 .me-h { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
@@ -67,7 +100,6 @@
 .panels { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
 .panel { flex: 1 1 380px; min-width: 0; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
 .panel p { margin: 0; color: var(--mut); font-size: 15px; }
-.sel { display: block; height: 44px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); color: var(--txt); font: 400 15px var(--body); }
 .note-ok { padding: 10px 14px; border-radius: 9px; background: var(--good-soft); font-size: 15px; }
 .note-bad { padding: 10px 14px; border-radius: 9px; background: var(--rose-soft); color: var(--rose); font-size: 15px; }
 
@@ -78,7 +110,10 @@
 @media (max-width: 640px) {
   .site-top { padding: 8px 16px; flex-wrap: nowrap; gap: 6px; }
   .site-brand { font-size: 16px; }
-  .site-nav a { padding: 0 9px; }
+  .site-brand-t { display: none; }
+  .site-nav { flex-wrap: nowrap; gap: 0; }
+  .site-nav a { padding: 0 8px; font-size: 15px; }
+  .nav-badge { margin-left: 4px; }
   .site-main { padding: 24px 16px 56px; }
   .site-main h1 { font-size: 28px; }
   .chain { padding: 20px; }

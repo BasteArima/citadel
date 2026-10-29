@@ -133,7 +133,7 @@ func TestSignInFlow(t *testing.T) {
 			t.Errorf("%s after sign in: %d", p, resp.StatusCode)
 		}
 	}
-	for _, p := range []string{"/", "/profile"} {
+	for _, p := range []string{"/", "/profile", "/review"} {
 		if resp, body := do(t, c, "GET", ts.URL+p, ""); resp.StatusCode != 200 || !strings.Contains(body, "/static/site/") {
 			t.Errorf("%s: %d", p, resp.StatusCode)
 		}
@@ -232,21 +232,25 @@ func TestOverview(t *testing.T) {
 	if o.Started || o.Done != 0 || o.Next == nil || o.Next.ID != "a" {
 		t.Fatalf("fresh: %+v", o)
 	}
-	do(t, c, "POST", ts.URL+"/api/progress/go", `{"items":{"q:a:a.q1":{"v":1,"at":1},"done:a":{"v":"2026-10-27","at":1}}}`)
-	// passed on the 27th: the first review (1 day) is due on the 28th
-	if o = get("2026-10-27"); o.Due != 0 || o.Done != 1 || o.Solved != 1 || o.Next != nil {
+	// one question right, one wrong on the first attempt; the wrong one became a card due on the 28th,
+	// a «say» card is due on the 31st
+	do(t, c, "POST", ts.URL+"/api/progress/go", `{"items":{
+		"q:a:a.q1":{"v":1,"at":1},"q:a:a.q2":{"v":2,"at":1},"done:a":{"v":"2026-10-27","at":1},
+		"card:a:a.q2":{"v":{"d":"2026-10-28","i":1,"s":0},"at":1},
+		"card:a:say":{"v":{"d":"2026-10-31","i":3,"s":0},"at":1}}}`)
+	o = get("2026-10-27")
+	if o.Done != 1 || o.Solved != 2 || o.FirstRight != 1 || o.Next != nil || o.Cards != 2 || o.Due != 0 {
 		t.Fatalf("same day: %+v", o)
 	}
-	if o = get("2026-10-28"); o.Due != 1 {
-		t.Fatalf("day after: %+v", o)
+	if o.Week != [7]int{0, 1, 0, 0, 1, 0, 0} {
+		t.Fatalf("week from the 27th: %v", o.Week)
 	}
-	// first review done: the second one (3 days) is due on the 30th
-	do(t, c, "POST", ts.URL+"/api/progress/go", `{"items":{"rev:a:0":{"v":1,"at":2}}}`)
-	if o = get("2026-10-29"); o.Due != 0 {
-		t.Fatalf("before the second review: %+v", o)
+	// an overdue card counts today
+	if o = get("2026-10-30"); o.Due != 1 || o.Week[0] != 1 || o.Week[1] != 1 {
+		t.Fatalf("on the 30th: %+v", o)
 	}
-	if o = get("2026-10-30"); o.Due != 1 {
-		t.Fatalf("second review: %+v", o)
+	if o = get("2026-10-31"); o.Due != 2 {
+		t.Fatalf("on the 31st: %+v", o)
 	}
 }
 

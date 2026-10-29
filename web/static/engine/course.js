@@ -25,7 +25,10 @@ export function indexCourse(c) {
     meta: (id) => byId.get(id) || null,
     ready: (id) => { const m = byId.get(id); return !!(m && !m.node.planned); },
     page: (id) => pages.find((p) => p.id === id) || null,
+    // справочник курса: какие страницы включены в паспорте (pages); без списка — все
     hasGlossary: !c.pages || c.pages.includes('glossary'),
+    hasNotes: !c.pages || c.pages.includes('notes'),
+    hasExam: !c.pages || c.pages.includes('exam'),
     lesson(id) {
       if (!lessons.has(id)) lessons.set(id, lessonModel(byId.get(id).node));
       return lessons.get(id);
