@@ -27,6 +27,7 @@ type Course struct {
 	Pages    []string          `json:"pages,omitempty"`
 	About    string            `json:"about,omitempty"`
 	Howto    []string          `json:"howto,omitempty"`
+	Requires []string          `json:"requires,omitempty"` // ids of courses this one builds on
 	Glossary map[string]Term   `json:"glossary"`
 	Root     []*Node           `json:"root"`
 }

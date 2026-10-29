@@ -99,6 +99,19 @@ func (v *validator) passport() {
 	if len(c.Root) == 0 {
 		v.errf("паспорт", "в курсе нет ни одного узла")
 	}
+	// Courses from requires may live elsewhere, so only the shape is checked here.
+	seen := map[string]bool{}
+	for _, r := range c.Requires {
+		switch {
+		case r == "":
+			v.errf("паспорт", "пустой id в requires")
+		case r == c.ID:
+			v.errf("паспорт", "курс не может опираться сам на себя")
+		case seen[r]:
+			v.errf("паспорт", "курс %q в requires повторяется", r)
+		}
+		seen[r] = true
+	}
 }
 
 func (v *validator) node(n *Node, parent *Node) {

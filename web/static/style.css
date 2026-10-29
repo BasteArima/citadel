@@ -524,3 +524,84 @@ details.callout.cs[open] .cs-more { display: none; }
 .next b { font-size: 16px; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ── металлы звеньев цепи: каталог, страница курса, профиль ── */
+.metal-iron { --metal: #5d6670; } .metal-copper { --metal: #a0522d; } .metal-bronze { --metal: #8c6a2f; }
+.metal-silver { --metal: #727c88; } .metal-gold { --metal: #8f6c0c; } .metal-steel { --metal: #4a6a8a; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .metal-iron { --metal: #9aa4b0; } :root:not([data-theme="light"]) .metal-copper { --metal: #d08a5e; }
+  :root:not([data-theme="light"]) .metal-bronze { --metal: #c9a45a; } :root:not([data-theme="light"]) .metal-silver { --metal: #c3cad3; }
+  :root:not([data-theme="light"]) .metal-gold { --metal: #e0bd5a; } :root:not([data-theme="light"]) .metal-steel { --metal: #8fb0d0; }
+}
+:root[data-theme="dark"] .metal-iron { --metal: #9aa4b0; } :root[data-theme="dark"] .metal-copper { --metal: #d08a5e; }
+:root[data-theme="dark"] .metal-bronze { --metal: #c9a45a; } :root[data-theme="dark"] .metal-silver { --metal: #c3cad3; }
+:root[data-theme="dark"] .metal-gold { --metal: #e0bd5a; } :root[data-theme="dark"] .metal-steel { --metal: #8fb0d0; }
+.link-ic { flex: none; overflow: visible; }
+.link-ic .lk-track { fill: none; stroke: var(--line-2); }
+.link-ic .lk-metal { fill: none; stroke: var(--metal, var(--dim)); stroke-linecap: round; }
+
+/* ── общие кусочки: карточка, чипы, прогресс, подпись (движок и страницы сайта) ── */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px;
+        background: var(--panel-2); color: var(--mut); font-size: 13px; font-weight: 500; white-space: nowrap; line-height: 1; }
+.chip.acc { background: var(--acc-soft); color: var(--acc); }
+.chip.good { background: var(--good-soft); color: var(--good); }
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--metal, var(--dim)); }
+.lbl { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.prog { display: flex; flex-direction: column; gap: 6px; }
+.prog-t { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--mut); }
+.prog .bar { margin-top: 0; height: 6px; }
+.prog .bar i { background: var(--acc-fill); }
+
+/* ── страница курса ── */
+.cp-hero { display: flex; flex-direction: column; gap: 14px; }
+.cp-title { display: flex; align-items: center; gap: 16px; }
+.cp-title .title { margin: 0; }
+#page .cp-hero .lead { margin: 0; max-width: 760px; }
+.cp-prog { margin-top: 22px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+.cp-go { display: flex; flex-wrap: wrap; gap: 8px; }
+.cp-go .btn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; text-decoration: none; color: var(--txt); }
+.cp-go .btn.pri { color: var(--acc-ink); }
+.cp-grid { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.cp-rev { scroll-margin-top: calc(var(--top-h) + 8px); }
+.cp-main { flex: 999 1 520px; min-width: 0; }
+.cp-aside { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 14px; margin-top: 46px; }
+.cp-aside .card { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+#page .cp-aside h2.lbl { margin: 0; font-size: 12px; letter-spacing: .06em; }
+#page .cp-aside p { margin: 0; font-size: 14.5px; color: var(--mut); }
+.cp-aside ul { margin: 0; padding-left: 18px; font-size: 14.5px; color: var(--mut); display: flex; flex-direction: column; gap: 6px; }
+.cp-link { display: flex; align-items: center; gap: 10px; min-height: 44px; color: var(--txt); text-decoration: none; font-weight: 500; }
+.cp-link:hover span { text-decoration: underline; text-underline-offset: 3px; }
+.cp-secs { margin-top: 14px; overflow: hidden; }
+.cp-sec + .cp-sec { border-top: 1px solid var(--line); }
+.cp-sec summary { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 10px 18px; cursor: pointer; list-style: none; }
+.cp-sec summary::-webkit-details-marker { display: none; }
+.cp-sec summary:hover { background: var(--panel-2); }
+.cp-sec summary .ic { color: var(--mut); transition: transform .2s; }
+.cp-sec[open] summary .ic { transform: rotate(180deg); }
+.cp-num { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 34px; height: 34px; border-radius: 9px; background: var(--panel-2); color: var(--mut); font-weight: 600; font-size: 14px; }
+.cp-sec-t { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.cp-sec-t b { font-size: 17px; }
+.cp-sec-t small { font-size: 13.5px; color: var(--mut); }
+.cp-cnt { font-size: 14px; color: var(--mut); white-space: nowrap; }
+#page .cp-about { margin: 0; padding: 0 18px 10px 66px; font-size: 14.5px; color: var(--mut); }
+.cp-ls { list-style: none; margin: 0; padding: 0 0 8px; }
+.cp-l { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 6px 18px; border-top: 1px solid var(--line); color: var(--txt); text-decoration: none; font-size: 15px; }
+a.cp-l:hover { background: var(--panel-2); }
+.cp-l.soon { color: var(--dim); }
+.cp-l.cur { background: var(--acc-soft); font-weight: 600; }
+.cp-st { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line-2); }
+.cp-l.ok .cp-st { border-color: var(--good); background: var(--good); color: var(--good-ink); }
+.cp-l.cur .cp-st { border-color: var(--acc-fill); }
+.cp-l.cur .cp-st i { width: 8px; height: 8px; border-radius: 50%; background: var(--acc-fill); }
+.cp-l.soon .cp-st { border-style: dashed; }
+.cp-n { width: 28px; flex: none; color: var(--mut); font-size: 14px; font-variant-numeric: tabular-nums; }
+.cp-t { flex: 1; min-width: 0; }
+.cp-s { font-size: 13px; color: var(--mut); white-space: nowrap; font-weight: 400; }
+@media (max-width: 640px) {
+  .cp-title { gap: 12px; }
+  .cp-title .link-ic { width: 44px; height: 32px; }
+  #page .cp-about { padding-left: 18px; }
+  .cp-s { display: none; }
+}

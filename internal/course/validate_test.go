@@ -48,6 +48,7 @@ func TestValidateProblems(t *testing.T) {
 			lessonA(c).Blocks[0] = Block{"type": "predict", "code": "fmt.Println(1)"}
 		}, "нет ни вывода, ни ошибки"},
 		{"no tool version", func(c *Course) { c.Tool.Version = "" }, "версия"},
+		{"requires itself", func(c *Course) { c.Requires = []string{"t"} }, "сам на себя"},
 		{"question without id", func(c *Course) { delete(lessonA(c).Blocks[1], "id") }, `нет обязательного поля "id"`},
 		{"duplicate question id", func(c *Course) {
 			lessonA(c).Blocks = append(lessonA(c).Blocks, Block{"type": "question", "id": "a.q1", "kind": "text", "q": "?", "a": []any{"x"}})

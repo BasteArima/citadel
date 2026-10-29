@@ -5,8 +5,10 @@ import { renderBlock, speakables, questionsOf, renderQuestion } from './blocks/i
 import { indexCourse } from './course.js';
 import { loadState } from './progress.js';
 import { initRich, rich, trackTerms, takeTerms } from './rich.js';
+import { linkIcon, metalName } from '../site/shared.js';
 
-export function start(course, user) {
+// course — курс v1, user — кто вошёл, catalog — список курсов (для «Опирается на» и «Что дальше»).
+export function start(course, user, catalog) {
   const X = indexCourse(course);
   const C = course;
   const STAGES = X.review;
@@ -148,7 +150,8 @@ export function start(course, user) {
     const done = doneCount(ALL);
     let h = '<div class="sd-prog"><div class="sd-prog-t"><span>Курс</span><span>' + done + ' из ' + TOTAL + '</span></div>' +
       '<div class="bar"><i style="width:' + (done / TOTAL * 100) + '%"></i></div></div>' +
-      '<ul class="sd-links">' + sideLink('', IC.home, 'Сегодня') +
+      '<ul class="sd-links"><li><a class="sd-a" href="/">' + ic(IC.back) + '<span class="sd-t">Все курсы</span></a></li>' +
+      sideLink('', IC.home, 'О курсе') +
       X.pages.map((p) => sideLink(p.id, IC[p.icon] || IC.book, esc(p.title))).join('') +
       (X.hasGlossary ? sideLink('glossary', IC.book, 'Словарь') : '') + '</ul>';
     X.sections.forEach((sec) => {
@@ -428,6 +431,7 @@ export function start(course, user) {
     page.appendChild(el('h1', 'title', esc(m.t)));
 
     if (!parts) {
+      rememberPlace('#' + id, lessonLabel + ' ' + m.n + '. ' + m.t);
       appendSimple(page, les);
       const slot = el('div'); page.appendChild(slot);
       appendBlocks(page, les.blocks);
@@ -440,6 +444,7 @@ export function start(course, user) {
     }
 
     const k = Math.min(Math.max(pn || 1, 1), parts.length) - 1, part = parts[k];
+    rememberPlace('#' + id + '/' + (k + 1), lessonLabel + ' ' + m.n + '. ' + m.t + ' · часть ' + (k + 1));
     const min = partMin(les, k);
     st.seen = st.seen || {};
     crumbs.push({ t: 'Часть ' + (k + 1) });
@@ -550,23 +555,48 @@ export function start(course, user) {
     return out;
   }
 
+  // ── страница курса: паспорт, прогресс, повторения, разделы; сбоку — связи с другими курсами ──
   function renderHome() {
     page.innerHTML = '';
-    page.appendChild(el('div', 'crumb', '<span>Главная</span>'));
-    page.appendChild(el('h1', 'title', esc(C.title)));
-    if (C.about) page.appendChild(el('p', 'lead', rich(C.about)));
+    page.appendChild(el('div', 'crumb', '<span>О курсе</span>'));
+    const done = doneCount(ALL), pct = TOTAL ? Math.round(done / TOTAL * 100) : 0;
+    const hero = el('section', 'cp-hero metal-' + esc(C.metal));
+    hero.innerHTML = '<div class="cp-title">' + linkIcon(C.metal, TOTAL ? done / TOTAL : 0, 64) + '<h1 class="title">' + esc(C.title) + '</h1></div>' +
+      (C.about ? '<p class="lead">' + rich(C.about) + '</p>' : '') +
+      '<ul class="chips">' +
+        '<li class="chip">' + esc(C.tool.name + ' ' + C.tool.version) + '</li>' +
+        '<li class="chip">' + X.sections.length + ' ' + plural(X.sections.length, 'раздел', 'раздела', 'разделов') + '</li>' +
+        '<li class="chip">' + TOTAL + ' ' + plural(TOTAL, 'урок', 'урока', 'уроков') + '</li>' +
+        '<li class="chip"><span class="dot"></span>звено: ' + esc(metalName(C.metal)) + '</li>' +
+        '<li class="chip">повторения: ' + STAGES.join(' · ') + ' ' + plural(STAGES[STAGES.length - 1], 'день', 'дня', 'дней') + '</li>' +
+      '</ul>';
+    page.appendChild(hero);
 
-    const todo = firstTodo();
-    if (todo) {
-      const started = doneCount(ALL) > 0;
-      const a = el('a', 'start', '<small>' + (started ? 'Продолжить' : 'Начать') + '</small><b>' + lessonLabel + ' ' + todo.n + '. ' + esc(todo.t) + ' →</b>');
-      a.href = '#' + todo.id; page.appendChild(a);
-    }
+    // прогресс и куда идти дальше
+    const todo = firstTodo(), last = lastPlace(), due = dueList();
+    const prog = el('section', 'card cp-prog');
+    let go = '';
+    if (last) go = '<a class="btn pri" href="' + esc(last.hash) + '">Продолжить: ' + esc(last.label) + '</a>';
+    else if (todo) go = '<a class="btn pri" href="#' + todo.id + '">' + (done ? 'Продолжить' : 'Начать') + ': ' + lessonLabel.toLowerCase() + ' ' + todo.n + '</a>';
+    prog.innerHTML = '<div class="prog"><div class="prog-t"><span>Пройдено ' + done + ' из ' + TOTAL + ' ' + plural(TOTAL, 'урока', 'уроков', 'уроков') + '</span><span>' + pct + '%</span></div>' +
+      '<div class="bar" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" aria-label="Прогресс курса"><i style="width:' + pct + '%"></i></div></div>' +
+      '<div class="cp-go">' + go + (due.length ? '<a class="btn" href="#review">Повторить сегодня · ' + due.length + '</a>' : '') +
+      (X.hasGlossary ? '<a class="btn" href="#glossary">' + ic(IC.book) + ' Словарь</a>' : '') +
+      X.pages.map((p) => '<a class="btn" href="#' + p.id + '">' + ic(IC[p.icon] || IC.book) + ' ' + esc(p.title) + '</a>').join('') + '</div>';
+    page.appendChild(prog);
 
-    page.appendChild(el('h2', null, 'Повторить сегодня'));
-    const due = dueList();
+    const grid = el('div', 'cp-grid');
+    const main = el('div', 'cp-main');
+    grid.appendChild(main);
+    grid.appendChild(courseAside());
+    page.appendChild(grid);
+
+    const rev = el('section', 'cp-rev');
+    rev.id = 'rev';
+    rev.appendChild(el('h2', null, 'Повторить сегодня'));
+    main.appendChild(rev);
     if (!due.length) {
-      page.appendChild(el('div', 'review-empty', 'Сегодня повторять нечего. Пройди урок — ' + inDays(STAGES[0]) + ' его вопросы появятся здесь' +
+      rev.appendChild(el('div', 'review-empty', 'Сегодня повторять нечего. Пройди урок — ' + inDays(STAGES[0]) + ' его вопросы появятся здесь' +
         (STAGES.length > 1 ? ', потом ещё через ' + daysList(STAGES.slice(1)) + ' ' + plural(STAGES[STAGES.length - 1], 'день', 'дня', 'дней') + ' после прохождения' : '') + '.'));
     }
     due.forEach((d) => {
@@ -581,35 +611,89 @@ export function start(course, user) {
           solved: () => !!revMem[key][q.id],
           solve: () => {
             revMem[key][q.id] = 1;
-            if (pick.every((x) => revMem[key][x.id])) { S.lessons[d.id].rev[d.k] = 1; save(); card.appendChild(el('div', 'done-msg', '<b>Повтор засчитан.</b>')); }
+            if (pick.every((x) => revMem[key][x.id])) { S.lessons[d.id].rev[d.k] = 1; save(); card.appendChild(el('div', 'done-msg', '<b>Повтор засчитан.</b>')); renderTop(); }
           }
         }));
       });
-      page.appendChild(card);
+      rev.appendChild(card);
     });
 
-    const grid = el('div', 'cards-grid');
-    X.sections.forEach((sec) => {
-      const dn = doneCount(sec.lessons);
-      grid.appendChild(el('div', 'sec-card', '<h3 class="k-' + sec.kind + '">' + esc(sec.name) + ' — ' + sec.lessons.length + ' ' + plural(sec.lessons.length, 'урок', 'урока', 'уроков') + '</h3>' +
-        '<div class="bar"><i style="width:' + (dn / sec.lessons.length * 100) + '%"></i></div>' +
-        '<div class="bar-t">Пройдено ' + dn + ' из ' + sec.lessons.length + '</div><p>' + esc(sec.about) + '</p>'));
+    // разделы: раскрыт тот, где ты сейчас (первый непройденный)
+    main.appendChild(el('h2', null, 'Разделы'));
+    const openSec = X.sections.find((s) => doneCount(s.lessons) < s.lessons.length) || X.sections[0];
+    const secs = el('div', 'card cp-secs');
+    X.sections.forEach((sec, i) => {
+      const dn = doneCount(sec.lessons), ls = sec.lessons;
+      const d = el('details', 'cp-sec');
+      d.open = sec === openSec;
+      d.innerHTML = '<summary><span class="cp-num">' + (i + 1) + '</span><span class="cp-sec-t"><b class="k-' + esc(sec.kind || '') + '">' + esc(sec.name) + '</b>' +
+        '<small>' + (ls.length > 1 ? ls[0].n + '–' + ls[ls.length - 1].n : ls[0].n) + '</small></span>' +
+        '<span class="cp-cnt">' + dn + ' из ' + ls.length + '</span>' + ic(IC.down, 18) + '</summary>' +
+        (sec.about ? '<p class="cp-about">' + esc(sec.about) + '</p>' : '') +
+        '<ol class="cp-ls">' + ls.map(lessonRow).join('') + '</ol>';
+      secs.appendChild(d);
     });
-    page.appendChild(grid);
+    main.appendChild(secs);
+
     // страницы курса с описанием — карточкой под разделами
     X.pages.filter((p) => p.about).forEach((p) => {
       const card = el('a', 'sec-card practice', '<h3 class="k-' + esc(p.tag || '') + '">' + esc(p.title) + '</h3><p>' + rich(p.about) + '</p>');
       card.href = '#' + p.id; card.style.display = 'block'; card.style.marginTop = '12px'; card.style.textDecoration = 'none'; card.style.color = 'inherit';
-      page.appendChild(card);
+      main.appendChild(card);
     });
 
     if (C.howto && C.howto.length) {
-      page.appendChild(el('h2', null, 'Как заниматься'));
+      main.appendChild(el('h2', null, 'Как заниматься'));
       const how = el('ul', 'list');
       C.howto.forEach((t) => how.appendChild(el('li', null, rich(t))));
-      page.appendChild(how);
+      main.appendChild(how);
     }
-    page.appendChild(importBox());
+    main.appendChild(importBox());
+  }
+
+  // строка урока на странице курса: пройден, начат, готов или ещё пишется
+  function lessonRow(l) {
+    if (!ready(l.id)) {
+      return '<li><div class="cp-l soon"><span class="cp-st"></span><span class="cp-n">' + l.n + '</span><span class="cp-t">' + esc(l.t) + '</span><span class="cp-s">скоро</span></div></li>';
+    }
+    const st = S.lessons[l.id], ok = isDone(l.id);
+    const started = !ok && st && (Object.keys(st.t || {}).length || Object.keys(st.seen || {}).length);
+    return '<li><a class="cp-l' + (ok ? ' ok' : started ? ' cur' : '') + '" href="#' + l.id + '">' +
+      '<span class="cp-st">' + (ok ? ic(IC.check, 12) : started ? '<i></i>' : '') + '</span>' +
+      '<span class="cp-n">' + l.n + '</span><span class="cp-t">' + esc(l.t) + '</span>' +
+      '<span class="cp-s">' + (ok ? 'пройден' : started ? 'начат' : esc(l.node.time || '')) + '</span></a></li>';
+  }
+
+  // сбоку: на какие курсы опирается, какие опираются на него, что значит «пройдено»
+  function courseAside() {
+    const byId = Object.fromEntries(catalog.map((c) => [c.id, c]));
+    const link = (c) => '<a class="cp-link metal-' + esc(c.metal) + '" href="/c/' + encodeURIComponent(c.id) + '/">' + linkIcon(c.metal, 1, 40) +
+      '<span>' + esc(c.title) + '</span></a>';
+    const needs = (C.requires || []).map((id) => byId[id] ? link(byId[id]) : '<span>' + esc(id) + '</span>');
+    const next = catalog.filter((c) => (c.requires || []).includes(C.id)).map(link);
+    const aside = el('aside', 'cp-aside');
+    aside.innerHTML =
+      '<section class="card"><h2 class="lbl">Опирается на</h2>' +
+        (needs.length ? needs.join('') : '<p>Ни на что: это стартовый курс.</p>') + '</section>' +
+      (next.length ? '<section class="card"><h2 class="lbl">Что дальше</h2>' + next.join('') + '</section>' : '') +
+      '<section class="card"><h2 class="lbl">Как засчитывается</h2><ul>' +
+        '<li>Часть — когда ответил на её вопросы «Проверь себя» или дочитал её до конца.</li>' +
+        '<li>Урок — когда решены все его вопросы.</li>' +
+        '<li>Курс — когда пройдены все уроки. Тогда звено выковано.</li>' +
+        '<li>Пройденный урок возвращается на повторение через ' + daysList(STAGES) + ' ' + plural(STAGES[STAGES.length - 1], 'день', 'дня', 'дней') + '.</li>' +
+      '</ul></section>';
+    return aside;
+  }
+
+  // последнее место в этом курсе — для «Продолжить» здесь и в каталоге
+  function lastPlace() {
+    try {
+      const l = JSON.parse(localStorage.getItem('citadel-last') || 'null');
+      return l && l.course === C.id && l.hash && ready(l.hash.replace(/^#/, '').split('/')[0]) ? l : null;
+    } catch (e) { return null; }
+  }
+  function rememberPlace(hash, label) {
+    try { localStorage.setItem('citadel-last', JSON.stringify({ course: C.id, hash, label, at: Date.now() })); } catch (e) { /* не страшно */ }
   }
 
   // Перенос прогресса из прежней версии курса: в ней на главной есть кнопка «Скачать прогресс».
@@ -726,12 +810,14 @@ export function start(course, user) {
     if (id === 'glossary' && X.hasGlossary) { crumbs = [{ t: 'Словарь' }]; renderGlossary(); }
     else if (pg) { crumbs = [{ t: pg.title }]; renderPage(pg); }
     else if (id && ready(id)) renderLesson(id, currentPart);
-    else { current = ''; crumbs = [{ t: 'Сегодня' }]; renderHome(); }
+    else { current = ''; crumbs = [{ t: 'О курсе' }]; renderHome(); }
     renderSide();
     renderTop();
     applyFocus();
     closeMenu();
     window.scrollTo(0, 0);
+    // #review — страница курса сразу на повторениях (ссылка из каталога)
+    if (id === 'review') { const r = document.getElementById('rev'); if (r) r.scrollIntoView(); }
     const m = meta(current);
     document.title = (m ? m.t + ' · ' : '') + C.title;
   }

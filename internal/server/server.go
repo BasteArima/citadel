@@ -31,6 +31,7 @@ type Summary struct {
 	Subtitle string      `json:"subtitle,omitempty"`
 	Metal    string      `json:"metal"`
 	Tool     course.Tool `json:"tool"`
+	Requires []string    `json:"requires,omitempty"`
 	Lessons  int         `json:"lessons"`
 	Ready    int         `json:"ready"`
 }
@@ -39,6 +40,7 @@ type server struct {
 	cfg      Config
 	log      *slog.Logger
 	order    []string
+	parsed   map[string]*course.Course
 	courses  map[string][]byte
 	listJSON []byte
 	limiter  *limiter
@@ -53,13 +55,14 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &server{cfg: cfg, log: cfg.Log, courses: map[string][]byte{}, limiter: newLimiter(10, 10*time.Minute)}
+	s := &server{cfg: cfg, log: cfg.Log, parsed: map[string]*course.Course{}, courses: map[string][]byte{}, limiter: newLimiter(10, 10*time.Minute)}
 	list := make([]Summary, 0, len(courses))
 	for _, c := range courses {
 		data, err := json.Marshal(c)
 		if err != nil {
 			return nil, err
 		}
+		s.parsed[c.ID] = c
 		s.courses[c.ID] = data
 		s.order = append(s.order, c.ID)
 		list = append(list, summarize(c))
@@ -80,6 +83,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	// signed-in only
 	mux.Handle("GET /api/me", s.api(s.me))
 	mux.Handle("GET /api/courses", s.api(s.listCourses))
+	mux.Handle("GET /api/overview", s.api(s.overview))
 	mux.Handle("GET /api/courses/{id}", s.api(s.getCourse))
 	mux.Handle("GET /api/blocks", s.api(s.listBlocks))
 	mux.Handle("GET /api/progress/{course}", s.api(s.getProgress))
@@ -88,12 +92,21 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.Handle("GET /ladder.html", s.page(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, web.FS, "ladder.html")
 	}))
-	mux.Handle("GET /{$}", s.page(s.home))
+	mux.Handle("GET /{$}", s.page(sitePage("catalog.html")))
+	mux.Handle("GET /profile", s.page(sitePage("profile.html")))
 	return s.logRequests(mux), nil
 }
 
+// sitePage serves a page of the site around the courses: the catalog, the profile.
+func sitePage(name string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFileFS(w, r, web.FS, name)
+	}
+}
+
 func summarize(c *course.Course) Summary {
-	sum := Summary{ID: c.ID, Title: c.Title, Subtitle: c.Subtitle, Metal: c.Metal, Tool: c.Tool}
+	sum := Summary{ID: c.ID, Title: c.Title, Subtitle: c.Subtitle, Metal: c.Metal, Tool: c.Tool, Requires: c.Requires}
 	c.Walk(func(n *course.Node, _ *course.Node) {
 		if n.Kind == course.KindLesson {
 			sum.Lessons++
@@ -121,15 +134,6 @@ func (s *server) getCourse(w http.ResponseWriter, r *http.Request) {
 func (s *server) listBlocks(w http.ResponseWriter, r *http.Request) {
 	data, _ := json.Marshal(map[string]any{"schema": course.SchemaVersion, "blocks": course.Blocks})
 	writeJSON(w, data)
-}
-
-// home opens the first course until the catalog exists (stage 3).
-func (s *server) home(w http.ResponseWriter, r *http.Request) {
-	if len(s.order) == 0 {
-		http.Error(w, "no courses", http.StatusNotFound)
-		return
-	}
-	http.Redirect(w, r, "/c/"+s.order[0]+"/", http.StatusFound)
 }
 
 func (s *server) coursePage(w http.ResponseWriter, r *http.Request) {

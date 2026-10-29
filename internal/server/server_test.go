@@ -133,8 +133,10 @@ func TestSignInFlow(t *testing.T) {
 			t.Errorf("%s after sign in: %d", p, resp.StatusCode)
 		}
 	}
-	if resp, _ := do(t, c, "GET", ts.URL+"/", ""); resp.Header.Get("Location") != "/c/go/" {
-		t.Errorf("home: %q", resp.Header.Get("Location"))
+	for _, p := range []string{"/", "/profile"} {
+		if resp, body := do(t, c, "GET", ts.URL+p, ""); resp.StatusCode != 200 || !strings.Contains(body, "/static/site/") {
+			t.Errorf("%s: %d", p, resp.StatusCode)
+		}
 	}
 	if resp, _ := do(t, c, "POST", ts.URL+"/api/logout", ""); resp.StatusCode != http.StatusNoContent {
 		t.Errorf("logout: %d", resp.StatusCode)
@@ -211,6 +213,40 @@ func TestProgressSync(t *testing.T) {
 	}
 	if out.Items["seen:a:0"].At >= 99999999999999 {
 		t.Fatalf("future mark not clamped: %+v", out.Items["seen:a:0"])
+	}
+}
+
+func TestOverview(t *testing.T) {
+	ts := newTestServer(t)
+	c := signIn(t, ts, "A")
+	get := func(today string) Overview {
+		t.Helper()
+		_, body := do(t, c, "GET", ts.URL+"/api/overview?today="+today, "")
+		var out struct{ Courses []Overview }
+		if err := json.Unmarshal([]byte(body), &out); err != nil || len(out.Courses) != 1 {
+			t.Fatalf("overview: %s", body)
+		}
+		return out.Courses[0]
+	}
+	o := get("2026-10-30")
+	if o.Started || o.Done != 0 || o.Next == nil || o.Next.ID != "a" {
+		t.Fatalf("fresh: %+v", o)
+	}
+	do(t, c, "POST", ts.URL+"/api/progress/go", `{"items":{"q:a:a.q1":{"v":1,"at":1},"done:a":{"v":"2026-10-27","at":1}}}`)
+	// passed on the 27th: the first review (1 day) is due on the 28th
+	if o = get("2026-10-27"); o.Due != 0 || o.Done != 1 || o.Solved != 1 || o.Next != nil {
+		t.Fatalf("same day: %+v", o)
+	}
+	if o = get("2026-10-28"); o.Due != 1 {
+		t.Fatalf("day after: %+v", o)
+	}
+	// first review done: the second one (3 days) is due on the 30th
+	do(t, c, "POST", ts.URL+"/api/progress/go", `{"items":{"rev:a:0":{"v":1,"at":2}}}`)
+	if o = get("2026-10-29"); o.Due != 0 {
+		t.Fatalf("before the second review: %+v", o)
+	}
+	if o = get("2026-10-30"); o.Due != 1 {
+		t.Fatalf("second review: %+v", o)
 	}
 }
 

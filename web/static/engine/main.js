@@ -1,4 +1,4 @@
-// Точка входа: кто вошёл, потом курс из API — и запускаем движок.
+// Точка входа: кто вошёл, курс и список курсов из API — и запускаем движок.
 import { start } from './app.js';
 
 const id = decodeURIComponent(location.pathname.split('/')[2] || '');
@@ -15,8 +15,12 @@ async function getJSON(url) {
 }
 
 try {
-  const [user, course] = await Promise.all([getJSON('/api/me'), getJSON('/api/courses/' + encodeURIComponent(id))]);
-  start(course, user);
+  const [user, course, catalog] = await Promise.all([
+    getJSON('/api/me'),
+    getJSON('/api/courses/' + encodeURIComponent(id)),
+    getJSON('/api/courses')
+  ]);
+  start(course, user, catalog);
 } catch (e) {
   page.textContent = 'Не удалось загрузить курс: ' + e.message;
   console.error(e);

@@ -1,0 +1,76 @@
+// Общее для страниц вокруг курсов (каталог, профиль): запросы к API, шапка, металлы и звенья цепи.
+
+export function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+export function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
+// Дата по часам ученика: «повторить сегодня» считается от его дня, а не от дня сервера.
+export function today() {
+  const d = new Date(), p = (n) => (n < 10 ? '0' : '') + n;
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+// Запрос к API; без сессии — на страницу входа и обратно.
+export async function api(url, opts) {
+  const r = await fetch(url, opts);
+  if (r.status === 401) {
+    location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
+    return new Promise(() => {});
+  }
+  if (!r.ok) throw new Error('сервер ответил ' + r.status);
+  return r.status === 204 ? null : r.json();
+}
+
+export const METALS = { iron: 'железо', copper: 'медь', bronze: 'бронза', silver: 'серебро', gold: 'золото', steel: 'сталь' };
+export const metalName = (m) => METALS[m] || m;
+
+// Состояние курса для ученика: звено выковано, когда пройдены все уроки плана.
+export function courseState(o) {
+  if (o.lessons > 0 && o.done >= o.lessons) return 'done';
+  return o.started ? 'active' : 'new';
+}
+
+// Звено цепи: дорожка и металл. part — доля от 0 до 1, сколько звена уже выковано.
+export function linkIcon(metal, part, size) {
+  const w = size || 56, h = Math.round(w * 40 / 56);
+  const per = 2 * (48 - 28) + Math.PI * 28; // периметр скруглённого прямоугольника 48×28 с радиусом 14
+  const dash = part >= 1 ? '' : ' stroke-dasharray="' + Math.max(part * per, part > 0 ? 6 : 0).toFixed(1) + ' ' + per.toFixed(1) + '"';
+  return '<svg class="link-ic metal-' + esc(metal) + '" width="' + w + '" height="' + h + '" viewBox="0 0 56 40" aria-hidden="true">' +
+    '<rect class="lk-track" x="4" y="6" width="48" height="28" rx="14" stroke-width="5"/>' +
+    (part > 0 ? '<rect class="lk-metal" x="4" y="6" width="48" height="28" rx="14" stroke-width="5"' + dash + '/>' : '') + '</svg>';
+}
+
+// Шапка сайта: логотип, разделы, кто вошёл.
+export function header(user, current) {
+  const nav = [['/', 'Курсы', 'catalog'], ['/profile', 'Профиль', 'profile']];
+  return '<header class="site-top">' +
+    '<a class="site-brand" href="/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg>Citadel</a>' +
+    '<nav class="site-nav" aria-label="Разделы">' + nav.map((n) =>
+      '<a href="' + n[0] + '"' + (n[2] === current ? ' aria-current="page"' : '') + '>' + n[1] + '</a>').join('') + '</nav>' +
+    '<span class="site-sp"></span>' +
+    '<a class="site-me" href="/profile" aria-label="Профиль: ' + esc(user.name) + '">' + esc(user.name.slice(0, 1).toUpperCase()) + '</a>' +
+    '</header>';
+}
+
+// Тема из настроек движка (общих для всех курсов).
+export const UI_KEY = 'citadel-ui';
+export function readUI() {
+  try { return JSON.parse(localStorage.getItem(UI_KEY) || '{}') || {}; } catch (e) { return {}; }
+}
+export function applyTheme(theme) {
+  const r = document.documentElement;
+  if (theme === 'light' || theme === 'dark') r.setAttribute('data-theme', theme);
+  else r.removeAttribute('data-theme');
+}
+
+// Последнее место в курсе, его записывает движок: { course, hash, label, at }.
+export function lastPlace() {
+  try { return JSON.parse(localStorage.getItem('citadel-last') || 'null'); } catch (e) { return null; }
+}

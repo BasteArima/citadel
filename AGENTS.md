@@ -33,7 +33,7 @@
 | `internal/server/` | HTTP: вход и сессии, API курсов и прогресса, встроенный фронтенд |
 | `internal/store/` | SQLite: версии курсов, пользователи, сессии, прогресс, бэкап |
 | `.env.example` | настройки сервиса: код доступа, админы. Свои значения — в `.env`, он не в git |
-| `web/` | фронтенд, встраивается в бинарник: `course.html`, движок на ES-модулях в `static/engine/` (типы блоков — `blocks/`), стили |
+| `web/` | фронтенд, встраивается в бинарник: `course.html` и движок на ES-модулях в `static/engine/` (типы блоков — `blocks/`); каталог и профиль — `catalog.html`, `profile.html` и `static/site/`; стили — `static/style.css` (общие) и `static/site.css` |
 | `content/<id>/course.json` | курсы в формате v1. Go-курс собирается из `legacy/go-course/` командой `task convert` — уроки пока пишутся там |
 | `Taskfile.yml` | команды разработки |
 | `Dockerfile`, `compose.yaml` | образ и запуск на Docker Desktop; база — в томе `citadel-data`. Как поднять у себя — `docs/guides/self-hosting.md` |

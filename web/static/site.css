@@ -1,0 +1,80 @@
+/* Страницы вокруг курсов: каталог и профиль. Токены цветов — из style.css. */
+
+.site-top { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+            padding: 10px 24px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.site-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--txt); font-weight: 700; font-size: 18px; text-decoration: none; }
+.site-nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.site-nav a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; color: var(--mut); font-weight: 500; text-decoration: none; }
+.site-nav a:hover { background: var(--panel-2); color: var(--txt); }
+.site-nav a[aria-current="page"] { background: var(--acc-soft); color: var(--acc); }
+.site-sp { flex: 1; }
+.site-me { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%;
+           background: var(--txt); color: var(--bg); font-weight: 600; text-decoration: none; }
+
+.site-main { max-width: 1120px; margin: 0 auto; padding: 36px 24px 72px; display: flex; flex-direction: column; gap: 28px; }
+.site-main h1 { margin: 0; font-size: 34px; line-height: 1.15; letter-spacing: -.02em; }
+.site-main h2 { margin: 0; font-size: 22px; line-height: 1.25; }
+.site-sub { margin: 6px 0 0; color: var(--mut); }
+.site-err { padding: 14px 16px; border-radius: 10px; background: var(--rose-soft); color: var(--rose); }
+
+
+.btn-l { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px;
+         text-decoration: none; color: var(--txt); }
+.btn-l.pri { color: var(--acc-ink); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* каталог */
+.top-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.top-card { padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+.top-card p { margin: 0; color: var(--mut); font-size: 15px; }
+.top-card h2 { font-size: 20px; }
+.segs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--panel-2); flex-wrap: wrap; }
+.segs button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 7px; background: transparent; color: var(--mut); font: 500 14px var(--body); cursor: pointer; }
+.segs button[aria-pressed="true"] { background: var(--panel); color: var(--txt); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.tile { padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+.tile-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.tile h3 { margin: 0; font-size: 21px; line-height: 1.3; }
+.tile h3 a { color: var(--txt); text-decoration: none; }
+.tile h3 a:hover { color: var(--acc); }
+.tile p { margin: 0; color: var(--mut); font-size: 15px; }
+
+.empty { padding: 40px 24px; border: 1px dashed var(--line-2); border-radius: 12px; text-align: center; color: var(--mut); }
+
+/* профиль */
+.me-h { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.me-av { display: inline-flex; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 50%;
+         background: var(--txt); color: var(--bg); font-weight: 700; font-size: 28px; }
+.chain { padding: 28px; border-radius: 16px; background: #111418; color: #e3e7ec; display: flex; flex-direction: column; gap: 22px; }
+.chain h2 { color: #fff; }
+.chain p { margin: 0; color: #9aa4b0; }
+.chain svg { width: 100%; max-width: 640px; height: auto; }
+.chain .lk-track { fill: none; stroke: #343c47; }
+.chain .lk-metal { fill: none; stroke: var(--metal-d, #9aa4b0); stroke-linecap: round; }
+.chain .lk-slot { fill: none; stroke: #262c35; }
+.chain-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.chain-card { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: 10px; background: #171b21; border: 1px solid #262c35; color: #e3e7ec; text-decoration: none; }
+.chain-card small { font-size: 13px; color: var(--metal-d, #9aa4b0); }
+.chain-card span { font-size: 14px; color: #9aa4b0; }
+.chain-card.slot { justify-content: center; border-style: dashed; border-color: #343c47; background: transparent; color: #9aa4b0; font-size: 14px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.stat { padding: 18px; display: flex; flex-direction: column; gap: 2px; }
+.stat b { font-size: 28px; line-height: 1.2; }
+.panels { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
+.panel { flex: 1 1 380px; min-width: 0; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+.panel p { margin: 0; color: var(--mut); font-size: 15px; }
+.note-ok { padding: 10px 14px; border-radius: 9px; background: var(--good-soft); font-size: 15px; }
+.note-bad { padding: 10px 14px; border-radius: 9px; background: var(--rose-soft); color: var(--rose); font-size: 15px; }
+
+/* звенья в профиле — светлые варианты металлов на тёмной панели */
+.chain .metal-iron { --metal-d: #9aa4b0; } .chain .metal-copper { --metal-d: #d08a5e; } .chain .metal-bronze { --metal-d: #c9a45a; }
+.chain .metal-silver { --metal-d: #c3cad3; } .chain .metal-gold { --metal-d: #e0bd5a; } .chain .metal-steel { --metal-d: #8fb0d0; }
+
+@media (max-width: 640px) {
+  .site-top { padding: 8px 16px; flex-wrap: nowrap; gap: 6px; }
+  .site-brand { font-size: 16px; }
+  .site-nav a { padding: 0 9px; }
+  .site-main { padding: 24px 16px 56px; }
+  .site-main h1 { font-size: 28px; }
+  .chain { padding: 20px; }
+}
