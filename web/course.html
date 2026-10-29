@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Citadel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+<script>
+  try {
+    var th = JSON.parse(localStorage.getItem('gocourse-v1') || '{}').theme;
+    if (th === 'light' || th === 'dark') document.documentElement.setAttribute('data-theme', th);
+  } catch (e) {}
+</script>
+</head>
+<body>
+<header class="top" id="top"></header>
+<div class="layout">
+  <aside class="side" id="side"></aside>
+  <main class="main"><article id="page"><p class="lead">Загружаю курс…</p></article></main>
+</div>
+<div class="pop" id="pop" role="dialog" hidden></div>
+
+<script src="/static/engine/adapter.js"></script>
+<script>
+  // Курс берётся из API, переходник превращает его в модель движка, потом запускается движок.
+  (function () {
+    var id = decodeURIComponent(location.pathname.split('/')[2] || '');
+    fetch('/api/courses/' + encodeURIComponent(id))
+      .then(function (r) {
+        if (!r.ok) throw new Error('сервер ответил ' + r.status);
+        return r.json();
+      })
+      .then(function (c) {
+        window.COURSE = citadelV1ToV0(c);
+        document.title = c.title;
+        var s = document.createElement('script');
+        s.src = '/static/engine/app.js';
+        document.body.appendChild(s);
+      })
+      .catch(function (e) {
+        document.getElementById('page').textContent = 'Не удалось загрузить курс: ' + e.message;
+      });
+  })();
+</script>
+</body>
+</html>

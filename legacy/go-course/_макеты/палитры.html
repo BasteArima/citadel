@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Палитры курса — сравнение</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Панель управления сверху (нейтральная), под ней — макет страницы урока, перекрашиваемый токенами варианта. */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font: 15px/1.5 'Golos Text', 'Segoe UI', system-ui, sans-serif; background: #e9eaec; color: #1d1f23; }
+.ctl { position: sticky; top: 0; z-index: 5; background: #ffffff; border-bottom: 1px solid #d6d8dc;
+       padding: 12px max(16px, 3vw); display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+.ctl h1 { font-size: 15px; margin: 0; }
+.grp { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.grp span { font-size: 12px; color: #5c6168; margin-right: 2px; }
+.grp button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 8px; border: 1px solid #cfd2d7; background: #f6f7f8; color: #1d1f23; cursor: pointer; }
+.grp button[aria-pressed="true"] { background: #1d1f23; color: #fff; border-color: #1d1f23; }
+.info { padding: 14px max(16px, 3vw) 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px); gap: 16px; }
+@media (max-width: 900px) { .info { grid-template-columns: 1fr; } }
+.about { background: #fff; border: 1px solid #d6d8dc; border-radius: 12px; padding: 14px 16px; font-size: 14px; }
+.about b.n { font-size: 16px; }
+.about p { margin: 6px 0 0; color: #3b3f45; }
+.swatches { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.swatches i { width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(0,0,0,.12); display: block; }
+table.cr { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; border: 1px solid #d6d8dc; border-radius: 12px; overflow: hidden; }
+table.cr td, table.cr th { padding: 7px 10px; border-bottom: 1px solid #eceef0; text-align: left; }
+table.cr th { background: #f6f7f8; font-weight: 600; }
+.ok { color: #1a7f37; font-weight: 600; } .mid { color: #9a6700; font-weight: 600; } .no { color: #c2372c; font-weight: 600; }
+
+.stage { padding: 14px max(16px, 3vw) 40px; }
+.frame { border-radius: 14px; overflow: hidden; border: 1px solid #c9ccd1; box-shadow: 0 6px 24px rgba(0,0,0,.08); }
+
+/* ── макет страницы курса ── */
+.m { display: grid; grid-template-columns: 250px minmax(0, 1fr); background: var(--bg); color: var(--txt); min-height: 600px; }
+@media (max-width: 760px) { .m { grid-template-columns: 1fr; } .m .side { display: none; } }
+.m .side { background: var(--side); border-right: 1px solid var(--line); padding: 20px 14px; font-size: 13.5px; }
+.m .brand { font-weight: 700; font-size: 16px; }
+.m .sub { color: var(--mut); font-size: 12px; margin-top: 3px; }
+.m .bar { height: 4px; border-radius: 9px; background: var(--line); margin-top: 12px; overflow: hidden; }
+.m .bar i { display: block; width: 18%; height: 100%; background: var(--acc); }
+.m .sec { margin: 20px 6px 6px; font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--acc-text); font-weight: 600; }
+.m .it { display: grid; grid-template-columns: 28px 1fr; gap: 8px; padding: 5px 6px; border-radius: 7px; line-height: 1.35; }
+.m .it.cur { background: var(--acc-soft); }
+.m .it .num { font: 10.5px 'JetBrains Mono', monospace; text-align: center; border: 1px solid var(--line); border-radius: 5px; color: var(--mut); padding: 1px 0; background: var(--panel); }
+.m .it.ok .num { background: var(--good); border-color: var(--good); color: var(--on-good); }
+.m .it.soon { color: var(--dim); }
+.m .subnav { margin: 2px 0 4px 34px; padding-left: 10px; border-left: 1px solid var(--line2); }
+.m .subnav div { padding: 3px 6px; color: var(--mut); font-size: 12.5px; display: flex; gap: 8px; align-items: center; }
+.m .subnav div.cur { color: var(--txt); font-weight: 600; }
+.m .subnav i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--line2); display: block; }
+.m .subnav .ok i { background: var(--good); border-color: var(--good); }
+
+.m .main { padding: 30px clamp(18px, 4vw, 48px) 50px; min-width: 0; }
+.m .col { max-width: 700px; margin: 0 auto; }
+.m .crumb { font-size: 12.5px; color: var(--mut); }
+.m h2.t { font-size: 32px; line-height: 1.15; margin: 8px 0 0; letter-spacing: -.015em; font-weight: 700; }
+.m .partbar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); }
+.m .pb { display: inline-flex; gap: 7px; align-items: center; padding: 3px 10px 3px 4px; border-radius: 999px; font-size: 12.5px; border: 1px solid var(--line2); background: var(--panel2); }
+.m .pb b { width: 19px; height: 19px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; background: var(--line); color: var(--mut); }
+.m .pb.ok b { background: var(--good); color: var(--on-good); }
+.m .pb.cur { border-color: var(--acc); background: var(--acc-soft); font-weight: 600; }
+.m .pb.cur b { background: var(--acc); color: var(--on-acc); }
+.m .kind { font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--acc-text); font-weight: 600; }
+.m h3 { font-size: 22px; margin: 26px 0 0; }
+.m p { font-size: 17px; line-height: 1.7; margin: 14px 0 0; }
+.m .lead { color: var(--mut); font-size: 18px; }
+.m code { font: .86em 'JetBrains Mono', ui-monospace, monospace; background: var(--code); border: 1px solid var(--line); padding: 1px 6px; border-radius: 5px; font-variant-ligatures: none; }
+.m pre { font: 14px/1.65 'JetBrains Mono', ui-monospace, monospace; background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 16px 0 0; overflow-x: auto; font-variant-ligatures: none; }
+.m pre .k { color: var(--syn-k); } .m pre .s { color: var(--syn-s); } .m pre .c { color: var(--syn-c); }
+.m .term { border-bottom: 1.5px dotted var(--acc-text); }
+.m .simple { display: grid; grid-template-columns: 34px 1fr; gap: 12px; margin-top: 22px; padding: 16px 18px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); }
+.m .simple .ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--acc-soft); color: var(--acc-text); font-weight: 700; }
+.m .simple p { margin-top: 6px; }
+.m .callout { margin-top: 18px; padding: 13px 16px; border-radius: 10px; background: var(--info-soft); box-shadow: inset 3px 0 0 var(--info); }
+.m .callout b { display: block; font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--info); margin-bottom: 2px; }
+.m .callout p { margin: 0; font-size: 16px; }
+.m .scene { margin-top: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 14px; }
+.m .scene svg { display: block; width: 100%; height: auto; }
+.m .q { margin-top: 20px; padding: 15px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); }
+.m .q .qt { font-weight: 600; font-size: 16px; }
+.m .opt { margin-top: 8px; padding: 9px 12px; border-radius: 9px; border: 1px solid var(--line2); background: var(--panel2); font-size: 15px; }
+.m .opt.r { border-color: var(--good); background: var(--good-soft); }
+.m .opt.w { border-color: var(--bad); background: var(--bad-soft); text-decoration: line-through; text-decoration-color: var(--bad); }
+.m .why { margin-top: 10px; padding: 10px 13px; border-radius: 9px; background: var(--good-soft); font-size: 15px; }
+.m .why b { color: var(--good-text); }
+.m .nav { display: flex; gap: 10px; margin-top: 30px; }
+.m .nav div { flex: 1; padding: 13px 16px; border-radius: 11px; border: 1px solid var(--line2); background: var(--panel); }
+.m .nav small { display: block; color: var(--mut); font-size: 12px; }
+.m .nav .fwd { background: var(--acc); border-color: var(--acc); color: var(--on-acc); text-align: right; }
+.m .nav .fwd small { color: var(--on-acc); opacity: .8; }
+</style>
+</head>
+<body>
+
+<div class="ctl">
+  <h1>Палитры курса</h1>
+  <div class="grp" id="vars"><span>Вариант:</span></div>
+  <div class="grp" id="themes"><span>Тема:</span>
+    <button data-t="dark" aria-pressed="true">Тёмная</button>
+    <button data-t="light" aria-pressed="false">Светлая</button>
+  </div>
+</div>
+
+<div class="info">
+  <div class="about" id="about"></div>
+  <table class="cr" id="contrast"></table>
+</div>
+
+<div class="stage"><div class="frame"><div class="m" id="mock">
+  <aside class="side">
+    <div class="brand">Go: путь до senior</div>
+    <div class="sub">От слайсов до system design</div>
+    <div class="bar"><i></i></div>
+    <div class="sec">Ядро Go</div>
+    <div class="it ok"><span class="num">09</span><span>Методы и ресиверы</span></div>
+    <div class="it cur"><span class="num">10</span><span>Интерфейсы: договор без подписи</span></div>
+    <div class="subnav">
+      <div class="ok"><i></i>Что такое интерфейс</div>
+      <div class="cur"><i></i>Наборы методов</div>
+      <div><i></i>Встраивание и any</div>
+      <div><i></i>Сделай руками</div>
+      <div><i></i>Проверка</div>
+    </div>
+    <div class="it"><span class="num">11</span><span>Интерфейсы в дизайне</span></div>
+    <div class="it soon"><span class="num">14</span><span>Ошибки: обёртки, Is и As</span></div>
+  </aside>
+  <main class="main"><div class="col">
+    <div class="crumb">Урок 10 из 60 · Ядро Go · часть 2 из 5 · ≈ 4 мин чтения</div>
+    <h2 class="t">Интерфейсы: договор без подписи</h2>
+    <div class="partbar">
+      <span class="pb ok"><b>✓</b>Что такое интерфейс</span>
+      <span class="pb cur"><b>2</b>Наборы методов</span>
+      <span class="pb"><b>3</b>Встраивание и any</span>
+      <span class="pb"><b>4</b>Сделай руками</span>
+      <span class="pb"><b>5</b>Проверка</span>
+    </div>
+
+    <div class="simple"><div class="ic">?</div><div>
+      <div class="kind">Простыми словами</div>
+      <p>Сервис уведомлений решает, кому и когда написать. Коду, который принимает решения, не нужно знать, как устроена отправка, — ему нужно одно действие: «отправь».</p>
+    </div></div>
+
+    <h3>Набор методов: где прячется ловушка</h3>
+    <p>У каждого типа есть <span class="term">набор методов</span> — список методов, которые можно вызвать у его значений. Набор <code>*T</code> включает методы с ресивером <code>T</code> и <code>*T</code>, а набор <code>T</code> — только с ресивером <code>T</code>.</p>
+    <pre><span class="k">type</span> Circle <span class="k">struct</span>{ R float64 }
+
+<span class="k">func</span> (c *Circle) Area() float64 { <span class="k">return</span> 3.14 * c.R * c.R }
+
+<span class="k">var</span> s Shape = Circle{R: 2} <span class="c">// ошибка: method Area has pointer receiver</span></pre>
+
+    <div class="callout"><b>Если ты из C#</b><p>В C# класс обязан объявить интерфейс. В Go тип подходит, если у него есть все методы, — объявлять ничего не нужно.</p></div>
+
+    <div class="scene"><svg viewBox="0 0 640 150" role="img" aria-label="Пример анимации">
+      <rect x="10" y="30" width="160" height="80" rx="10" fill="var(--panel2)" stroke="var(--acc)" stroke-width="1.5"/>
+      <text x="90" y="62" text-anchor="middle" fill="var(--txt)" font-weight="600" font-size="15">Shape требует</text>
+      <text x="90" y="86" text-anchor="middle" fill="var(--mut)" font-size="13" font-family="JetBrains Mono, monospace">Area() float64</text>
+      <rect x="230" y="20" width="210" height="80" rx="10" fill="var(--bad-soft)" stroke="var(--bad)" stroke-width="1.5"/>
+      <text x="335" y="50" text-anchor="middle" fill="var(--txt)" font-weight="600" font-size="15">набор методов Circle</text>
+      <text x="335" y="74" text-anchor="middle" fill="var(--bad)" font-size="13" font-family="JetBrains Mono, monospace">— пусто —</text>
+      <rect x="292" y="104" width="86" height="30" rx="15" fill="var(--acc)"/>
+      <text x="335" y="124" text-anchor="middle" fill="var(--on-acc)" font-size="14" font-weight="600" font-family="JetBrains Mono, monospace">Area()</text>
+      <line x1="172" y1="70" x2="226" y2="62" stroke="var(--mut)" stroke-width="2"/>
+      <text x="470" y="66" fill="var(--bad)" font-size="26" font-weight="700">✗</text>
+      <text x="498" y="64" fill="var(--bad)" font-size="14" font-weight="700">не найден</text>
+    </svg></div>
+
+    <div class="q">
+      <div class="kind">Проверь себя · вопрос 1 из 2</div>
+      <div class="qt" style="margin-top:6px">У <code>Circle</code> метод <code>func (c *Circle) Area()</code>. Что скомпилируется?</div>
+      <div class="opt w">var s Shape = Circle{R: 1}</div>
+      <div class="opt r">var s Shape = &amp;Circle{R: 1}</div>
+      <div class="opt">Оба варианта</div>
+      <div class="why"><b>Верно.</b> В набор методов <code>Circle</code> метод с ресивером <code>*Circle</code> не входит, в набор <code>*Circle</code> — входит.</div>
+    </div>
+
+    <div class="nav"><div><small>← Назад</small><b>Что такое интерфейс</b></div><div class="fwd"><small>Дальше →</small><b>Встраивание и any</b></div></div>
+  </div></main>
+</div></div></div>
+
+<script>
+// Токены вариантов. --acc — заливки и полосы; --acc-text — акцент для текста (чуть светлее в тёмной теме, темнее в светлой).
+var V = {
+  graphite: {
+    name: 'Графит', idea: 'Нейтральный серый, как у GitHub и документации. Один спокойный синий акцент, всё остальное — оттенки серого. Самый «рабочий» вариант: ничего не отвлекает от текста.',
+    dark: { bg:'#111418', side:'#0d1013', panel:'#171b21', panel2:'#1c2128', line:'#262c35', line2:'#343c47', txt:'#e3e7ec', mut:'#9aa4b0', dim:'#68727e',
+            acc:'#8ab4f8', 'acc-text':'#9cc0fa', 'on-acc':'#0b1a33', 'acc-soft':'rgba(138,180,248,.12)', code:'#0d1013',
+            good:'#7fcf9c', 'good-soft':'rgba(127,207,156,.10)', 'good-text':'#8fdbab', 'on-good':'#0b2416', bad:'#f08b80', 'bad-soft':'rgba(240,139,128,.10)',
+            info:'#9cc0fa', 'info-soft':'rgba(138,180,248,.08)', 'syn-k':'#c4a7f5', 'syn-s':'#9fd59b', 'syn-c':'#7c8794' },
+    light: { bg:'#fbfbfa', side:'#f2f3f5', panel:'#ffffff', panel2:'#f6f7f8', line:'#e3e6ea', line2:'#cfd4da', txt:'#1f2328', mut:'#58616c', dim:'#8a929c',
+            acc:'#2563d6', 'acc-text':'#1f56bd', 'on-acc':'#ffffff', 'acc-soft':'rgba(37,99,214,.08)', code:'#f4f5f7',
+            good:'#1f7a3d', 'good-soft':'rgba(31,122,61,.08)', 'good-text':'#1a6b35', 'on-good':'#ffffff', bad:'#c0392b', 'bad-soft':'rgba(192,57,43,.07)',
+            info:'#1f56bd', 'info-soft':'rgba(37,99,214,.06)', 'syn-k':'#8a3fbd', 'syn-s':'#1f7a3d', 'syn-c':'#6e7781' } },
+  paper: {
+    name: 'Бумага', idea: 'Тёплые тона, как в читалках: тёмная тема — тёплый уголь, светлая — бумага. Акцент — приглушённый янтарь, так что связь с прошлым дизайном остаётся, но без свечения и насыщенных заливок. Самый мягкий для долгого чтения.',
+    dark: { bg:'#1b1a17', side:'#171613', panel:'#211f1c', panel2:'#272522', line:'#2f2c27', line2:'#3d3932', txt:'#e7e1d5', mut:'#aaa293', dim:'#7b7467',
+            acc:'#d6a35a', 'acc-text':'#e0b06a', 'on-acc':'#24190a', 'acc-soft':'rgba(214,163,90,.11)', code:'#161512',
+            good:'#9ccb98', 'good-soft':'rgba(156,203,152,.09)', 'good-text':'#a8d4a4', 'on-good':'#14240f', bad:'#e59a84', 'bad-soft':'rgba(229,154,132,.10)',
+            info:'#c8b38f', 'info-soft':'rgba(200,179,143,.08)', 'syn-k':'#e0a17a', 'syn-s':'#b5c98a', 'syn-c':'#8a8273' },
+    light: { bg:'#f7f3ea', side:'#efe9dc', panel:'#fdfbf6', panel2:'#f6f1e6', line:'#e6ddcb', line2:'#d6cab3', txt:'#2b2620', mut:'#665d50', dim:'#958b7b',
+            acc:'#985d14', 'acc-text':'#8a5410', 'on-acc':'#ffffff', 'acc-soft':'rgba(168,105,27,.09)', code:'#f1ebdf',
+            good:'#3b7a3a', 'good-soft':'rgba(59,122,58,.08)', 'good-text':'#336b32', 'on-good':'#ffffff', bad:'#b0432f', 'bad-soft':'rgba(176,67,47,.07)',
+            info:'#7a6542', 'info-soft':'rgba(122,101,66,.07)', 'syn-k':'#a0452a', 'syn-s':'#4f7a2c', 'syn-c':'#8b8170' } },
+  nord: {
+    name: 'Север', idea: 'Холодная приглушённая гамма, по мотивам палитры Nord: сине-серый фон и бирюзовый акцент. Спокойная и «технологичная», хорошо смотрится с кодом.',
+    dark: { bg:'#1d2128', side:'#191c22', panel:'#232831', panel2:'#29303a', line:'#313845', line2:'#3e4655', txt:'#dfe5ee', mut:'#9ca7b7', dim:'#6c7687',
+            acc:'#88c0d0', 'acc-text':'#94cad9', 'on-acc':'#0f232a', 'acc-soft':'rgba(136,192,208,.12)', code:'#181b21',
+            good:'#a3be8c', 'good-soft':'rgba(163,190,140,.10)', 'good-text':'#b2cb9c', 'on-good':'#16220e', bad:'#d99195', 'bad-soft':'rgba(217,145,149,.10)',
+            info:'#94cad9', 'info-soft':'rgba(136,192,208,.08)', 'syn-k':'#b48ead', 'syn-s':'#a3be8c', 'syn-c':'#7b8698' },
+    light: { bg:'#f6f8fb', side:'#edf1f6', panel:'#ffffff', panel2:'#f4f6f9', line:'#dfe5ed', line2:'#c9d2de', txt:'#262d38', mut:'#58627a', dim:'#8a94a6',
+            acc:'#2f6f86', 'acc-text':'#285f73', 'on-acc':'#ffffff', 'acc-soft':'rgba(47,111,134,.08)', code:'#eef2f7',
+            good:'#3d7a49', 'good-soft':'rgba(61,122,73,.08)', 'good-text':'#356b40', 'on-good':'#ffffff', bad:'#b4434b', 'bad-soft':'rgba(180,67,75,.07)',
+            info:'#285f73', 'info-soft':'rgba(47,111,134,.06)', 'syn-k':'#8e4f84', 'syn-s':'#3d7a49', 'syn-c':'#7a8494' } },
+  lilac: {
+    name: 'Мягкий фиолет', idea: 'Приглушённая версия текущего дизайна: фиолетовый оттенок остаётся, но фон почти серый, а акцент — пастельная лаванда вместо насыщенного янтаря. Для тех, кому нравится нынешнее настроение, но не нравится яркость.',
+    dark: { bg:'#1c1b23', side:'#18171e', panel:'#22212b', panel2:'#282733', line:'#302e3b', line2:'#3d3a4b', txt:'#e3e1ec', mut:'#a4a0b6', dim:'#736f88',
+            acc:'#b9a4f0', 'acc-text':'#c3b0f4', 'on-acc':'#1d1530', 'acc-soft':'rgba(185,164,240,.12)', code:'#17161d',
+            good:'#9dcfa8', 'good-soft':'rgba(157,207,168,.10)', 'good-text':'#aad9b4', 'on-good':'#122417', bad:'#ec9c9c', 'bad-soft':'rgba(236,156,156,.10)',
+            info:'#c3b0f4', 'info-soft':'rgba(185,164,240,.08)', 'syn-k':'#e0a3c8', 'syn-s':'#a6d4a0', 'syn-c':'#7f7b93' },
+    light: { bg:'#f8f7fb', side:'#f0eef6', panel:'#ffffff', panel2:'#f6f5fa', line:'#e4e1ee', line2:'#d2cde1', txt:'#26232f', mut:'#5f5a72', dim:'#908aa4',
+            acc:'#6a4fc4', 'acc-text':'#5c43b0', 'on-acc':'#ffffff', 'acc-soft':'rgba(106,79,196,.08)', code:'#f3f1f8',
+            good:'#2f7a4c', 'good-soft':'rgba(47,122,76,.08)', 'good-text':'#2a6b43', 'on-good':'#ffffff', bad:'#b5434b', 'bad-soft':'rgba(181,67,75,.07)',
+            info:'#5c43b0', 'info-soft':'rgba(106,79,196,.06)', 'syn-k':'#a03b88', 'syn-s':'#2f7a4c', 'syn-c':'#8a8599' } },
+  current: {
+    name: 'Текущая', idea: 'Как сейчас: насыщенный фиолетовый фон со свечением и яркий янтарь. Для сравнения.',
+    dark: { bg:'#0b0720', side:'#0e0927', panel:'#14102a', panel2:'#191433', line:'#261a46', line2:'#3a2b6a', txt:'#eee8f7', mut:'#a394c3', dim:'#6f6392',
+            acc:'#f4b942', 'acc-text':'#f4b942', 'on-acc':'#241603', 'acc-soft':'rgba(244,185,66,.10)', code:'#120e26',
+            good:'#8fd6a8', 'good-soft':'rgba(143,214,168,.10)', 'good-text':'#8fd6a8', 'on-good':'#10251a', bad:'#f08a74', 'bad-soft':'rgba(232,112,90,.11)',
+            info:'#9aa8ff', 'info-soft':'rgba(140,155,255,.10)', 'syn-k':'#f4b942', 'syn-s':'#8fd6a8', 'syn-c':'#6f6392' },
+    light: { bg:'#f6f3fb', side:'#efeaf7', panel:'#ffffff', panel2:'#f3eff9', line:'#e2daee', line2:'#cfc3e3', txt:'#1f1638', mut:'#66597f', dim:'#9a8fb1',
+            acc:'#f4b942', 'acc-text':'#a86a00', 'on-acc':'#2a1a00', 'acc-soft':'rgba(244,185,66,.16)', code:'#f1ecf8',
+            good:'#23784d', 'good-soft':'rgba(70,170,115,.13)', 'good-text':'#23784d', 'on-good':'#ffffff', bad:'#b8452f', 'bad-soft':'rgba(232,112,90,.12)',
+            info:'#4d5fd1', 'info-soft':'rgba(90,110,230,.10)', 'syn-k':'#a86a00', 'syn-s':'#23784d', 'syn-c':'#9a8fb1' } }
+};
+
+var cur = 'graphite', theme = 'dark';
+var mock = document.getElementById('mock');
+
+function lum(hex) {
+  var c = hex.replace('#', ''), rgb = [0, 2, 4].map(function (i) { return parseInt(c.substr(i, 2), 16) / 255; });
+  rgb = rgb.map(function (v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+}
+function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+function grade(r, body) {
+  if (r >= 7) return '<span class="ok">' + r.toFixed(1) + ' · AAA</span>';
+  if (r >= 4.5) return '<span class="ok">' + r.toFixed(1) + ' · AA</span>';
+  if (r >= 3) return '<span class="mid">' + r.toFixed(1) + ' · только крупное</span>';
+  return '<span class="no">' + r.toFixed(1) + ' · мало</span>';
+}
+
+function render() {
+  var t = V[cur][theme];
+  for (var k in t) mock.style.setProperty('--' + k, t[k]);
+  document.getElementById('about').innerHTML = '<b class="n">' + V[cur].name + '</b><p>' + V[cur].idea + '</p>' +
+    '<div class="swatches">' + ['bg', 'panel', 'txt', 'mut', 'acc', 'good', 'bad'].map(function (k) { return '<i title="' + k + ' ' + t[k] + '" style="background:' + t[k] + '"></i>'; }).join('') + '</div>';
+  document.getElementById('contrast').innerHTML = '<tr><th>Пара</th><th>Контраст</th></tr>' +
+    '<tr><td>Основной текст на фоне</td><td>' + grade(ratio(t.txt, t.bg), true) + '</td></tr>' +
+    '<tr><td>Вторичный текст на фоне</td><td>' + grade(ratio(t.mut, t.bg)) + '</td></tr>' +
+    '<tr><td>Акцентный текст на фоне</td><td>' + grade(ratio(t['acc-text'], t.bg)) + '</td></tr>' +
+    '<tr><td>Текст на кнопке «Дальше»</td><td>' + grade(ratio(t['on-acc'], t.acc)) + '</td></tr>' +
+    '<tr><td>Текст на карточке</td><td>' + grade(ratio(t.txt, t.panel.charAt(0) === '#' ? t.panel : t.bg), true) + '</td></tr>';
+  [].forEach.call(document.querySelectorAll('#vars button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.v === cur)); });
+  [].forEach.call(document.querySelectorAll('#themes button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.t === theme)); });
+}
+
+var vb = document.getElementById('vars');
+Object.keys(V).forEach(function (k) {
+  var b = document.createElement('button'); b.dataset.v = k; b.textContent = V[k].name;
+  b.addEventListener('click', function () { cur = k; render(); });
+  vb.appendChild(b);
+});
+[].forEach.call(document.querySelectorAll('#themes button'), function (b) {
+  b.addEventListener('click', function () { theme = b.dataset.t; render(); });
+});
+render();
+</script>
+</body>
+</html>

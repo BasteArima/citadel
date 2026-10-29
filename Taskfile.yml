@@ -1,0 +1,60 @@
+# Команды разработки. Установка: go install github.com/go-task/task/v3/cmd/task@latest
+version: '3'
+
+vars:
+  # Только код платформы: study/ и legacy/ не трогаем.
+  GO_DIRS: cmd internal web
+
+tasks:
+  fmt:
+    desc: Отформатировать код
+    cmds:
+      - gofmt -w {{.GO_DIRS}}
+
+  vet:
+    desc: go vet
+    cmds:
+      - go vet ./...
+
+  test:
+    desc: Тесты
+    cmds:
+      - go test ./...
+
+  check:
+    desc: Проверить курсы в content/
+    cmds:
+      - go run ./cmd/citadel check
+
+  convert:
+    desc: Пересобрать content/go/course.json из legacy/go-course
+    cmds:
+      - go run ./cmd/citadel convert-v0
+
+  verify:
+    desc: Всё перед тем, как отдать — формат, vet, тесты, курсы
+    cmds:
+      - cmd: test -z "$(gofmt -l {{.GO_DIRS}})" || (gofmt -l {{.GO_DIRS}} && echo "run task fmt" && exit 1)
+      - task: vet
+      - task: test
+      - task: check
+
+  run:
+    desc: Запустить сервер локально на :8081
+    cmds:
+      - go run ./cmd/citadel serve -addr :8081
+
+  up:
+    desc: Поднять в Docker Desktop на http://localhost:8080
+    cmds:
+      - docker compose up -d --build
+
+  down:
+    desc: Остановить контейнер
+    cmds:
+      - docker compose down
+
+  logs:
+    desc: Логи контейнера
+    cmds:
+      - docker compose logs -f --tail 100

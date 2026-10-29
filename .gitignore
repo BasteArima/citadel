@@ -1,0 +1,28 @@
+# секреты и локальные настройки
+.env
+.env.*
+!.env.example
+
+# данные сервиса: база, загрузки, бэкапы
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# сборка
+/bin/
+/dist/
+node_modules/
+
+# личное: учёба владельца, его заметки и инструкции для Claude
+/study/
+/docs/dev/_local/
+CLAUDE.local.md
+.claude/settings.local.json
+
+# редакторы и система
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

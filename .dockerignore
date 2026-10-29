@@ -1,0 +1,17 @@
+# В образ попадают только cmd, internal, web, content и go.mod/go.sum.
+.git
+.claude
+.idea
+.vscode
+study
+legacy
+docs
+data
+bin
+dist
+*.md
+.env
+.env.*
+Taskfile.yml
+compose.yaml
+Dockerfile

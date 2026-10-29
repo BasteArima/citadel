@@ -1,0 +1,22 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "legacy",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8766", "--directory", "legacy"],
+      "port": 8766
+    },
+    {
+      "name": "citadel",
+      "runtimeExecutable": "go",
+      "runtimeArgs": ["run", "./cmd/citadel", "serve", "-addr", ":8081"],
+      "port": 8081
+    },
+    {
+      "name": "docker",
+      "url": "http://localhost:8080",
+      "port": 8080
+    }
+  ]
+}

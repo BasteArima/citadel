@@ -1,0 +1,490 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Лестница бэкендера</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Эквалайзер уровней сверху, под ним две колонки: шаги слева, ТЗ выбранного шага справа.
+   Палитра «Графит», как у курса: тема берётся из настроек курса, иначе — из системы. */
+:root{
+  color-scheme: light;
+  --void:#fbfbfa; --panel:#ffffff; --panel2:#f6f7f8; --line:#e3e6ea; --line2:#cfd4da;
+  --amb:#2563d6; --amb2:#1f56bd; --amb-ink:#ffffff; --amb-soft:rgba(37,99,214,.08);
+  --rose:#b5352a; --rose-soft:rgba(192,57,43,.07); --good:#1f7a3d;
+  --txt:#1f2328; --mut:#58616c; --dead:#dfe3e8; --code:#f4f5f7;
+  --body:'Golos Text', system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --void:#111418; --panel:#171b21; --panel2:#1c2128; --line:#262c35; --line2:#343c47;
+    --amb:#8ab4f8; --amb2:#9cc0fa; --amb-ink:#0b1a33; --amb-soft:rgba(138,180,248,.12);
+    --rose:#f08b80; --rose-soft:rgba(240,139,128,.10); --good:#7fcf9c;
+    --txt:#e3e7ec; --mut:#9aa4b0; --dead:#2a313b; --code:#0d1013;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --void:#111418; --panel:#171b21; --panel2:#1c2128; --line:#262c35; --line2:#343c47;
+  --amb:#8ab4f8; --amb2:#9cc0fa; --amb-ink:#0b1a33; --amb-soft:rgba(138,180,248,.12);
+  --rose:#f08b80; --rose-soft:rgba(240,139,128,.10); --good:#7fcf9c;
+  --txt:#e3e7ec; --mut:#9aa4b0; --dead:#2a313b; --code:#0d1013;
+}
+*{box-sizing:border-box}
+html,body{background:var(--void)}
+body{margin:0; color:var(--txt); font-family:var(--body); line-height:1.6;
+  padding-left:max(16px, env(safe-area-inset-left,0px));
+  padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-block:24px 64px}
+.wrap{max-width:1060px; margin:0 auto}
+
+.top{display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap}
+.mark{display:flex; align-items:center; gap:10px}
+.mark .led{width:9px; height:9px; border-radius:50%; background:var(--amb)}
+.mark b{font-weight:700; font-size:18px}
+.mark span{font-size:13px; color:var(--mut)}
+.chips{display:flex; gap:8px; flex-wrap:wrap}
+.chip{font-size:12.5px; color:var(--mut);
+  border:1px solid var(--line2); border-radius:999px; padding:5px 13px; white-space:nowrap}
+.chip.local{color:var(--rose); border-color:var(--rose)}
+
+/* баннер «сейчас» */
+.today{display:flex; gap:16px; align-items:center; flex-wrap:wrap; justify-content:space-between;
+  margin-top:18px; padding:15px 18px; border-radius:12px;
+  border:1px solid var(--line); background:var(--panel)}
+.today .l{min-width:0}
+.today .k{font-size:13px; font-weight:600; color:var(--amb2)}
+.today .v{font-size:17px; font-weight:600; margin-top:3px}
+.today .d{font-size:13.5px; color:var(--mut); margin-top:2px}
+.today button{font-family:var(--body); font-weight:600; font-size:14px; cursor:pointer; min-height:44px;
+  border-radius:10px; padding:0 18px; border:1px solid var(--amb); background:var(--amb); color:var(--amb-ink); white-space:nowrap}
+.today button:focus-visible{outline:2px solid var(--amb2); outline-offset:2px}
+
+.stage{display:flex; gap:clamp(18px,4vw,46px); align-items:flex-end; justify-content:space-between;
+  flex-wrap:wrap; padding:clamp(20px,3.6vw,34px) 0 10px}
+.eq{display:flex; gap:clamp(6px,1.4vw,13px); align-items:flex-end; overflow-x:auto; padding-bottom:6px; min-width:0}
+.col{background:none; border:0; padding:6px 4px 0; cursor:pointer; display:flex; flex-direction:column;
+  align-items:center; gap:9px; border-radius:9px; flex:none; color:inherit; font-family:inherit}
+.col:focus-visible{outline:2px solid var(--amb); outline-offset:2px}
+.bars{display:flex; flex-direction:column-reverse; gap:4px}
+.tick{width:clamp(22px,4.6vw,34px); height:7px; border-radius:2px; background:var(--dead); transition:background .2s}
+.tick.on{background:var(--good)}
+.tick.now{background:var(--amb); animation:pulse 2.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.5}}
+.col .cap{font-size:12px; color:var(--mut); font-weight:500}
+.col .idx{font-size:12.5px; color:var(--mut); font-weight:600}
+.col[aria-selected="true"] .cap{color:var(--txt)}
+.col[aria-selected="true"] .idx{color:var(--amb2)}
+.col[aria-selected="true"]{background:var(--amb-soft); box-shadow:inset 0 0 0 1px var(--line2)}
+.col:hover .cap{color:var(--txt)}
+.readout{text-align:right; min-width:0}
+.readout .lab{font-size:13px; color:var(--mut)}
+.readout .big{font-weight:600; font-size:clamp(52px,10vw,92px); line-height:.95;
+  color:var(--txt); font-variant-numeric:tabular-nums; margin-top:4px; letter-spacing:-.02em}
+.readout .of{font-size:13px; color:var(--mut)}
+
+.cols{display:grid; grid-template-columns:340px 1fr; gap:14px; margin-top:22px; align-items:start}
+@media (max-width:820px){ .cols{grid-template-columns:1fr} }
+.card{background:var(--panel); border:1px solid var(--line); border-radius:12px; min-width:0}
+.card > h2{font-weight:600; font-size:14px; color:var(--mut); margin:0; padding:15px 18px; border-bottom:1px solid var(--line)}
+.lvl-pain{padding:13px 18px; color:var(--mut); font-size:14px; line-height:1.6; border-bottom:1px solid var(--line); margin:0}
+.lvl-pain b{color:var(--txt); font-weight:600}
+
+.steps{list-style:none; margin:0; padding:7px}
+.steps button{width:100%; text-align:left; background:none; border:0; cursor:pointer; color:inherit;
+  font-family:inherit; display:grid; grid-template-columns:auto 1fr; gap:11px; padding:11px 12px; border-radius:9px; align-items:start}
+.steps button:hover{background:var(--panel2)}
+.steps button[aria-current="true"]{background:var(--amb-soft); box-shadow:inset 0 0 0 1px var(--line2)}
+.steps button:focus-visible{outline:2px solid var(--amb); outline-offset:-2px}
+.bullet{width:13px; height:13px; border-radius:50%; border:1.5px solid var(--line2); margin-top:4px; flex:none}
+.bullet.on{background:var(--good); border-color:var(--good)}
+.steps .n{font-size:12px; color:var(--mut); display:block}
+.steps .t{font-size:14.5px; font-weight:500; line-height:1.4}
+.steps button[aria-current="true"] .n{color:var(--amb2)}
+.steps .done .t{color:var(--mut)}
+
+.spec{padding:clamp(18px,3vw,30px)}
+.spec .eyebrow{display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; font-size:13.5px; font-weight:600; color:var(--amb2)}
+.spec .eyebrow .t{color:var(--mut); font-weight:400}
+.spec h3{font-weight:700; font-size:clamp(24px,4vw,32px);
+  margin:8px 0 0; letter-spacing:-.01em; line-height:1.2; text-wrap:balance}
+.spec .why{margin:16px 0 0; padding:14px 16px; border:1px solid var(--line); background:var(--rose-soft);
+  border-radius:10px; color:var(--txt); font-size:15.5px; line-height:1.65; max-width:64ch}
+.spec h4{font-size:15px; font-weight:700; color:var(--txt);
+  margin:30px 0 0; padding-bottom:8px; border-bottom:1px solid var(--line)}
+.spec ul{margin:14px 0 0; padding-left:20px; font-size:15.5px; line-height:1.65;
+  display:flex; flex-direction:column; gap:11px; max-width:66ch}
+.spec ul.ok li::marker{color:var(--good)}
+.spec ul.q li::marker{color:var(--amb)}
+.spec ul.warn li::marker{color:var(--rose)}
+.spec ul.skip{color:var(--mut)}
+.spec li{min-width:0}
+.spec li b{font-weight:600}
+code{font-family:'JetBrains Mono',ui-monospace,'Cascadia Mono',Consolas,monospace; font-size:.85em; background:var(--code);
+  border:1px solid var(--line); padding:1px 6px; border-radius:5px; overflow-wrap:anywhere;
+  font-variant-ligatures:none; font-feature-settings:"liga" 0, "calt" 0}
+.spec .note{margin:16px 0 0; font-size:14.5px; line-height:1.6; color:var(--mut); max-width:64ch;
+  padding:12px 14px; border-radius:10px; background:var(--panel2)}
+.spec .act{display:flex; gap:11px; flex-wrap:wrap; align-items:center; margin-top:30px; padding-top:20px; border-top:1px solid var(--line)}
+.spec .act button{font-family:var(--body); font-weight:600; font-size:14px; cursor:pointer; border-radius:10px; min-height:44px;
+  padding:0 19px; border:1px solid var(--amb); background:var(--amb); color:var(--amb-ink)}
+.spec .act button.off{background:transparent; color:var(--mut); border-color:var(--line2)}
+.spec .act button:focus-visible{outline:2px solid var(--amb2); outline-offset:2px}
+.spec .act .hint{font-size:13px; color:var(--mut)}
+
+.rules{margin-top:32px; border-top:1px solid var(--line); padding-top:24px}
+.rules h2{font-weight:700; font-size:22px; margin:0 0 4px}
+.rules p.lead{color:var(--mut); font-size:14.5px; margin:0 0 18px; max-width:64ch}
+.rules .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(248px,1fr)); gap:12px}
+.rules .r{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:16px; min-width:0}
+.rules .r b{display:block; font-size:15px; margin-bottom:5px}
+.rules .r span{font-size:14px; color:var(--mut); line-height:1.6}
+@media (prefers-reduced-motion:reduce){.tick.now{animation:none}}
+</style>
+<script>
+  try {
+    var th = JSON.parse(localStorage.getItem('gocourse-v1') || '{}').theme;
+    if (th === 'light' || th === 'dark') document.documentElement.setAttribute('data-theme', th);
+  } catch (e) {}
+</script>
+
+<div class="wrap">
+  <div class="top">
+    <div class="mark"><span class="led"></span><b>Лестница</b><span>путь к офферу</span></div>
+    <div class="chips"><span class="chip">8 уровней · 64 шага</span><span class="chip" id="sync">прогресс — в этом браузере</span></div>
+  </div>
+
+  <div class="today">
+    <div class="l">
+      <div class="k">Сегодня делаешь это</div>
+      <div class="v" id="nowT">—</div>
+      <div class="d" id="nowD">Один шаг за заход. Закрыл — остановись, даже если идёт легко.</div>
+    </div>
+    <button id="nowGo">Открыть ТЗ</button>
+  </div>
+
+  <div class="stage">
+    <div class="eq" id="eq" role="tablist" aria-label="Уровни"></div>
+    <div class="readout">
+      <div class="lab">шагов закрыто</div>
+      <div class="big" id="big">00</div>
+      <div class="of">из 64</div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="card">
+      <h2 id="lvlName">Уровень 1</h2>
+      <p class="lvl-pain" id="lvlPain"></p>
+      <ul class="steps" id="stepList"></ul>
+    </div>
+    <div class="card" id="detail"></div>
+  </div>
+
+  <section class="rules">
+    <h2>Правила, чтобы не задохнуться</h2>
+    <p class="lead">Лестница рассчитана не на спринт, а на то, чтобы её можно было идти месяцами и не бросить. Эти правила — часть задания, а не пожелания.</p>
+    <div class="grid">
+      <div class="r"><b>Один шаг за заход, максимум час</b><span>Закрыл шаг — остановись, даже если прёт. Не закрыл за час — тоже остановись и приходи с тем, что есть.</span></div>
+      <div class="r"><b>Залип на 20 минут — пиши мне</b><span>Двадцать минут без движения — это не лень и не тупость, это сигнал, что в ТЗ чего-то не хватает. Разбираем и правим ТЗ.</span></div>
+      <div class="r"><b>Пауза ничего не обнуляет</b><span>Пропал на неделю или на месяц — шаги остаются закрытыми. Возвращаешься туда, где остановился, а не в начало.</span></div>
+      <div class="r"><b>Ядро пишешь руками</b><span>Логика, база, конкурентность — твои. Docker-compose и CI можно генерить: это не то, что проверяют на собесе.</span></div>
+      <div class="r"><b>Шаг закрывает защита</b><span>Не зелёный тест, а объяснение своего кода. Не смог объяснить — шаг открыт, и это нормальный результат.</span></div>
+      <div class="r"><b>Собесы с третьего уровня</b><span>Не после восьмого. Настоящее собеседование находит дыры быстрее, чем любое самотестирование.</span></div>
+    </div>
+  </section>
+</div>
+
+<script>
+var LEVELS=[
+{n:'Каталог товаров', pain:'HTTP-сервис, который хранит товары и переживает перезапуск.',
+ milestone:'Первый рабочий сервис на Go, который можно показать.', steps:[
+
+ {t:'Сервер отвечает', why:'Пока нечего запускать — нечего и проверять.', time:'1 вечер',
+  build:['<code>go mod init</code> и один <code>main.go</code> в корне','Свой роутер: <code>mux := http.NewServeMux()</code>','Хендлер <code>GET /health</code> → JSON <code>{"status":"ok"}</code>','Порт из переменной окружения <code>PORT</code>, по умолчанию 8080','Сервер через <code>&http.Server{}</code> с таймаутами <code>ReadTimeout</code> и <code>WriteTimeout</code>'],
+  files:['<b>main.go</b> — пока всё здесь: роутер, хендлер, запуск'],
+  done:['<code>go run .</code> поднимает сервер и пишет в лог, на каком порту','<code>curl -i localhost:8080/health</code> даёт 200 и <code>Content-Type: application/json</code>','<code>PORT=9000 go run .</code> поднимает на 9000','Любой другой путь отвечает 404'],
+  traps:['<code>ListenAndServe</code> возвращает ошибку — её надо залогировать, иначе сервис тихо умрёт','Заголовки пишутся строго до тела: сначала <code>Header().Set</code>, потом <code>WriteHeader</code>, потом <code>Write</code>','<code>Content-Type</code> сам не проставится — Go угадает <code>text/plain</code>','Таймауты в <code>http.Server</code> по умолчанию бесконечные. На проде это способ исчерпать соединения'],
+  skip:['Фреймворки — chi и gin подождут, стандартной библиотеки тут хватает','Конфиг в YAML — <code>os.Getenv</code> достаточно','Логгер сложнее <code>log.Printf</code>','Graceful shutdown — он появится, когда будет что закрывать'],
+  viva:['Чем свой <code>ServeMux</code> лучше <code>DefaultServeMux</code>?','Что произойдёт, если записать в <code>ResponseWriter</code> после <code>WriteHeader</code>?','Зачем серверу таймауты, если клиенты «нормальные»?']},
+
+ {t:'Товары в памяти', why:'Сервер живой, но пустой.', time:'1–2 вечера',
+  build:['Тип <code>Product</code>: id, название, цена, категория','Хранилище в памяти на слайсе, с генерацией id','Разбор тела через <code>json.NewDecoder(r.Body)</code>','Валидация: пустое имя и отрицательная цена не проходят','Единый формат ошибки <code>{"error":"..."}</code> для всех 4xx'],
+  files:['<b>main.go</b> — роутинг и запуск','<b>product.go</b> — тип и валидация','<b>store.go</b> — хранилище в памяти'],
+  api:['<code>POST /products</code> · тело <code>{name, price, category}</code> → <b>201</b> + товар с id','<code>GET /products</code> → <b>200</b>, массив товаров','<code>GET /products/{id}</code> → <b>200</b> или <b>404</b>','Любая ошибка разбора → <b>400</b> и <code>{"error":"..."}</code>'],
+  done:['Создал товар — вернулся 201 и товар с проставленным id','<code>GET /products</code> на пустом каталоге отдаёт <code>[]</code>, а не <code>null</code>','Кривой JSON даёт 400 с внятным текстом, а не панику','Несуществующий id даёт 404'],
+  traps:['<code>ServeMux</code> с Go 1.22 сам понимает <code>GET /products/{id}</code> — значение берётся через <code>r.PathValue("id")</code>','<code>var products []Product</code> сериализуется в <code>null</code>. Инициализируй литералом — это ровно тот баг, который ломает фронт','<code>DisallowUnknownFields()</code> у декодера ловит опечатки в ключах','Цена в <code>float64</code> — плохая привычка для денег. Храни целые копейки'],
+  skip:['Удаление и обновление товара — не нужны до уровня 3','Пагинация — это уровень 6','Авторизация — её в этой лестнице нет совсем'],
+  viva:['Почему <code>json.Decoder</code> лучше, чем <code>io.ReadAll</code> с <code>Unmarshal</code>?','Откуда в ответе берётся <code>null</code> вместо <code>[]</code> и чем это ломает фронт?','Почему id генерирует сервер, а не присылает клиент?']},
+
+ {t:'Данные переживают рестарт', why:'Перезапустил сервис — всё пропало.', time:'1 вечер',
+  build:['Сохранение каталога в <code>products.json</code> при каждом изменении','Чтение файла при старте','Запись через временный файл и <code>os.Rename</code>','Отсутствующий файл — не ошибка, а пустой каталог'],
+  done:['Создал товар, перезапустил — товар на месте','Битый файл не роняет сервис, а даёт понятную ошибку в лог','Пустая папка после первого запуска содержит валидный JSON'],
+  traps:['Запись «поверх» через <code>os.Create</code> обрезает файл сразу: упал посередине — потерял всё','<code>os.Rename</code> в пределах одной файловой системы атомарен, через диски — нет','<code>defer f.Close()</code> не гарантирует, что данные на диске. Для надёжности — <code>f.Sync()</code> до закрытия'],
+  skip:['Формат на замену JSON','Инкрементальная запись — пиши весь файл целиком, это нормально на таком объёме'],
+  viva:['Зачем писать во временный файл и переименовывать, а не поверх?','Что останется на диске, если процесс убить <code>kill -9</code> в момент записи?']},
+
+ {t:'Файл под нагрузкой', why:'Два запроса одновременно — и файл битый.', time:'1–2 вечера',
+  build:['Скрипт: 50 горутин параллельно создают товары','Запуск под <code>go run -race .</code>','<code>sync.RWMutex</code> вокруг каталога и файла','Замер: сколько занимает поиск по категории на 10 000 товаров'],
+  done:['<code>-race</code> молчит','После нагрузки файл валидный, товаров ровно столько, сколько создали','Записана цифра времени поиска — её будешь сравнивать после Postgres'],
+  traps:['Мьютекс вокруг записи в файл сериализует все запросы — заметь это в замере','Копирование структуры с мьютексом внутри ломает защиту. Только указательный ресивер','<code>-race</code> находит только то, что реально столкнулось в этом прогоне'],
+  skip:['Оптимизация поиска — сейчас надо честно упереться в медленный перебор'],
+  viva:['Почему <code>RWMutex</code>, а не обычный <code>Mutex</code>?','Что именно ловит детектор гонок и почему чистый прогон не значит корректную программу?','Где здесь узкое место — диск, мьютекс или перебор?']},
+
+ {t:'Postgres вместо файла', why:'Файл не умеет ни фильтров, ни индексов, ни транзакций — а ты уже упёрся во всё три.', time:'2 вечера',
+  build:['Postgres в докере','Подключение через <code>pgx</code>, пул соединений','Таблица <code>products</code>','Репозиторий: вставка, выборка, фильтр по категории','<code>context</code> с таймаутом в каждом запросе'],
+  done:['Файл удалён, данные в базе','Фильтр по категории работает SQL-запросом','Отменённый контекст обрывает запрос, а не висит','Повторный замер поиска — цифра против цифры из шага 1.4'],
+  traps:['Забытый <code>rows.Close()</code> держит соединение в пуле до исчерпания','<code>rows.Err()</code> проверяют после цикла, иначе теряются ошибки чтения','Конкатенация строк в SQL — путь к инъекции. Только плейсхолдеры <code>$1</code>','Пул по умолчанию может быть больше, чем выдержит Postgres'],
+  skip:['ORM — пиши SQL руками, на собесе спросят именно его','Миграции — это следующий шаг'],
+  viva:['Что такое пул соединений и что будет, если его не ограничить?','Зачем <code>context</code> в запросе к базе, если клиент уже отвалился?','Чем <code>QueryRow</code> отличается от <code>Query</code> и где легко потерять ошибку?']},
+
+ {t:'Миграции', why:'Схему ты создал руками в psql и уже не помнишь как.', time:'1 вечер',
+  build:['<code>goose</code> в проект','Миграция <code>0001_init.sql</code> с секциями up и down','Запуск миграций отдельной командой, не из кода сервиса'],
+  done:['<code>goose up</code> на пустой базе поднимает схему с нуля','<code>goose down</code> откатывает','Проект поднимается на чистой машине без твоих подсказок'],
+  traps:['Правка уже применённой миграции ломает историю у всех, кто её накатил. Новое изменение — новая миграция','Миграции из кода приложения при старте конфликтуют, когда реплик несколько'],
+  skip:['Сидирование тестовых данных — отдельная команда, не миграция'],
+  viva:['Зачем нужны down-миграции, если откат почти никогда не делают?','Почему схему не создают кодом приложения при старте?']},
+
+ {t:'Слои', why:'SQL лежит прямо в хендлере, и чтобы проверить логику, нужна живая база.', time:'1–2 вечера',
+  build:['Три слоя: handler → service → repository','Интерфейс репозитория объявлен рядом с сервисом','Фейковая реализация репозитория на map','Хендлер не знает про SQL, репозиторий не знает про HTTP'],
+  done:['Логика сервиса проверяется без базы','Замена хранилища не трогает хендлеры','Ошибки базы не утекают в ответ клиенту как есть'],
+  traps:['Интерфейс на двадцать методов — это не абстракция, а копия репозитория','Структуры базы, протекающие в ответ API, связывают схему и контракт намертво'],
+  skip:['Чистая архитектура во всей строгости — трёх слоёв достаточно','Генерация моков — фейк руками нагляднее'],
+  viva:['Где объявлять интерфейс — рядом с реализацией или рядом с тем, кто им пользуется?','Зачем интерфейс, если реализация всего одна?','Как ошибка «товар не найден» доходит от репозитория до 404, не протаскивая SQL наверх?']},
+
+ {t:'Тесты и одна команда', why:'Запуск — семь шагов в README, который ты сам забудешь.', time:'2 вечера',
+  build:['Тесты хендлеров через <code>httptest</code>','Тесты сервиса на фейковом репозитории','<code>docker-compose.yml</code>: база и сервис','<code>Makefile</code>: run, test, migrate','README на десять строк'],
+  done:['<code>docker compose up</code> поднимает всё','<code>go test ./...</code> зелёный','Проект клонируется и запускается на чистой машине','<code>go vet ./...</code> молчит'],
+  traps:['Тесты, которые ходят в живую базу, падают у всех по очереди','Табличные тесты в Go — стандарт, с них и начинай'],
+  skip:['Покрытие ради процента','CI — он появится на уровне 5, когда будет что собирать'],
+  viva:['Чем <code>httptest</code> отличается от поднятия настоящего сервера в тесте?','Что проверять юнит-тестом, а что только интеграционным?']}
+]},
+
+{n:'Корзина', pain:'Postgres справляется, пока корзина не стала самой горячей таблицей в базе.',
+ milestone:'Умеешь говорить про кэш не абстрактно, а с цифрами своего сервиса.',
+ mat:'видео «Разбираемся с Redis» из 4 спринта', steps:[
+ {t:'Корзина в Postgres', why:'Начинаем с того, что уже умеешь — чтобы было с чем сравнивать.', time:'1 вечер',
+  build:['Таблицы <code>carts</code> и <code>cart_items</code>','Добавить товар, изменить количество, удалить, получить корзину'],
+  done:['Корзина наполняется и читается','Количество меньше единицы не проходит валидацию'],
+  viva:['Почему корзина — отдельная сущность, а не поле у пользователя?']},
+ {t:'Замер под нагрузкой', why:'Нельзя чинить то, что не измерил.', time:'1 вечер',
+  build:['Скрипт: 200 запросов в секунду на добавление в корзину','Снять p95 времени ответа и нагрузку на Postgres'],
+  done:['Есть цифры до оптимизации, записаны в README'],
+  viva:['Почему смотрят на p95 и p99, а не на среднее?']},
+ {t:'Redis рядом', why:'Корзина — это частые мелкие записи, которым необязательно жить в основной базе.', time:'1–2 вечера',
+  build:['Redis в докере','Клиент <code>go-redis</code>','Корзина в хэше <code>cart:{id}</code>'],
+  done:['Корзина читается и пишется из Redis','Postgres больше не трогается на каждое добавление'],
+  viva:['Чем Redis быстрее Postgres и за счёт чего именно?','Что теряешь, уводя данные из базы в кэш?']},
+ {t:'TTL и брошенные корзины', why:'Корзины копятся вечно и занимают память.', time:'1 вечер',
+  build:['<code>EXPIRE</code> на корзину','Продление срока при активности'],
+  done:['Брошенная корзина исчезает сама','Активная не исчезает посреди покупки'],
+  viva:['Как Redis удаляет просроченные ключи и почему не мгновенно?']},
+ {t:'Идемпотентность', why:'Кнопку нажали дважды, сеть моргнула, запрос повторился.', time:'1 вечер',
+  build:['Ключ идемпотентности в заголовке','Повтор возвращает тот же результат, не удваивая товар'],
+  done:['Десять одинаковых запросов дают один товар в корзине'],
+  viva:['Чем идемпотентность отличается от дедупликации?','Какие HTTP-методы идемпотентны по спецификации и почему POST не из них?']},
+ {t:'Две вкладки у одного человека', why:'Два параллельных изменения одной корзины затирают друг друга.', time:'1–2 вечера',
+  build:['Воспроизвести потерянное обновление','Атомарные операции Redis (<code>HINCRBY</code>) или скрипт на Lua'],
+  done:['Параллельные изменения не теряются'],
+  viva:['Почему последовательность GET-изменить-SET ломается, а <code>HINCRBY</code> — нет?']},
+ {t:'Redis упал', why:'Кэш — не источник правды, и падать он будет.', time:'1 вечер',
+  build:['Остановить Redis при работающем сервисе','Осознанное поведение: деградация на Postgres либо честный 503'],
+  done:['Падение Redis не роняет весь сервис','В логе видно, что произошло'],
+  viva:['Что такое cache stampede и как его гасят?']},
+ {t:'Цифры до и после', why:'Без замера ты не знаешь, помог ли Redis — и не расскажешь об этом на собесе.', time:'1 вечер',
+  build:['Повторить замер из шага 2.2','Таблица до/после в README'],
+  done:['Есть разница в цифрах и объяснение, откуда она взялась'],
+  viva:['На собесе: расскажи за две минуты, зачем ты ввёл Redis и что это дало.']}
+]},
+
+{n:'Заказы', pain:'Сервис упал посреди оформления и оставил половину заказа.',
+ milestone:'С этого уровня начинаешь ходить на собеседования.',
+ mat:'make chan name — транзакции и блокировки простым языком', steps:[
+ {t:'Корзина превращается в заказ', why:'Нужна операция, которая меняет сразу несколько таблиц.', time:'1–2 вечера', done:['Заказ создаётся одной транзакцией','Корзина очищается только при успехе']},
+ {t:'Падение посреди оформления', why:'Половина заказа хуже, чем его отсутствие.', time:'1 вечер', done:['Искусственный сбой между шагами не оставляет мусора в базе']},
+ {t:'Уровни изоляции вживую', why:'Про них спрашивают всегда, а понимают их только на своих руках.', time:'2 вечера', done:['Два окна psql: воспроизведены неповторяющееся чтение и фантом','Записано, какой уровень что лечит']},
+ {t:'Статусы заказа', why:'Заказ не меняется как попало: из «отменён» нельзя в «оплачен».', time:'1 вечер', done:['Переходы описаны явно, недопустимые запрещены кодом']},
+ {t:'Deadlock своими руками', why:'Увидеть его в логе Postgres стоит дороже, чем прочитать определение.', time:'1 вечер', done:['Взаимная блокировка воспроизведена и починена порядком захвата']},
+ {t:'Повторное оформление', why:'Клиент нажал «оформить» дважды.', time:'1 вечер', done:['Второй запрос не создаёт второй заказ']},
+ {t:'Отмена заказа', why:'Обратная операция обычно сложнее прямой.', time:'1 вечер', done:['Отмена возвращает товары и не ломает статусы']},
+ {t:'Длинные транзакции', why:'Транзакция, открытая на минуту, останавливает половину базы.', time:'1 вечер', done:['Нашёл долгую транзакцию через <code>pg_stat_activity</code> и объяснил, чем она опасна']}
+]},
+
+{n:'Резерв склада', pain:'Двое купили последний товар.',
+ milestone:'Умеешь отвечать на вопрос «как вы боролись с гонками» своим примером.', steps:[
+ {t:'Остатки товара', why:'Нужна величина, за которую будут драться.', time:'1 вечер', done:['Остаток уменьшается при заказе — пока наивно']},
+ {t:'Воспроизвести гонку', why:'Сначала сломать, потом чинить.', time:'1 вечер', done:['100 параллельных заказов на 10 товаров уводят остаток в минус']},
+ {t:'Пессимистичная блокировка', why:'Самый прямой способ — запретить одновременность.', time:'1 вечер', done:['<code>SELECT FOR UPDATE</code> убирает минус']},
+ {t:'Оптимистичная блокировка', why:'Блокировать дорого, если конфликты редки.', time:'1–2 вечера', done:['Версия строки и повтор при конфликте работают']},
+ {t:'Сравнить под нагрузкой', why:'У каждого подхода своя цена, и её надо знать в цифрах.', time:'1 вечер', done:['Таблица: пропускная способность и доля конфликтов у обоих вариантов']},
+ {t:'Резерв с таймаутом', why:'Товар держат 15 минут, потом отпускают.', time:'1–2 вечера', done:['Истёкший резерв возвращает товар автоматически']},
+ {t:'Нагрузочный тест в проекте', why:'Он должен запускаться одной командой, а не жить в голове.', time:'1 вечер', done:['Сценарий лежит в репозитории, результат в README']},
+ {t:'Инвариант на уровне базы', why:'Последняя линия обороны — чтобы отрицательный остаток был физически невозможен.', time:'1 вечер', done:['<code>CHECK</code> не даёт уйти в минус даже при ошибке в коде']}
+]},
+
+{n:'Уведомления', pain:'Письмо отправляется внутри транзакции и держит её открытой.',
+ milestone:'Можешь говорить про очереди и гарантии доставки как практик.',
+ mat:'Vlad Mishustin — гайд по Kafka за час', steps:[
+ {t:'Отправка внутри транзакции', why:'Сначала надо увидеть проблему, которую решают очереди.', time:'1 вечер', done:['Воспроизведены оба исхода: транзакция висит и письмо теряется']},
+ {t:'Kafka и продюсер', why:'Событие должно уезжать из сервиса, а не обрабатываться в нём.', time:'1–2 вечера', done:['<code>order.created</code> публикуется и виден в топике']},
+ {t:'Консьюмер', why:'Кто-то должен это читать.', time:'1–2 вечера', done:['Отдельный процесс читает события и логирует «письмо отправлено»']},
+ {t:'Outbox', why:'Между коммитом в базу и отправкой в Kafka сервис может упасть.', time:'2 вечера', done:['Событие пишется в ту же транзакцию, воркер досылает его в Kafka']},
+ {t:'Повторы и идемпотентность', why:'Kafka гарантирует «хотя бы один раз», то есть дубли будут.', time:'1–2 вечера', done:['Повторное событие не отправляет второе письмо']},
+ {t:'Ядовитое сообщение', why:'Одно битое событие не должно останавливать очередь навсегда.', time:'1 вечер', done:['После N неудач сообщение уходит в DLQ, обработка продолжается']},
+ {t:'Партиции и порядок', why:'Порядок существует только внутри партиции — на этом ломаются многие.', time:'1 вечер', done:['Ключ партиционирования выбран осознанно и объяснён']},
+ {t:'Брокер полежал', why:'Надо знать, что будет при простое и как догоняется отставание.', time:'1 вечер', done:['Kafka остановлена на две минуты: ничего не потеряно, лаг виден и рассасывается']}
+]},
+
+{n:'Листинг и поиск', pain:'100 тысяч товаров, и страница грузится четыре секунды.',
+ milestone:'Индексы и планы запросов — на уровне собеса в Ozon.',
+ mat:'make chan name — индексы, собес в Ozon', steps:[
+ {t:'Сто тысяч товаров', why:'На сотне записей тормозов не бывает.', time:'1 вечер', done:['База наполнена правдоподобными данными одной командой']},
+ {t:'EXPLAIN ANALYZE', why:'Пока не прочитал план, любые догадки — гадание.', time:'1–2 вечера', done:['Найден seq scan и объяснено, сколько он стоит']},
+ {t:'Первый индекс', why:'Основной инструмент, который спрашивают всегда.', time:'1 вечер', done:['Цифры до и после, план изменился на index scan']},
+ {t:'Составной индекс', why:'Порядок колонок меняет всё.', time:'1 вечер', done:['Показано, когда индекс не применяется из-за порядка полей']},
+ {t:'Глубокая пагинация', why:'<code>OFFSET 100000</code> читает сто тысяч строк и выбрасывает.', time:'1 вечер', done:['Замерена деградация на дальних страницах']},
+ {t:'Keyset-пагинация', why:'Правильный способ листать большие выборки.', time:'1–2 вечера', done:['Время ответа не зависит от номера страницы']},
+ {t:'Поиск по названию', why:'<code>LIKE %текст%</code> не использует обычный индекс.', time:'1–2 вечера', done:['Триграммный индекс ускорил поиск, цифры записаны']},
+ {t:'Кэш листинга', why:'Самые частые запросы незачем считать каждый раз.', time:'1 вечер', done:['Кэш работает, инвалидация при изменении товара продумана']}
+]},
+
+{n:'Оплата', pain:'Деньги списались, а заказ не создался.',
+ milestone:'Распределённые транзакции — на уровне разговора о системном дизайне.', steps:[
+ {t:'Платёжный сервис-заглушка', why:'Нужен второй процесс, который может упасть отдельно.', time:'1 вечер', done:['Заглушка умеет отвечать успехом, отказом и таймаутом']},
+ {t:'Синхронный вызов и его цена', why:'Сначала сделай просто — и посмотри, что ломается.', time:'1 вечер', done:['Таймаут платежа оставляет систему в непонятном состоянии']},
+ {t:'Сага на бумаге', why:'Шаги и компенсации проще придумать до кода.', time:'1 вечер', done:['Схема шагов и компенсаций описана в README']},
+ {t:'Компенсации в коде', why:'Откатывать придётся вручную — транзакции между сервисами нет.', time:'2 вечера', done:['Сбой на втором шаге корректно откатывает первый']},
+ {t:'Повторная доставка', why:'Платёжка пришлёт колбэк дважды.', time:'1 вечер', done:['Повторный колбэк не списывает деньги второй раз']},
+ {t:'Состояние саги в базе', why:'Сервис перезапустят посреди процесса.', time:'1–2 вечера', done:['После рестарта сага продолжается с того же шага']},
+ {t:'Зависшие саги', why:'Что-то обязательно застрянет между шагами.', time:'1 вечер', done:['Воркер находит застрявшие и дожимает или компенсирует']},
+ {t:'Видимость процесса', why:'Невозможно поддерживать то, чего не видно.', time:'1 вечер', done:['По логам виден весь путь заказа от создания до оплаты']}
+]},
+
+{n:'Профилирование', pain:'Работает, но медленно и ест память.',
+ milestone:'Финал: сервис, про который есть что рассказать в цифрах.', steps:[
+ {t:'pprof под нагрузкой', why:'Оптимизация без профиля — трата времени.', time:'1 вечер', done:['Профиль снят с работающего сервиса под нагрузкой']},
+ {t:'CPU-профиль', why:'Горячая функция почти никогда не та, на которую думаешь.', time:'1 вечер', done:['Найдена самая дорогая функция, объяснено почему']},
+ {t:'Профиль памяти', why:'Аллокации — главный источник тормозов в Go.', time:'1–2 вечера', done:['Найдено место, которое аллоцирует больше всех']},
+ {t:'Escape-анализ своего кода', why:'Вот здесь пригодятся слайсы и память, которые ты разбирал в сентябре.', time:'1–2 вечера', done:['<code>-gcflags=-m</code> прочитан, часть аллокаций убрана с кучи']},
+ {t:'Бенчмарки', why:'«Стало быстрее» без замера — не аргумент.', time:'1 вечер', done:['<code>go test -bench</code> и benchstat показывают разницу до/после']},
+ {t:'Метрики', why:'Профиль снимают раз, метрики смотрят всегда.', time:'1–2 вечера', done:['Prometheus отдаёт p99 по эндпоинтам']},
+ {t:'Логи и трассировка', why:'Один запрос должен прослеживаться через все сервисы.', time:'1 вечер', done:['По id запроса видна вся цепочка']},
+ {t:'Рассказ на три минуты', why:'Это то, что ты принесёшь на собес.', time:'1 вечер', done:['Готов связный рассказ: что было, что сделал, какие цифры получились']}
+]}
+];
+
+(function(){
+  var KEY='ladder-v2', state;
+  try{ state=(localStorage.getItem(KEY)||''); }catch(e){ state=''; }
+  state=(state+'0'.repeat(64)).slice(0,64);
+  var sel=0, selStep=null;
+  var eq=document.getElementById('eq'), big=document.getElementById('big');
+  var lvlName=document.getElementById('lvlName'), lvlPain=document.getElementById('lvlPain');
+  var list=document.getElementById('stepList'), detail=document.getElementById('detail');
+  var syncEl=document.getElementById('sync');
+  var nowT=document.getElementById('nowT'), nowD=document.getElementById('nowD');
+
+  function bit(l,s){ return state.charAt(l*8+s)==='1'; }
+  function setBit(l,s,v){
+    var i=l*8+s; state=state.slice(0,i)+(v?'1':'0')+state.slice(i+1);
+    try{ localStorage.setItem(KEY,state); syncEl.textContent='сохранено в этом браузере'; }
+    catch(e){ syncEl.textContent='браузер не даёт сохранять'; syncEl.className='chip local'; }
+  }
+  function total(){ return (state.match(/1/g)||[]).length; }
+  function firstOpen(l){ for(var s=0;s<8;s++) if(!bit(l,s)) return s; return null; }
+  function currentPos(){
+    for(var l=0;l<8;l++){ var s=firstOpen(l); if(s!==null) return {l:l,s:s}; }
+    return {l:7,s:7};
+  }
+
+  function drawNow(){
+    var p=currentPos(), st=LEVELS[p.l].steps[p.s];
+    nowT.textContent='Шаг '+(p.l+1)+'.'+(p.s+1)+' — '+st.t;
+    nowD.textContent=(st.time?st.time+'. ':'')+'Один шаг за заход. Закрыл — остановись, даже если идёт легко.';
+  }
+
+  function drawEq(){
+    eq.textContent='';
+    LEVELS.forEach(function(lv,l){
+      var b=document.createElement('button');
+      b.className='col'; b.setAttribute('role','tab');
+      b.setAttribute('aria-selected', String(l===sel));
+      b.title=lv.n;
+      var bars=document.createElement('div'); bars.className='bars';
+      var open=firstOpen(l), cur=currentPos();
+      for(var s=0;s<8;s++){
+        var t=document.createElement('span');
+        t.className='tick'+(bit(l,s)?' on':((l===cur.l&&s===cur.s)?' now':''));
+        bars.appendChild(t);
+      }
+      var idx=document.createElement('span'); idx.className='idx'; idx.textContent='0'+(l+1);
+      var cap=document.createElement('span'); cap.className='cap'; cap.textContent=lv.n.split(' ')[0];
+      b.appendChild(bars); b.appendChild(idx); b.appendChild(cap);
+      b.addEventListener('click', function(){ sel=l; selStep=null; render(); });
+      eq.appendChild(b);
+    });
+    big.textContent=String(total()).padStart(2,'0');
+  }
+
+  function drawList(){
+    var lv=LEVELS[sel], closed=0;
+    for(var i=0;i<8;i++) if(bit(sel,i)) closed++;
+    lvlName.textContent='Уровень '+(sel+1)+' · '+lv.n+' · '+closed+'/8';
+    lvlPain.innerHTML=lv.pain+(lv.milestone?' <b>'+lv.milestone+'</b>':'');
+    list.textContent='';
+    lv.steps.forEach(function(st,s){
+      var li=document.createElement('li');
+      var b=document.createElement('button');
+      b.setAttribute('aria-current', String(selStep===s));
+      if(bit(sel,s)) b.className='done';
+      var dot=document.createElement('span'); dot.className='bullet'+(bit(sel,s)?' on':'');
+      var box=document.createElement('span');
+      var n=document.createElement('span'); n.className='n'; n.textContent='ШАГ '+(sel+1)+'.'+(s+1);
+      var t=document.createElement('span'); t.className='t'; t.textContent=st.t;
+      box.appendChild(n); box.appendChild(t);
+      b.appendChild(dot); b.appendChild(box);
+      b.addEventListener('click', function(){ selStep=s; render(); });
+      li.appendChild(b); list.appendChild(li);
+    });
+  }
+
+  function ul(cls, items){
+    return '<ul class="'+cls+'">'+items.map(function(i){return '<li>'+i+'</li>';}).join('')+'</ul>';
+  }
+
+  function drawDetail(){
+    var lv=LEVELS[sel];
+    var s = selStep===null ? (firstOpen(sel)===null?0:firstOpen(sel)) : selStep;
+    var st=lv.steps[s], closed=bit(sel,s);
+    var full = st.build || st.traps;
+    detail.innerHTML='<div class="spec">'+
+      '<div class="eyebrow"><span>Шаг '+(sel+1)+'.'+(s+1)+(closed?' · закрыт':'')+'</span>'+
+      (st.time?'<span class="t">'+st.time+'</span>':'')+'</div>'+
+      '<h3>'+st.t+'</h3>'+
+      '<div class="why">'+st.why+'</div>'+
+      (st.build?'<h4>Что построить</h4>'+ul('', st.build):'')+
+      (st.api?'<h4>Контракт API</h4>'+ul('', st.api):'')+
+      (st.files?'<h4>Файлы</h4>'+ul('', st.files):'')+
+      '<h4>Готово, когда</h4>'+ul('ok', st.done)+
+      (st.traps?'<h4>Подводные камни</h4>'+ul('warn', st.traps):'')+
+      (st.skip?'<h4>Чего на этом шаге не делаем</h4>'+ul('skip', st.skip):'')+
+      (st.viva?'<h4>На защите спрошу</h4>'+ul('q', st.viva):'')+
+      (full?'':'<p class="note">Это бриф: цель и критерий готовности. Полное ТЗ — с файлами, контрактом API и подводными камнями — я разверну, когда до шага дойдёшь: так оно будет учитывать код, который ты уже написал.</p>')+
+      (lv.mat?'<p class="note"><b>Материалы:</b> '+lv.mat+'</p>':'')+
+      '<div class="act"><button id="toggle" class="'+(closed?'off':'')+'">'+
+      (closed?'Вернуть в работу':'Отметить закрытым')+'</button>'+
+      '<span class="hint">'+(closed?'Шаг зачтён':'Отмечай после защиты, а не после первого зелёного запуска')+'</span></div></div>';
+    document.getElementById('toggle').addEventListener('click', function(){
+      setBit(sel,s,!bit(sel,s)); selStep=s; render();
+    });
+  }
+
+  document.getElementById('nowGo').addEventListener('click', function(){
+    var p=currentPos(); sel=p.l; selStep=p.s; render();
+    detail.scrollIntoView({behavior:'smooth', block:'start'});
+  });
+
+  function render(){ drawEq(); drawList(); drawDetail(); drawNow(); }
+  render();
+})();
+</script>
