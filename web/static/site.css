@@ -113,7 +113,10 @@
   .site-top { padding: 8px 16px; flex-wrap: nowrap; gap: 6px; }
   .site-brand { font-size: 16px; }
   .site-brand-t { display: none; }
-  .site-nav { flex-wrap: nowrap; gap: 0; }
+  .site-nav { flex-wrap: nowrap; gap: 0; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .site-nav::-webkit-scrollbar { display: none; }
+  .site-nav a { flex: none; }
+  .site-sp { display: none; }
   .site-nav a { padding: 0 8px; font-size: 15px; }
   .nav-badge { margin-left: 4px; }
   .site-main { padding: 24px 16px 56px; }

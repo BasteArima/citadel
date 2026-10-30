@@ -88,6 +88,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.Handle("GET /api/overview", s.api(s.overview))
 	mux.Handle("GET /api/courses/{id}", s.api(s.getCourse))
 	mux.Handle("GET /api/blocks", s.api(s.listBlocks))
+	mux.Handle("GET /api/search", s.api(s.search))
 	mux.Handle("GET /api/progress/{course}", s.api(s.getProgress))
 	mux.Handle("POST /api/progress/{course}", s.api(s.postProgress))
 	mux.Handle("GET /c/{id}/", s.page(s.coursePage))

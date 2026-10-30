@@ -1,5 +1,8 @@
 // Каталог: «Повторить сегодня» по всем курсам, «Продолжить с того же места» и плитки курсов.
 import { api, esc, plural, today, header, linkIcon, metalName, courseState, lastPlace } from './shared.js';
+import { initSiteSearch } from './search.js';
+
+initSiteSearch();
 
 const app = document.getElementById('app');
 const FILTERS = [['all', 'Все'], ['active', 'В процессе'], ['new', 'Не начатые'], ['done', 'Пройденные']];

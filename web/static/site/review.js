@@ -2,6 +2,9 @@
 // Карточка — вопрос, где первая попытка была с ошибкой, или фраза «Скажи на собесе».
 // Вспомни вслух → «Показать ответ» → «Забыл / С трудом / Помню»; оценка двигает следующий показ.
 import { api, esc, today, header, nextCard, inDays, courseText } from './shared.js';
+import { initSiteSearch } from './search.js';
+
+initSiteSearch();
 
 const app = document.getElementById('app');
 const SAY_RE = /^\s*<b>\s*Как сказать на собесе:?\s*<\/b>\s*/;

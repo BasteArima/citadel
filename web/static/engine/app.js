@@ -6,6 +6,7 @@ import { indexCourse } from './course.js';
 import { loadState } from './progress.js';
 import { initRich, rich, trackTerms, takeTerms } from './rich.js';
 import { linkIcon, metalName } from '../site/shared.js';
+import { openSearch as openSiteSearch, allCourses, bindSearchKeys } from '../site/search.js';
 
 // course — курс v1, user — кто вошёл, catalog — список курсов (для «Опирается на» и «Что дальше»).
 export function start(course, user, catalog) {
@@ -974,73 +975,45 @@ export function start(course, user, catalog) {
   // Пока ищет по этому курсу; фильтр «все курсы» появится, когда курсов станет несколько.
   let glossaryQuery = '';
   const norm = (s) => String(s || '').replace(/<[^>]+>/g, ' ').toLowerCase().replace(/ё/g, 'е');
+  // Поиск по этому курсу — в браузере, без сети; «все курсы» — на сервере (site/search.js).
   function searchIndex() {
     const out = [];
     ALL.filter((l) => ready(l.id)).forEach((l) => {
-      out.push({ g: 'les', t: l.t, sub: l.sec.name + ' · ' + lessonLabel + ' ' + l.n, href: '#' + l.id, k: norm(l.t) });
-      (X.lesson(l.id).parts || []).forEach((p, i) => out.push({ g: 'les', t: p.title, sub: lessonLabel + ' ' + l.n + ' · часть ' + (i + 1), href: '#' + l.id + '/' + (i + 1), k: norm(p.title) }));
+      out.push({ kind: 'lesson', title: l.t, sub: l.sec.name + ' · ' + lessonLabel + ' ' + l.n, href: '#' + l.id, k: norm(l.t) });
+      (X.lesson(l.id).parts || []).forEach((p, i) => out.push({ kind: 'part', title: p.title, sub: lessonLabel + ' ' + l.n + ' · часть ' + (i + 1), href: '#' + l.id + '/' + (i + 1), k: norm(p.title) }));
     });
-    X.pages.forEach((p) => out.push({ g: 'les', t: p.title, sub: 'Страница курса', href: '#' + p.id, k: norm(p.title) }));
-    Object.keys(C.glossary).forEach((key) => {
+    X.pages.forEach((p) => out.push({ kind: 'page', title: p.title, sub: 'Страница курса', href: '#' + p.id, k: norm(p.title) }));
+    if (X.hasGlossary) Object.keys(C.glossary).forEach((key) => {
       const g = C.glossary[key];
-      out.push({ g: 'term', t: g.t, sub: g.d, term: g.t, href: '#glossary', k: norm(g.t + ' ' + (g.en || '')), kd: norm(g.d) });
+      out.push({ kind: 'term', title: g.t, sub: g.d, href: '#glossary/' + key, k: norm(g.t + ' ' + (g.en || '') + ' ' + key), kd: norm(g.d) });
     });
     return out;
   }
-  let searchBox = null;
+  let searchIdx = null;
+  const thisCourse = {
+    id: 'course', label: C.title,
+    async find(raw) {
+      const q = norm(raw).trim();
+      searchIdx = searchIdx || searchIndex();
+      const places = searchIdx.filter((x) => x.kind !== 'term' && (!q || x.k.includes(q)) && (q || x.kind === 'lesson')).slice(0, q ? 12 : 8);
+      const terms = !q ? [] : searchIdx.filter((x) => x.kind === 'term' && x.k.includes(q))
+        .concat(searchIdx.filter((x) => x.kind === 'term' && !x.k.includes(q) && x.kd.includes(q))).slice(0, 8);
+      return { places, terms };
+    }
+  };
   function openSearch() {
-    if (searchBox) return;
-    const idx = searchIndex();
-    searchBox = el('div', 'sk-back');
-    searchBox.innerHTML = '<div class="sk" role="dialog" aria-modal="true" aria-label="Поиск по курсу">' +
-      '<div class="sk-in">' + ic('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', 20) +
-      '<label for="sk-q" class="sr-only">Поиск по урокам и терминам</label>' +
-      '<input id="sk-q" type="search" autocomplete="off" placeholder="Урок, часть или термин"><span class="kbd">Esc</span></div>' +
-      '<div class="sk-scope"><span class="chip acc">' + esc(C.title) + '</span></div>' +
-      '<div class="sk-res" role="listbox" aria-label="Результаты"></div>' +
-      '<div class="sk-foot"><span><span class="kbd">↑</span> <span class="kbd">↓</span> выбрать</span><span><span class="kbd">Enter</span> открыть</span><span><span class="kbd">Ctrl K</span> поиск откуда угодно</span></div></div>';
-    document.body.appendChild(searchBox);
-    const inp = searchBox.querySelector('input'), res = searchBox.querySelector('.sk-res');
-    let hits = [], act = 0;
-    const draw = () => {
-      const q = norm(inp.value).trim();
-      hits = q ? idx.filter((x) => x.k.includes(q)).concat(idx.filter((x) => x.kd && !x.k.includes(q) && x.kd.includes(q))) : idx.filter((x) => x.g === 'les').slice(0, 8);
-      const les = hits.filter((x) => x.g === 'les').slice(0, 8), terms = hits.filter((x) => x.g === 'term').slice(0, 6);
-      hits = les.concat(terms);
-      act = Math.min(act, Math.max(hits.length - 1, 0));
-      const row = (x, i) => '<a class="sk-r' + (i === act ? ' on' : '') + '" role="option" aria-selected="' + (i === act) + '" data-i="' + i + '" href="' + x.href + '">' +
-        '<span class="sk-ic ' + x.g + '">' + (x.g === 'term' ? 'Aa' : ic(IC.book, 16)) + '</span>' +
-        '<span class="sk-t"><b>' + esc(x.t) + '</b><small>' + esc(String(x.sub).slice(0, 110)) + '</small></span></a>';
-      res.innerHTML = (les.length ? '<div class="lbl sk-g">' + (q ? 'Уроки и части' : 'Уроки') + '</div>' + les.map(row).join('') : '') +
-        (terms.length ? '<div class="lbl sk-g">Термины</div>' + terms.map((x, j) => row(x, les.length + j)).join('') : '') +
-        (!hits.length ? '<p class="sk-none">Ничего не нашлось. Поиск идёт по названиям уроков, частей и словарю курса.</p>' : '');
-    };
-    const go = (x) => {
-      if (!x) return;
-      if (x.g === 'term') glossaryQuery = x.term;
-      closeSearch();
-      if (location.hash === x.href) route(); else location.hash = x.href;
-    };
-    inp.addEventListener('input', () => { act = 0; draw(); });
-    inp.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowDown') { e.preventDefault(); act = Math.min(act + 1, hits.length - 1); draw(); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); act = Math.max(act - 1, 0); draw(); }
-      else if (e.key === 'Enter') { e.preventDefault(); go(hits[act]); }
+    openSiteSearch({
+      scopes: [thisCourse, allCourses],
+      go(x) {
+        // ссылка на этот же курс — переход внутри страницы, на другой курс — обычный переход
+        const own = '/c/' + C.id + '/';
+        const href = x.href.startsWith(own) ? x.href.slice(own.length) : x.href;
+        if (!href.startsWith('#')) { location.href = href; return; }
+        if (location.hash === href) route(); else location.hash = href;
+      }
     });
-    res.addEventListener('click', (e) => { const a = e.target.closest('[data-i]'); if (a) { e.preventDefault(); go(hits[+a.dataset.i]); } });
-    searchBox.addEventListener('click', (e) => { if (e.target === searchBox) closeSearch(); });
-    draw();
-    inp.focus();
   }
-  function closeSearch() {
-    if (!searchBox) return;
-    searchBox.remove();
-    searchBox = null;
-  }
-  document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K' || e.key === 'л' || e.key === 'Л')) { e.preventDefault(); if (searchBox) closeSearch(); else openSearch(); }
-    else if (e.key === 'Escape' && searchBox) closeSearch();
-  });
+  bindSearchKeys(openSearch);
 
   // ── всплывающее определение ──
   const pop = document.getElementById('pop');
@@ -1100,7 +1073,10 @@ export function start(course, user, catalog) {
     current = id;
     currentPart = parseInt(seg[1], 10) || 1;
     const pg = X.page(id);
-    if (id === 'glossary' && X.hasGlossary) renderGlossary();
+    if (id === 'glossary' && X.hasGlossary) {
+      if (seg[1] && C.glossary[seg[1]]) glossaryQuery = C.glossary[seg[1]].t; // ссылка из поиска: словарь с фильтром
+      renderGlossary();
+    }
     else if (id === 'notes' && X.hasNotes) renderNotes();
     else if (id === 'exam' && X.hasExam) renderExam();
     else if (pg) renderPage(pg);

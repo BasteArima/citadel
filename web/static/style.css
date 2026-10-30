@@ -704,7 +704,9 @@ a.cp-l:hover { background: var(--panel-2); }
 .sk { width: 100%; max-width: 680px; max-height: 76vh; display: flex; flex-direction: column; background: var(--pop); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--pop-shadow); overflow: hidden; }
 .sk-in { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--mut); }
 .sk-in input { flex: 1; min-width: 0; height: 40px; border: 0; outline: 0; background: transparent; color: var(--txt); font: 400 18px var(--body); }
-.sk-scope { padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.sk-scope { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.sk-scope button.chip { border: 0; cursor: pointer; font: 500 13px var(--body); min-height: 32px; height: auto; color: var(--mut); background: var(--panel-2); }
+.sk-scope button.chip.acc { background: var(--acc-soft); color: var(--acc); }
 .sk-res { overflow-y: auto; padding: 6px 8px 10px; }
 .sk-g { padding: 10px 10px 4px; }
 .sk-r { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 10px; border-radius: 9px; color: var(--txt); text-decoration: none; }

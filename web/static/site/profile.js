@@ -1,5 +1,8 @@
 // Профиль: цепь из звеньев-курсов, сводка, перенос прогресса файлом, тема и выход.
 import { api, esc, plural, today, header, metalName, courseState, readUI, applyTheme, UI_KEY } from './shared.js';
+import { initSiteSearch } from './search.js';
+
+initSiteSearch();
 
 const app = document.getElementById('app');
 const FILE_FORMAT = 'citadel-progress';

@@ -83,6 +83,7 @@ export function header(user, current, due) {
       '<a href="' + n[0] + '"' + (n[2] === current ? ' aria-current="page"' : '') + '>' + n[1] +
       (n[2] === 'review' && due ? ' <b class="nav-badge">' + due + '</b>' : '') + '</a>').join('') + '</nav>' +
     '<span class="site-sp"></span>' +
+    '<button type="button" class="tb-search" data-search aria-label="Поиск по всем курсам, Ctrl K"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Поиск</span><span class="kbd">Ctrl K</span></button>' +
     '<a class="site-me" href="/profile" aria-label="Профиль: ' + esc(user.name) + '">' + esc(user.name.slice(0, 1).toUpperCase()) + '</a>' +
     '</header>';
 }

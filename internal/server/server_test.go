@@ -265,3 +265,29 @@ func TestCourseList(t *testing.T) {
 		t.Fatalf("got %+v", list)
 	}
 }
+
+func TestSearch(t *testing.T) {
+	ts := newTestServer(t)
+	c := signIn(t, ts, "A")
+	get := func(q string) (out struct{ Places, Terms []Hit }) {
+		t.Helper()
+		_, body := do(t, c, "GET", ts.URL+"/api/search?q="+q, "")
+		if err := json.Unmarshal([]byte(body), &out); err != nil {
+			t.Fatalf("%s: %s", q, body)
+		}
+		return
+	}
+	// lesson «А» is ready, «Б» is planned and must not be found
+	if r := get("%D0%B0"); len(r.Places) != 1 || r.Places[0].Href != "/c/go/#a" || r.Places[0].Kind != "lesson" {
+		t.Fatalf("«а»: %+v", r.Places)
+	}
+	if r := get("%D0%B1"); len(r.Places) != 0 {
+		t.Fatalf("planned lesson found: %+v", r.Places)
+	}
+	if r := get(""); len(r.Places) != 1 || r.Places[0].Kind != "course" {
+		t.Fatalf("empty query lists courses: %+v", r.Places)
+	}
+	if resp, _ := do(t, client(), "GET", ts.URL+"/api/search?q=a", ""); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("search without session: %d", resp.StatusCode)
+	}
+}
