@@ -42,7 +42,7 @@ function render() {
           '<div class="row"><button type="button" class="btn btn-l" id="export">Скачать прогресс</button>' +
           '<label class="btn btn-l">Загрузить из файла<input type="file" id="import" accept="application/json,.json" hidden></label></div>' +
           '<p id="io" role="status" hidden></p>' +
-          '<p>Файл из прежней версии Go-курса загружается на странице курса, внизу.</p></section>' +
+          '<p>Прогресс из прежней версии курса, если она была, переносится на странице этого курса, внизу.</p></section>' +
         '<section class="card panel" aria-labelledby="st"><h2 id="st">Настройки</h2>' +
           '<div><div class="lbl" id="thl">Тема</div><div class="segs" role="group" aria-labelledby="thl" id="theme" style="margin-top:6px">' +
             [['light', 'Светлая'], ['dark', 'Тёмная'], ['auto', 'Как в системе']].map((t) =>

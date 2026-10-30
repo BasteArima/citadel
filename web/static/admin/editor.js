@@ -310,7 +310,7 @@ export function renderEditor(main, nodeId, courseBar) {
       initRich(indexCourse(c));
       page.appendChild(h('h2', 'pt-title', esc(node.title)));
       if (node.lead) page.appendChild(h('p', 'lead', rich(node.lead)));
-      const ctx = { tool: c.tool || { name: '', version: '' }, label: 'Вопрос', store: { state: () => 0, answer() {} }, onSolve() {}, onChange() {} };
+      const ctx = { tool: c.tool || { name: '', version: '' }, csLabel: c.labels && c.labels.cs, label: 'Вопрос', store: { state: () => 0, answer() {} }, onSolve() {}, onChange() {} };
       const blocks = node.blocks || [];
       if (!blocks.length && !(node.children && node.children.length)) page.appendChild(h('p', 'ad-mut', 'Блоков пока нет.'));
       if (node.children && node.children.length) page.appendChild(h('p', 'ad-mut', 'Части: ' + node.children.map((p) => esc(p.title)).join(' · ')));

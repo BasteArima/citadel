@@ -10,7 +10,7 @@ export const predict = {
   render(p, ctx) {
     const w = el('section', 'pr');
     w.setAttribute('aria-label', 'Предскажи и запусти');
-    w.appendChild(codeHead(p.file || 'main.go', 'проверено на ' + ctx.tool.name + ' ' + (p.go || ctx.tool.version), p.code));
+    w.appendChild(codeHead(p.file || ctx.tool.file || 'code', 'проверено на ' + ctx.tool.name + ' ' + (p.ver || ctx.tool.version), p.code));
     const lines = p.code.split('\n');
     const body = el('div', 'pr-code');
     const gut = el('pre', 'pr-gut', lines.map((x, i) => i + 1).join('\n'));
@@ -27,7 +27,7 @@ export const predict = {
     const res = el('div', 'pr-out');
     res.setAttribute('role', 'status');
     res.hidden = true;
-    res.innerHTML = '<div class="pr-cmd">' + ic(IC.term, 14) + '<span>' + esc(p.cmd || 'go run .') + '</span></div>' +
+    res.innerHTML = '<div class="pr-cmd">' + ic(IC.term, 14) + '<span>' + esc(p.cmd || ctx.tool.cmd || 'запуск') + '</span></div>' +
       '<pre class="' + (p.err ? 'err' : '') + '"><code>' + esc(p.out) + '</code></pre>' +
       (p.after ? '<p class="pr-after">' + rich(p.after) + '</p>' : '');
     w.appendChild(res);

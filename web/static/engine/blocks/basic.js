@@ -29,7 +29,7 @@ export const code = {
   render(b, ctx) {
     const f = document.createDocumentFragment();
     const cb = el('div', 'codebox');
-    cb.appendChild(codeHead(b.file || ctx.tool.name, null, b.code));
+    cb.appendChild(codeHead(b.file || ctx.tool.file || ctx.tool.name, null, b.code));
     const pre = el('pre'); pre.appendChild(el('code', null, esc(b.code)));
     cb.appendChild(pre);
     f.appendChild(cb);
@@ -51,10 +51,10 @@ export const table = {
 
 export const callout = {
   type: 'callout',
-  render(b) {
+  render(b, ctx) {
     if (b.kind === 'cs') {
-      // врезка про C# — сбоку от основной линии, поэтому свёрнута
-      return el('details', 'callout cs', '<summary>' + ic(IC.chev, 16) + '<span>' + esc(b.title || 'Если ты из C#') + '</span><span class="cs-more">развернуть</span></summary>' +
+      // боковая врезка («Если ты из C#», подпись — labels.cs курса) — сбоку от основной линии, поэтому свёрнута
+      return el('details', 'callout cs', '<summary>' + ic(IC.chev, 16) + '<span>' + esc(b.title || ctx.csLabel || 'Если ты из C#') + '</span><span class="cs-more">развернуть</span></summary>' +
         '<div class="cs-b">' + rich(b.html) + '</div>');
     }
     const label = b.title || { note: 'Важно', warn: 'Осторожно' }[b.kind] || '';

@@ -28,6 +28,7 @@ type Course struct {
 	About    string            `json:"about,omitempty"`
 	Howto    []string          `json:"howto,omitempty"`
 	Requires []string          `json:"requires,omitempty"` // ids of courses this one builds on
+	Legacy   string            `json:"legacy,omitempty"`   // where the course came from: "v0" — the old Go engine, whose progress file can be imported
 	Glossary map[string]Term   `json:"glossary"`
 	Root     []*Node           `json:"root"`
 }
@@ -36,6 +37,8 @@ type Course struct {
 type Tool struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
+	File    string `json:"file,omitempty"` // default file name of code and «predict» blocks, e.g. main.go or query.sql
+	Cmd     string `json:"cmd,omitempty"`  // default command that runs a «predict» block, e.g. go run . or psql -f query.sql
 }
 
 // Term is a glossary entry.

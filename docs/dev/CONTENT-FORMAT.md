@@ -61,7 +61,7 @@ COURSE.lessons['interfaces'] = {
   "title": "Go: путь до senior",
   "subtitle": "От слайсов до system design — с объяснением «почему»",
   "metal": "iron",
-  "tool": { "name": "Go", "version": "1.27" },
+  "tool": { "name": "Go", "version": "1.27", "file": "main.go", "cmd": "go run ." },
   "labels": { "section": "Раздел", "lesson": "Урок", "part": "Часть" },
   "review": [1, 3, 7],
   "pages": ["glossary", "notes", "exam", "tools"],
@@ -70,7 +70,7 @@ COURSE.lessons['interfaces'] = {
 }
 ```
 
-`tool.version` обязательна: на этой версии получены все выводы программ в курсе. `review` — интервалы карточек повторения в днях для оценок «Забыл», «С трудом», «Помню» ([0008](decisions/0008-first-attempt-and-cards.md)). `pages` — какие страницы справочника включены: `notes` (конспект), `glossary` (словарь), `exam` (контрольная); «Инструменты» — узел `page` с id `tools`. `about` — вступление на главной курса, `howto` — список «Как заниматься» там же (оба необязательны). `requires` — id курсов, на которые этот опирается: страница курса показывает их в «Опирается на», а сам курс попадает им в «Что дальше».
+`tool.version` обязательна: на этой версии получены все выводы программ в курсе. `tool.file` и `tool.cmd` — имя файла и команда запуска по умолчанию для блоков кода и «Предскажи» (у Go-курса `main.go` и `go run .`, у Postgres — `query.sql` и `psql -f query.sql`). `labels.cs` — подпись свёрнутой боковой врезки (`callout` вида `cs`): у Go-курса «Если ты из C#». `legacy: "v0"` — курс перенесён из прежнего движка, и на его странице есть перенос прогресса из него. `review` — интервалы карточек повторения в днях для оценок «Забыл», «С трудом», «Помню» ([0008](decisions/0008-first-attempt-and-cards.md)). `pages` — какие страницы справочника включены: `notes` (конспект), `glossary` (словарь), `exam` (контрольная); «Инструменты» — узел `page` с id `tools`. `about` — вступление на главной курса, `howto` — список «Как заниматься» там же (оба необязательны). `requires` — id курсов, на которые этот опирается: страница курса показывает их в «Опирается на», а сам курс попадает им в «Что дальше».
 
 У Go-курса `about`, `howto` и страницы курса берутся из `legacy/go-course/data/platform.js` (`COURSE.platform`): прежний движок держал эти тексты у себя в коде, теперь движок общий для всех курсов.
 
@@ -106,7 +106,7 @@ COURSE.lessons['interfaces'] = {
 | `scheme` | `title`, `html`, `cap` | `{ scheme: { … } }` |
 | `steps` | `title`, `items` | `{ steps: { … } }` |
 | `anim` | `title`, `w`, `h`, `els`, `steps`, `side`, `speed` | `{ anim: { … } }` |
-| `predict` | `file`, `q`, `code`, `cmd`, `out` или `err`, `after`, `go` | `{ predict: { … } }` |
+| `predict` | `file`, `q`, `code`, `cmd`, `out`, `err` (`true` — вывод это ошибка), `after`, `ver` (версия, если вывод получен не на версии из паспорта) | `{ predict: { … } }` |
 | `question` | `id`, `kind` (`choice`, `text`, `order`), `q`, `opts`, `a`, `items`, `why`, `exam` (`false` — не брать в контрольную) | элемент `test` |
 | `hands` | `title`, `goal`, `steps`, `trouble`, `check` (вопросы с `id` и `kind`) | `hands` урока |
 | `embed` | `src` | — (место для песочницы) |

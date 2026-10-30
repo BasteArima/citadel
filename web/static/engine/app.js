@@ -20,7 +20,7 @@ export function start(course, user, catalog) {
   const save = S.save;
   const ALL = X.all, TOTAL = X.total;
   const lessonLabel = (C.labels && C.labels.lesson) || 'Урок';
-  const blockCtx = { tool: C.tool };
+  const blockCtx = { tool: C.tool, csLabel: C.labels && C.labels.cs };
   initRich(X);
 
   const meta = X.meta, ready = X.ready;
@@ -700,7 +700,7 @@ export function start(course, user, catalog) {
       C.howto.forEach((t) => how.appendChild(el('li', null, rich(t))));
       main.appendChild(how);
     }
-    main.appendChild(importBox());
+    if (C.legacy === 'v0') main.appendChild(importBox()); // перенос прогресса — только у курса из прежнего движка
   }
 
   // строка урока на странице курса: пройден, начат, готов или ещё пишется

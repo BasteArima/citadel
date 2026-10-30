@@ -11,7 +11,7 @@ export async function loadSpecs() {
 }
 
 const JSON_ONLY = ['table', 'scheme', 'steps', 'anim', 'hands', 'embed'];
-const CALLOUTS = [['note', 'Заметка'], ['warn', 'Осторожно'], ['cs', 'Из C#']];
+const CALLOUTS = [['note', 'Заметка'], ['warn', 'Осторожно'], ['cs', 'Боковая врезка (свёрнута; подпись — labels.cs курса)']];
 const QKINDS = [['choice', 'выбор варианта'], ['text', 'ввод ответа'], ['order', 'порядок']];
 
 // Следующий свободный id вопроса урока: урок.qN (старые id не переиспользуются).
@@ -30,13 +30,13 @@ export function newBlock(type, course, lesson) {
     case 'heading': return { type, level: 2, text: '' };
     case 'text': return { type, html: '' };
     case 'list': return { type, items: [''] };
-    case 'code': return { type, code: '', file: 'main.go' };
+    case 'code': return { type, code: '', file: (course.tool && course.tool.file) || '' };
     case 'table': return { type, head: ['', ''], rows: [['', '']] };
     case 'callout': return { type, kind: 'note', title: '', html: '' };
     case 'scheme': return { type, title: '', html: '<div class="diagram"></div>', cap: '' };
     case 'steps': return { type, title: '', items: [{ t: '', d: '' }] };
     case 'anim': return { type, title: '', w: 640, h: 240, els: [], steps: [] };
-    case 'predict': return { type, file: 'main.go', q: 'Что выведет программа?', code: '', cmd: 'go run main.go', out: '' };
+    case 'predict': return { type, q: 'Что выведет программа?', code: '', out: '' }; // файл и команда — из паспорта (tool.file, tool.cmd)
     case 'question': return { type, id: nextQuestionId(course, lesson.id), kind: 'choice', q: '', opts: ['', ''], a: 0, why: '' };
     case 'hands': return { type, title: '', goal: '', steps: [{ t: '', cmd: '', out: '' }], trouble: [], check: [] };
     case 'embed': return { type, src: '' };
@@ -159,12 +159,12 @@ const FORMS = {
   predict(box, b, ctx) {
     const tool = ctx.course.tool || {};
     const g = h('div', 'ad-grid'); box.appendChild(g);
-    input(g, b, 'file', 'Файл', { ctx, mono: true });
-    input(g, b, 'cmd', 'Команда запуска', { ctx, mono: true });
+    input(g, b, 'file', 'Файл' + (tool.file ? ' · по умолчанию ' + tool.file : ''), { ctx, mono: true });
+    input(g, b, 'cmd', 'Команда запуска' + (tool.cmd ? ' · по умолчанию ' + tool.cmd : ''), { ctx, mono: true });
     input(box, b, 'q', 'Вопрос', { ctx });
     input(box, b, 'code', 'Код', { ctx, rows: Math.max(4, Math.min(24, (b.code || '').split('\n').length + 1)), mono: true, keep: true });
     const out = h('div', 'ed-out');
-    out.innerHTML = '<span class="lbl">Вывод</span><span class="ad-small">получи запуском на ' + esc((tool.name || '') + ' ' + (b.go || tool.version || '')) + ' и вставь как есть</span>';
+    out.innerHTML = '<span class="lbl">Вывод</span><span class="ad-small">получи запуском на ' + esc((tool.name || '') + ' ' + (b.ver || tool.version || '')) + ' и вставь как есть</span>';
     box.appendChild(out);
     input(box, b, 'out', b.err ? 'Текст ошибки компиляции или паники' : 'Вывод программы', { ctx, rows: Math.max(2, Math.min(12, (b.out || '').split('\n').length + 1)), mono: true, keep: true });
     check(box, b, 'err', 'Программа не компилируется или падает — показать вывод как ошибку', ctx);
