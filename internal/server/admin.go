@@ -56,6 +56,7 @@ func (s *server) adminRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/admin/courses/{id}/versions/{v}", s.admin(s.adminVersion))
 	mux.Handle("GET /api/admin/users", s.admin(s.adminUsers))
 	mux.Handle("PUT /api/admin/users/{id}", s.admin(s.adminSetRole))
+	s.adminAgentRoutes(mux)
 }
 
 // checkSummary is what the course list shows about the latest version.
@@ -80,14 +81,20 @@ func (s *server) adminCourses(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "list courses", err)
 		return
 	}
+	pending, err := s.cfg.Store.PendingByCourse(r.Context())
+	if err != nil {
+		s.fail(w, "count proposals", err)
+		return
+	}
 	type row struct {
 		store.CourseInfo
-		Tool  string       `json:"tool"`
-		Check checkSummary `json:"check"`
+		Tool   string       `json:"tool"`
+		Agents int          `json:"agents"` // proposals waiting for the admin
+		Check  checkSummary `json:"check"`
 	}
 	out := make([]row, 0, len(list))
 	for _, ci := range list {
-		rw := row{CourseInfo: ci}
+		rw := row{CourseInfo: ci, Agents: pending[ci.ID]}
 		if data, _, err := s.cfg.Store.Version(r.Context(), ci.ID, 0); err == nil {
 			if c, err := course.Decode(data); err == nil {
 				rw.Check = check(c)

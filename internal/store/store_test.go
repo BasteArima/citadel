@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -224,5 +225,80 @@ func TestBackup(t *testing.T) {
 	pub, _ := b.Published(ctx)
 	if len(pub) != 1 {
 		t.Fatalf("backup has %d courses", len(pub))
+	}
+}
+
+func TestTokens(t *testing.T) {
+	s, ctx := open(t), context.Background()
+	tok, secret, err := s.CreateToken(ctx, Token{Name: "claude", CanPropose: true, Courses: []string{"go"}, CreatedBy: "Baste"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(secret, TokenPrefix) || len(secret) < 40 || !strings.HasSuffix(secret, tok.Tail) {
+		t.Fatalf("secret %d chars, tail %q", len(secret), tok.Tail)
+	}
+	got, err := s.TokenBySecret(ctx, secret)
+	if err != nil || got.ID != tok.ID || !got.CanPropose || got.CanCreate || !got.Allows("go") || got.Allows("pg") || got.LastUsedAt == "" {
+		t.Fatalf("by secret: %+v %v", got, err)
+	}
+	for _, bad := range []string{"", "cit_", secret + "x", strings.TrimPrefix(secret, TokenPrefix)} {
+		if _, err := s.TokenBySecret(ctx, bad); !errors.Is(err, ErrNoToken) {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+	if err := s.RevokeToken(ctx, tok.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.TokenBySecret(ctx, secret); !errors.Is(err, ErrNoToken) {
+		t.Fatalf("revoked token works: %v", err)
+	}
+	if err := s.RevokeToken(ctx, tok.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("revoke twice: %v", err)
+	}
+	list, _ := s.Tokens(ctx)
+	if len(list) != 1 || list[0].RevokedAt == "" {
+		t.Fatalf("tokens: %+v", list)
+	}
+}
+
+func TestProposals(t *testing.T) {
+	s, ctx := open(t), context.Background()
+	if _, err := s.ImportContent(ctx, []*course.Course{testCourse("Go")}); err != nil {
+		t.Fatal(err)
+	}
+	tok, _, _ := s.CreateToken(ctx, Token{Name: "claude", CanPropose: true, CreatedBy: "Baste"})
+	data, _ := course.Encode(testCourse("Go: правка агента"))
+	id, err := s.AddProposal(ctx, Proposal{CourseID: "go", TokenID: tok.ID, Agent: "claude", Title: "Опечатки", Base: 1,
+		Changes: json.RawMessage(`[]`), Data: data, Status: ProposalPending, Checks: json.RawMessage(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.PendingByCourse(ctx); n["go"] != 1 {
+		t.Fatalf("pending: %v", n)
+	}
+	if _, err := s.AcceptProposal(ctx, id, "go", data, 2, "agent:claude", "Опечатки", "Baste"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("accept on a wrong base: %v", err)
+	}
+	v, err := s.AcceptProposal(ctx, id, "go", data, 1, "agent:claude", "Опечатки", "Baste")
+	if err != nil || v != 2 {
+		t.Fatalf("accept: %d %v", v, err)
+	}
+	p, _ := s.Proposal(ctx, id)
+	if p.Status != ProposalAccepted || p.Version != 2 || p.DecidedBy != "Baste" || len(p.Data) == 0 {
+		t.Fatalf("after accept: %+v", p)
+	}
+	if err := s.DecideProposal(ctx, id, ProposalRejected, "Baste", "нет", 0); !errors.Is(err, ErrConflict) {
+		t.Fatalf("decide twice: %v", err)
+	}
+	if pub, _ := s.Published(ctx); pub[0].Title != "Go" {
+		t.Fatal("an accepted proposal must not publish")
+	}
+	// a new course from an agent
+	pid, _ := s.AddProposal(ctx, Proposal{CourseID: "pg", TokenID: tok.ID, Agent: "claude", Title: "Postgres", NewCourse: true, Data: data, Status: ProposalPending, Checks: json.RawMessage(`{}`)})
+	if v, err := s.AcceptProposal(ctx, pid, "pg", data, 0, "agent:claude", "Postgres", "Baste"); err != nil || v != 1 {
+		t.Fatalf("accept new course: %d %v", v, err)
+	}
+	if list, _ := s.Proposals(ctx, ProposalFilter{TokenID: tok.ID}); len(list) != 2 || len(list[0].Data) != 0 {
+		t.Fatalf("list: %+v", list)
 	}
 }

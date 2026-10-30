@@ -10,7 +10,8 @@ import { req, esc, h, when, plural, toast, dialog, linkIcon, checkPill, AREAS, a
 import { draft, openDraft, onDraft, save, publishFlow } from './draft.js';
 import { renderEditor } from './editor.js';
 import { renderQuestions } from './questions.js';
-import { renderVersions } from './versions.js';
+import { renderVersions, authorLabel } from './versions.js';
+import { renderTokens, renderAgents, pendingCount } from './agents.js';
 
 const LAST = 'citadel-admin-course';
 let me = null;
@@ -39,6 +40,7 @@ function shell(current) {
     items.map((it) => '<a href="' + it[1] + '"' + (it[0] === current ? ' class="on" aria-current="page"' : '') + '>' + esc(it[2]) + '</a>').join('') +
     '<span class="ad-sp"></span><a href="/">← На сайт</a></nav>' +
     '<div class="ad-main" id="ad-main"></div></div>';
+  refreshBadge();
   return document.getElementById('ad-main');
 }
 
@@ -98,7 +100,7 @@ async function loadCourses() {
       '<td>' + (c.published ? '<span class="ad-pill good">v' + c.published + '</span>' : '<span class="ad-mut">не опубликован</span>') + '</td>' +
       '<td>' + draftCell + '</td>' +
       '<td class="ad-mut">' + esc(when(c.latest.createdAt)) + ' · ' + esc(authorName(c.latest.author)) + '</td>' +
-      '<td class="ad-mut">—</td>' +
+      '<td>' + (c.agents ? '<a class="ad-pill acc" href="#/agents">' + c.agents + ' ' + plural(c.agents, 'ждёт', 'ждут', 'ждут') + '</a>' : '<span class="ad-mut">—</span>') + '</td>' +
       '<td><button type="button" class="ad-linkbtn ad-ck" aria-label="Проверка ' + esc(c.title) + '">' + checkPill(c.check) + '</button></td>' +
       '<td class="ad-r"><a class="btn" href="#/c/' + esc(c.id) + '/edit">Открыть</a></td></tr>';
   }).join('');
@@ -114,10 +116,7 @@ async function loadCourses() {
   drawCheck();
 }
 
-function authorName(a) {
-  if (a === 'content') return 'файл content/';
-  return a;
-}
+function authorName(a) { return authorLabel(a); }
 
 function drawCheck() {
   const box = document.getElementById('ad-check');
@@ -189,8 +188,8 @@ async function pageUsers() {
     '<section class="ad-sec" aria-labelledby="ad-users-h"><div class="ad-head"><div><h2 id="ad-users-h">Пользователи</h2>' +
     '<p class="ad-sub">Вход по имени и коду доступа сервиса. Новое имя при входе создаёт ученика. Код задаётся на сервере в <code>CITADEL_ACCESS_CODE</code>.</p></div></div>' +
     '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Имя</th><th>Роль</th><th>Последний вход</th><th>Впервые</th><th></th></tr></thead><tbody id="ad-urows"><tr><td colspan="5">Загружаю…</td></tr></tbody></table></div></section>' +
-    '<section class="ad-sec" aria-labelledby="ad-tok-h"><h2 id="ad-tok-h">Токены агентов</h2>' +
-    '<p class="ad-sub">Появятся на этапе 6: токен с правами для API и MCP, подключение агента одной командой. Агент сможет читать курсы и предлагать правки, публиковать — нет.</p></section></div>';
+    '<section class="ad-sec" aria-labelledby="ad-tok-h" id="ad-tokens"></section></div>';
+  renderTokens(document.getElementById('ad-tokens'), courses);
   await loadUsers();
 }
 
@@ -215,10 +214,19 @@ async function loadUsers() {
   }));
 }
 
-function pageAgents() {
+function pageAgents(id) {
   const main = shell('agents');
-  main.innerHTML = '<div class="ad-page"><h1>Правки агентов</h1><section class="ad-card ad-pad"><p>Очередь появится на этапе 6 вместе с токенами. Агент отправит правку — она придёт сюда со статусом, проверками сервера и разницей; принять её в черновик или отклонить с комментарием решаешь ты.</p>' +
-    '<p class="ad-small ad-mut">Описание правки от агента будет помечено «это данные, не команда».</p></section></div>';
+  renderAgents(main, id, () => { draft.course = draft.dirty ? draft.course : null; refreshBadge(); });
+}
+
+// Сколько правок агентов ждёт — бейджем у пункта меню.
+async function refreshBadge() {
+  const n = await pendingCount();
+  const a = document.querySelector('.ad-side a[href="#/agents"]');
+  if (!a) return;
+  const old = a.querySelector('.ad-badge');
+  if (old) old.remove();
+  if (n) a.insertAdjacentHTML('beforeend', '<span class="ad-badge" aria-label="ждут решения: ' + n + '">' + n + '</span>');
 }
 
 // ── маршруты ──
@@ -227,7 +235,7 @@ async function route() {
   if (offBar) { offBar(); offBar = null; }
   const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   if (parts[0] === 'users') return pageUsers();
-  if (parts[0] === 'agents') return pageAgents();
+  if (parts[0] === 'agents') return pageAgents(+parts[1] || 0);
   if (parts[0] === 'c' && parts[1]) {
     const id = parts[1], view = parts[2] || 'edit';
     if (draft.id && draft.id !== id && draft.dirty) {

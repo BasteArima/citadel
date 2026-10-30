@@ -32,12 +32,12 @@ export function renderVersions(main, selected, courseBar) {
   function drawList(latest) {
     const ul = page.querySelector('#v-list');
     ul.innerHTML = list.map((v) => {
-      const tag = v.version === latest && !v.published ? ['acc', 'черновик'] : v.published ? ['good', 'опубликована'] : v.author === 'content' ? ['', 'из файла'] : null;
+      const tag = v.version === latest && !v.published ? ['acc', 'черновик'] : v.published ? ['good', 'опубликована'] : v.author === 'content' ? ['', 'из файла'] : v.author.startsWith('agent:') ? ['agent', 'от агента'] : null;
       const on = v.version === selected;
       return '<li><button type="button" class="v-item' + (on ? ' on' : '') + '" data-v="' + v.version + '"' + (v.version === latest ? ' disabled' : '') + ' aria-pressed="' + on + '">' +
         '<span class="v-n"><strong>v' + v.version + '</strong>' + (tag ? '<span class="ad-pill ' + tag[0] + '">' + tag[1] + '</span>' : '') + '</span>' +
         '<span>' + esc(v.note || (v.version === 1 ? 'первая версия' : 'правка в редакторе')) + '</span>' +
-        '<span class="ad-small ad-mut">' + esc(when(v.createdAt)) + ' · ' + esc(v.author === 'content' ? 'файл content/' : v.author) + '</span></button></li>';
+        '<span class="ad-small ad-mut">' + esc(when(v.createdAt)) + ' · ' + esc(authorLabel(v.author)) + '</span></button></li>';
     }).join('');
     ul.querySelectorAll('.v-item:not([disabled])').forEach((b) => b.addEventListener('click', () => {
       selected = +b.dataset.v;
@@ -76,13 +76,25 @@ export function renderVersions(main, selected, courseBar) {
     box.innerHTML = '<div class="ad-card v-sum"><strong>v' + selected + ' → v' + latest + (draft.dirty ? ' + несохранённое' : '') + ' · черновик</strong><span class="ad-sp"></span>' +
       '<span class="ad-pill good">+' + added + '</span><span class="ad-pill acc">' + changed + ' ' + plural(changed, 'изменён', 'изменено', 'изменено') + '</span><span class="ad-pill bad">' + removed + ' ' + plural(removed, 'удалён', 'удалено', 'удалено') + '</span></div>' +
       (d.length ? '' : '<p class="ad-mut ad-pad">Версии совпадают.</p>');
-    d.forEach((grp) => {
-      const art = h('article', 'ad-card v-grp');
-      art.innerHTML = '<div class="v-gh"><strong>' + esc(grp.title) + '</strong><span class="ad-sp"></span>' + (grp.node ? '<a href="#/c/' + esc(draft.id) + '/edit/' + esc(grp.node) + '">Открыть в редакторе</a>' : '') + '</div>' +
-        grp.items.map((it) => '<div class="v-it ' + it.op + '"><span class="ad-pill ' + ({ add: 'good', del: 'bad', mod: 'acc' })[it.op] + '">' + esc(it.label) + ' · ' + ({ add: 'новый', del: 'удалён', mod: 'изменён' })[it.op] + '</span><div class="v-body">' + it.html + '</div></div>').join('');
-      box.appendChild(art);
-    });
+    renderDiff(box, d, draft.id);
   }
+}
+
+// Разница по группам (узел, словарь, паспорт) — карточками; ссылка ведёт в редактор узла.
+export function renderDiff(box, groups, courseId) {
+  groups.forEach((grp) => {
+    const art = h('article', 'ad-card v-grp');
+    art.innerHTML = '<div class="v-gh"><strong>' + esc(grp.title) + '</strong><span class="ad-sp"></span>' + (grp.node && courseId ? '<a href="#/c/' + esc(courseId) + '/edit/' + esc(grp.node) + '">Открыть в редакторе</a>' : '') + '</div>' +
+      grp.items.map((it) => '<div class="v-it ' + it.op + '"><span class="ad-pill ' + ({ add: 'good', del: 'bad', mod: 'acc' })[it.op] + '">' + esc(it.label) + ' · ' + ({ add: 'новый', del: 'удалён', mod: 'изменён' })[it.op] + '</span><div class="v-body">' + it.html + '</div></div>').join('');
+    box.appendChild(art);
+  });
+}
+
+// Автор версии: человек, файл content/ или агент (agent:<имя токена>).
+export function authorLabel(a) {
+  if (a === 'content') return 'файл content/';
+  if (a && a.startsWith('agent:')) return a.slice(6) + ' (агент)';
+  return a;
 }
 
 // ── разница ──

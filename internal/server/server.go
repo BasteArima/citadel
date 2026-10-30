@@ -99,6 +99,9 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.Handle("GET /review", s.page(sitePage("review.html")))
 	// admins only
 	s.adminRoutes(mux)
+	// agents, by token
+	s.agentRoutes(mux)
+	s.mcpRoutes(mux)
 	return s.logRequests(mux), nil
 }
 

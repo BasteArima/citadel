@@ -77,6 +77,40 @@ var migrations = []string{
 		at        INTEGER NOT NULL,
 		PRIMARY KEY (user_id, course_id, key)
 	);`,
+	// agents: tokens with rights and their proposals (decision 0003)
+	`CREATE TABLE tokens (
+		id           INTEGER PRIMARY KEY,
+		name         TEXT NOT NULL,
+		hash         TEXT NOT NULL UNIQUE,
+		tail         TEXT NOT NULL,
+		can_propose  INTEGER NOT NULL,
+		can_create   INTEGER NOT NULL,
+		courses      TEXT NOT NULL DEFAULT '',
+		created_by   TEXT NOT NULL,
+		created_at   TEXT NOT NULL,
+		last_used_at TEXT,
+		revoked_at   TEXT
+	);
+	CREATE TABLE proposals (
+		id          INTEGER PRIMARY KEY,
+		course_id   TEXT NOT NULL,
+		token_id    INTEGER NOT NULL REFERENCES tokens(id),
+		agent       TEXT NOT NULL,
+		title       TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		new_course  INTEGER NOT NULL DEFAULT 0,
+		base        INTEGER NOT NULL,
+		changes     TEXT NOT NULL,
+		data        TEXT NOT NULL,
+		status      TEXT NOT NULL,
+		checks      TEXT NOT NULL,
+		comment     TEXT NOT NULL DEFAULT '',
+		decided_by  TEXT NOT NULL DEFAULT '',
+		decided_at  TEXT NOT NULL DEFAULT '',
+		version     INTEGER NOT NULL DEFAULT 0,
+		created_at  TEXT NOT NULL
+	);
+	CREATE INDEX proposals_status ON proposals(status, course_id);`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {
