@@ -199,3 +199,54 @@ func TestUserRoles(t *testing.T) {
 		t.Errorf("new admin: %d", resp.StatusCode)
 	}
 }
+
+func TestPrivateCourse(t *testing.T) {
+	ts := newTestServer(t)
+	admin, guest := signIn(t, ts, "Baste"), signIn(t, ts, "Гость")
+	if resp, body := do(t, admin, "PUT", ts.URL+"/api/admin/courses/go/access", `{"access":"private"}`); resp.StatusCode != 200 {
+		t.Fatalf("make private: %d %s", resp.StatusCode, body)
+	}
+	hidden := []string{"/api/courses/go", "/c/go/", "/api/progress/go"}
+	for _, p := range hidden {
+		if resp, _ := do(t, guest, "GET", ts.URL+p, ""); resp.StatusCode != http.StatusNotFound {
+			t.Errorf("private %s for a guest: %d", p, resp.StatusCode)
+		}
+		if resp, _ := do(t, admin, "GET", ts.URL+p, ""); resp.StatusCode != 200 {
+			t.Errorf("private %s for the admin: %d", p, resp.StatusCode)
+		}
+	}
+	for _, p := range []string{"/api/courses", "/api/overview", "/api/search?q="} {
+		if _, body := do(t, guest, "GET", ts.URL+p, ""); strings.Contains(body, `"go"`) || strings.Contains(body, "/c/go/") {
+			t.Errorf("guest sees the private course in %s: %s", p, body)
+		}
+	}
+	// grant access to the guest
+	_, body := do(t, admin, "GET", ts.URL+"/api/admin/users", "")
+	var out struct {
+		Users []struct {
+			ID   int64
+			Name string
+		}
+	}
+	json.Unmarshal([]byte(body), &out)
+	var gid int64
+	for _, u := range out.Users {
+		if u.Name == "Гость" {
+			gid = u.ID
+		}
+	}
+	if resp, body := do(t, admin, "PUT", ts.URL+"/api/admin/users/"+strconv.FormatInt(gid, 10)+"/courses", `{"courses":["go"]}`); resp.StatusCode != 200 {
+		t.Fatalf("grant: %d %s", resp.StatusCode, body)
+	}
+	for _, p := range hidden {
+		if resp, _ := do(t, guest, "GET", ts.URL+p, ""); resp.StatusCode != 200 {
+			t.Errorf("granted %s: %d", p, resp.StatusCode)
+		}
+	}
+	if _, body := do(t, admin, "GET", ts.URL+"/api/admin/users", ""); !strings.Contains(body, `"courses":["go"]`) {
+		t.Errorf("users list misses the grant: %s", body)
+	}
+	if resp, _ := do(t, admin, "PUT", ts.URL+"/api/admin/courses/go/access", `{"access":"secret"}`); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("unknown access: %d", resp.StatusCode)
+	}
+}

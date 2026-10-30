@@ -30,7 +30,7 @@ type progressBody struct {
 
 func (s *server) getProgress(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("course")
-	if _, ok := s.cat.Load().courses[id]; !ok {
+	if _, ok := s.published(r, id); !ok {
 		jsonError(w, http.StatusNotFound, "course not found")
 		return
 	}
@@ -51,7 +51,7 @@ func (s *server) postProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("course")
-	if _, ok := s.cat.Load().courses[id]; !ok {
+	if _, ok := s.published(r, id); !ok {
 		jsonError(w, http.StatusNotFound, "course not found")
 		return
 	}

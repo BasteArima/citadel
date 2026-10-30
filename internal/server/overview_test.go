@@ -39,6 +39,18 @@ func TestPartsClosed(t *testing.T) {
 		{"hands check", mark("q:l:l.h1"), 1},
 		{"everything", mark("q:l:l.q1", "q:l:l.q2", "seen:l:1", "q:l:l.h1", "done:l"), 4},
 	}
+	// done: read — the part with questions closes by reading; done: manual — by the seen mark too
+	read := *les
+	read.Children = append([]*course.Node{}, les.Children...)
+	p1 := *les.Children[0]
+	p1.Done = "read"
+	read.Children[0] = &p1
+	if got := partsClosed(&read, mark("seen:l:0")); got != 1 {
+		t.Errorf("done: read, read to the end: %d", got)
+	}
+	if got := partsClosed(&read, mark("q:l:l.q1", "q:l:l.q2")); got != 0 {
+		t.Errorf("done: read, questions answered but not read: %d", got)
+	}
 	for _, tt := range tests {
 		if got := partsClosed(les, tt.items); got != tt.want {
 			t.Errorf("%s: got %d, want %d", tt.name, got, tt.want)

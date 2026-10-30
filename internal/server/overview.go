@@ -49,8 +49,16 @@ func (s *server) overview(w http.ResponseWriter, r *http.Request) {
 	}
 	u := userFrom(r.Context())
 	cat := s.cat.Load()
+	see, err := s.visible(r)
+	if err != nil {
+		s.fail(w, "course access", err)
+		return
+	}
 	out := make([]Overview, 0, len(cat.order))
 	for _, id := range cat.order {
+		if !see(id) {
+			continue
+		}
 		items, err := s.cfg.Store.Progress(r.Context(), u.ID, id)
 		if err != nil {
 			s.log.Error("read progress", "err", err)
@@ -59,7 +67,13 @@ func (s *server) overview(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, overviewOf(cat.parsed[id], items, today))
 	}
-	writeValue(w, map[string]any{"courses": out, "soon": cat.soon})
+	soon := []Soon{}
+	for _, c := range cat.soon {
+		if see(c.ID) {
+			soon = append(soon, c)
+		}
+	}
+	writeValue(w, map[string]any{"courses": out, "soon": soon})
 }
 
 func overviewOf(c *course.Course, items map[string]store.Item, today time.Time) Overview {
@@ -106,8 +120,9 @@ func overviewOf(c *course.Course, items map[string]store.Item, today time.Time) 
 }
 
 // partsClosed counts the closed parts of a lesson by the same rules as the engine:
-// the final check — when the lesson is passed; a part with questions — when all are answered;
-// a part without them — when it was read to the end.
+// the final check — when the lesson is passed; a part with done: read or manual — when it was
+// read to the end or marked; a part with questions — when all are answered; a part without
+// them — when it was read to the end.
 func partsClosed(les *course.Node, items map[string]store.Item) int {
 	has := func(key string) bool { _, ok := items[key]; return ok }
 	if len(les.Children) == 0 {
@@ -120,6 +135,12 @@ func partsClosed(les *course.Node, items map[string]store.Item) int {
 	for k, p := range les.Children {
 		if p.Practice == course.PracticeTest {
 			if has("done:" + les.ID) {
+				n++
+			}
+			continue
+		}
+		if p.Done == "read" || p.Done == "manual" {
+			if has("seen:" + les.ID + ":" + strconv.Itoa(k)) {
 				n++
 			}
 			continue

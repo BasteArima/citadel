@@ -77,7 +77,7 @@ async function pageCourses() {
   const main = shell('courses');
   main.innerHTML = '<div class="ad-page"><div class="ad-head"><div><h1>Курсы</h1><p class="ad-sub">Ученики видят только опубликованную версию. Каждое сохранение — новая версия.</p></div>' +
     '<div class="ad-acts"><label class="btn ad-file">Импорт JSON<input type="file" accept=".json,application/json" hidden></label><button type="button" class="btn pri" id="ad-new">+ Новый курс</button></div></div>' +
-    '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Курс</th><th>Опубликовано</th><th>Черновик</th><th>Изменён</th><th>Правки агентов</th><th>Проверка</th><th></th></tr></thead><tbody id="ad-rows"><tr><td colspan="7">Загружаю…</td></tr></tbody></table></div>' +
+    '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Курс</th><th>Доступ</th><th>Опубликовано</th><th>Черновик</th><th>Изменён</th><th>Правки агентов</th><th>Проверка</th><th></th></tr></thead><tbody id="ad-rows"><tr><td colspan="8">Загружаю…</td></tr></tbody></table></div>' +
     '<section class="ad-card ad-check" id="ad-check" aria-labelledby="ad-check-h"></section></div>';
   main.querySelector('#ad-new').addEventListener('click', newCourse);
   main.querySelector('.ad-file input').addEventListener('change', (e) => importFile(e.target.files[0]));
@@ -97,6 +97,7 @@ async function loadCourses() {
       : '<span class="ad-pill acc">v' + c.latest.version + (c.published ? ' · ' + changes + ' ' + plural(changes, 'изменение', 'изменения', 'изменений') : '') + '</span>';
     return '<tr data-id="' + esc(c.id) + '"' + (c.id === selectedCheck ? ' class="is-sel"' : '') + '>' +
       '<td><div class="ad-course">' + linkIcon(c.metal, !c.published) + '<span><a href="#/c/' + esc(c.id) + '/edit" class="ad-ct">' + esc(c.title || c.id) + '</a><code>' + esc(c.id) + ' · ' + esc(METALS[c.metal] || c.metal) + '</code></span></div></td>' +
+      '<td><select class="ad-access" aria-label="Доступ к курсу ' + esc(c.title) + '"><option value="public"' + (c.access !== 'private' ? ' selected' : '') + '>всем</option><option value="private"' + (c.access === 'private' ? ' selected' : '') + '>по доступу</option></select></td>' +
       '<td>' + (c.published ? '<span class="ad-pill good">v' + c.published + '</span>' : '<span class="ad-mut">не опубликован</span>') + '</td>' +
       '<td>' + draftCell + '</td>' +
       '<td class="ad-mut">' + esc(when(c.latest.createdAt)) + ' · ' + esc(authorName(c.latest.author)) + '</td>' +
@@ -104,6 +105,14 @@ async function loadCourses() {
       '<td><button type="button" class="ad-linkbtn ad-ck" aria-label="Проверка ' + esc(c.title) + '">' + checkPill(c.check) + '</button></td>' +
       '<td class="ad-r"><a class="btn" href="#/c/' + esc(c.id) + '/edit">Открыть</a></td></tr>';
   }).join('');
+  rows.querySelectorAll('.ad-access').forEach((sel) => sel.addEventListener('change', async () => {
+    const id = sel.closest('tr').dataset.id;
+    const r2 = await req('PUT', '/api/admin/courses/' + encodeURIComponent(id) + '/access', { access: sel.value });
+    if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); loadCourses(); return; }
+    const c = courses.find((x) => x.id === id);
+    if (c) c.access = sel.value;
+    toast(sel.value === 'private' ? 'Курс виден только админам и тем, кому выдан доступ — в «Пользователях»' : 'Курс виден всем, кто вошёл', 'good');
+  }));
   rows.querySelectorAll('.ad-ck').forEach((b) => b.addEventListener('click', () => {
     selectedCheck = b.closest('tr').dataset.id;
     rows.querySelectorAll('tr').forEach((tr) => tr.classList.toggle('is-sel', tr.dataset.id === selectedCheck));
@@ -187,7 +196,7 @@ async function pageUsers() {
   main.innerHTML = '<div class="ad-page"><h1>Пользователи и токены</h1>' +
     '<section class="ad-sec" aria-labelledby="ad-users-h"><div class="ad-head"><div><h2 id="ad-users-h">Пользователи</h2>' +
     '<p class="ad-sub">Вход по имени и коду доступа сервиса. Новое имя при входе создаёт ученика. Код задаётся на сервере в <code>CITADEL_ACCESS_CODE</code>.</p></div></div>' +
-    '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Имя</th><th>Роль</th><th>Последний вход</th><th>Впервые</th><th></th></tr></thead><tbody id="ad-urows"><tr><td colspan="5">Загружаю…</td></tr></tbody></table></div></section>' +
+    '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Имя</th><th>Роль</th><th>Курсы</th><th>Последний вход</th><th>Впервые</th><th></th></tr></thead><tbody id="ad-urows"><tr><td colspan="6">Загружаю…</td></tr></tbody></table></div></section>' +
     '<section class="ad-sec" aria-labelledby="ad-tok-h" id="ad-tokens"></section></div>';
   renderTokens(document.getElementById('ad-tokens'), courses);
   await loadUsers();
@@ -198,14 +207,41 @@ async function loadUsers() {
   const rows = document.getElementById('ad-urows');
   if (!r.ok || !rows) return;
   const cfg = (r.data.configAdmins || []).map((n) => n.toLowerCase());
+  const priv = courses.filter((c) => c.access === 'private');
+  const title = (id) => { const c = courses.find((x) => x.id === id); return c ? c.title : id; };
+  // Курсы пользователя: публичные видят все, админ — всё; приватные — только выданные
+  const coursesCell = (u) => {
+    if (u.role === 'admin') return '<span class="ad-mut">все</span>';
+    const mine = u.courses.filter((id) => priv.some((c) => c.id === id));
+    const text = !priv.length ? 'все' : 'публичные' + (mine.length ? ' + ' + mine.map(title).join(', ') : '');
+    return '<span>' + esc(text) + '</span>' + (priv.length ? ' <button type="button" class="ad-linkbtn ad-grant" data-id="' + u.id + '">изменить</button>' : '');
+  };
   rows.innerHTML = r.data.users.map((u) => {
     const self = u.name.toLowerCase() === me.name.toLowerCase(), fixed = cfg.includes(u.name.toLowerCase());
     const action = self ? '<span class="ad-mut">это ты</span>'
       : '<button type="button" class="btn ad-role" data-id="' + u.id + '" data-role="' + (u.role === 'admin' ? 'student' : 'admin') + '">' + (u.role === 'admin' ? 'Сделать учеником' : 'Сделать админом') + '</button>';
     return '<tr><td><span class="ad-user"><i class="ad-ava' + (u.role === 'admin' ? ' adm' : '') + '">' + esc(u.name.slice(0, 1).toUpperCase()) + '</i><strong>' + esc(u.name) + '</strong></span></td>' +
       '<td><span class="ad-pill ' + (u.role === 'admin' ? 'acc' : '') + '">' + (u.role === 'admin' ? 'админ' : 'ученик') + '</span>' + (fixed ? ' <span class="ad-small ad-mut" title="Имя есть в CITADEL_ADMINS: админом станет при каждом входе">из настроек</span>' : '') + '</td>' +
+      '<td>' + coursesCell(u) + '</td>' +
       '<td class="ad-mut">' + esc(u.lastSeenAt ? when(u.lastSeenAt) : 'ещё не входил') + '</td><td class="ad-mut">' + esc(when(u.createdAt)) + '</td><td class="ad-r">' + action + '</td></tr>';
   }).join('');
+  rows.querySelectorAll('.ad-grant').forEach((b) => b.addEventListener('click', () => {
+    const u = r.data.users.find((x) => String(x.id) === b.dataset.id);
+    const form = h('div', 'ad-form');
+    form.innerHTML = '<p class="ad-sub">Публичные курсы видны всем, кто вошёл. Здесь — приватные, которые увидит ' + esc(u.name) + '.</p>' +
+      priv.map((c) => '<label class="ad-check-l"><input type="checkbox" value="' + esc(c.id) + '"' + (u.courses.includes(c.id) ? ' checked' : '') + '> ' + esc(c.title) + '</label>').join('');
+    dialog('Доступ к курсам · ' + u.name, form, [
+      { label: 'Отмена' },
+      { label: 'Сохранить', primary: true, onClick: async (close) => {
+        const list = [...form.querySelectorAll('input:checked')].map((i) => i.value);
+        const r2 = await req('PUT', '/api/admin/users/' + u.id + '/courses', { courses: list });
+        if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); return; }
+        close();
+        toast('Доступ обновлён', 'good');
+        loadUsers();
+      } }
+    ]);
+  }));
   rows.querySelectorAll('.ad-role').forEach((b) => b.addEventListener('click', async () => {
     const r2 = await req('PUT', '/api/admin/users/' + b.dataset.id, { role: b.dataset.role });
     if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); return; }

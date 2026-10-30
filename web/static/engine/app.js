@@ -244,23 +244,44 @@ export function start(course, user, catalog) {
   // Часть теории засчитывается ответами на её вопросы «Проверь себя» (их отдают модули блоков).
   // Если своих вопросов у части нет — когда страница дочитана до конца, но не в момент открытия.
   // «Сделай руками» — ответами на «Проверь, что понял»; «Проверка» — когда пройден весь урок.
+  // Поле done узла меняет правило: read — дочитал (даже если есть вопросы), manual — отметил кнопкой;
+  // questions и hands — ответами на вопросы, как по умолчанию. Дочитал и отметил хранятся одинаково: seen.
   function partQuestions(les, k) {
     const p = les.parts[k];
     if (p.type === 'hands') return p.hands ? questionsOf(p.hands) : [];
     if (p.type === 'test') return [];
     return p.questions.concat(...p.blocks.map(questionsOf));
   }
+  const partRule = (les, k) => les.parts[k].node.done || '';
   function partDone(les, k) {
     const st = S.lessons[les.id] || {}, p = les.parts[k];
     if (p.type === 'test') return !!st.done;
+    const rule = partRule(les, k);
+    if (rule === 'read' || rule === 'manual') return !!(st.seen && st.seen[k]);
     const own = partQuestions(les, k);
     if (own.length) return own.every((q) => st.t && st.t[q.id]);
     return !!(st.seen && st.seen[k]);
   }
+  // Урок: по умолчанию — решены все его вопросы; done: manual — кнопкой в конце урока;
+  // done: read — закрыты все части, кроме итоговой проверки.
   function markIfDone(les, st) {
-    if (!st.done && les.questions.every((q) => st.t[q.id])) {
-      st.done = today(); save();
-    }
+    if (st.done) return;
+    const rule = les.node.done || '';
+    if (rule === 'manual') return;
+    const ok = rule === 'read' && les.parts ? les.parts.every((p, i) => p.type === 'test' || partDone(les, i)) : les.questions.every((q) => st.t[q.id]);
+    if (ok) { st.done = today(); save(); }
+  }
+  // Кнопка «Отметить урок пройденным» для урока с done: manual.
+  function manualLesson(les, st, onChange) {
+    const box = el('div', 'manual-done');
+    const draw = () => {
+      box.innerHTML = st.done ? '<div class="done-msg"><b>Урок пройден.</b> Отмечен вручную.</div>'
+        : '<p>Этот урок отмечается вручную: когда разберёшься и сделаешь всё, что в нём есть.</p><button type="button" class="btn pri">Отметить урок пройденным</button>';
+      const b = box.querySelector('button');
+      if (b) b.addEventListener('click', () => { st.done = today(); save(); draw(); renderSide(); if (onChange) onChange(); });
+    };
+    draw();
+    return box;
   }
 
   // время чтения: ~150 слов в минуту по тексту блоков; практика — по числу шагов и вопросов
@@ -272,7 +293,7 @@ export function start(course, user, catalog) {
   }
   function partMin(les, k) {
     const p = les.parts[k];
-    if (p.type === 'hands') return Math.max(5, p.hands.steps.length * 3);
+    if (p.type === 'hands') return p.hands.min || Math.max(5, p.hands.steps.length * 3); // min — время, указанное автором
     if (p.type === 'test') return Math.max(3, Math.round(p.questions.length * 0.75));
     const words = textOf(p.blocks).split(/\s+/).filter(Boolean).length + (k === 0 ? textOf([les.lead, les.simple]).split(/\s+/).length : 0);
     return Math.max(1, Math.round(words / 150));
@@ -513,6 +534,7 @@ export function start(course, user, catalog) {
       appendBlocks(main, les.blocks);
       if (les.hands) main.appendChild(renderHands(les.hands, st, les.id, () => renderSide()));
       appendTest(main, les, st, false);
+      if (les.node.done === 'manual') main.appendChild(manualLesson(les, st));
       appendVideos(main, les, 0);
       appendNextLesson(main, m);
       fillRail(rail, les, 'Термины урока');
@@ -524,7 +546,7 @@ export function start(course, user, catalog) {
     const remember = () => rememberPlace('#' + id + '/' + (k + 1), lessonLabel + ' ' + m.n + '. ' + m.t + ' · часть ' + (k + 1),
       parts.map((p, i) => partDone(les, i) ? 'ok' : i === k ? 'cur' : ''));
     remember();
-    const min = partMin(les, k);
+    const min = partMin(les, k), rule = partRule(les, k);
     st.seen = st.seen || {};
 
     let bar = partBar(les, k);
@@ -544,6 +566,8 @@ export function start(course, user, catalog) {
       const done = partDone(les, k);
       let txt;
       if (done) txt = part.type === 'test' ? 'Урок пройден' : 'Часть засчитана';
+      else if (rule === 'read') txt = 'Часть засчитается, когда дочитаешь до конца';
+      else if (rule === 'manual') txt = 'Отметь часть, когда разберёшься';
       else if (part.type === 'test') {
         const left = les.questions.filter((q) => !st.t[q.id]).length;
         txt = 'Осталось ' + left + ' ' + plural(left, 'вопрос', 'вопроса', 'вопросов') + ' — и урок пройден';
@@ -558,6 +582,7 @@ export function start(course, user, catalog) {
       status.innerHTML = '<span class="pt-st-ic">' + (done ? ic(IC.check, 13) : '') + '</span><span>' + txt + '</span>';
     }
     function refreshBar() {
+      markIfDone(les, st);
       const nb = partBar(les, k);
       bar.replaceWith(nb); bar = nb;
       setStatus();
@@ -588,6 +613,7 @@ export function start(course, user, catalog) {
       }
     }
     appendVideos(body, les, k);
+    if (k === parts.length - 1 && les.node.done === 'manual') body.appendChild(manualLesson(les, st, refreshBar));
 
     // низ части одной строкой: назад · что осталось · дальше
     if (k > 0) {
@@ -596,6 +622,11 @@ export function start(course, user, catalog) {
       back.title = parts[k - 1].title;
     }
     foot.appendChild(status);
+    if (rule === 'manual' && !partDone(les, k)) {
+      const mark = foot.appendChild(el('button', 'btn pf-mark', 'Отметить часть пройденной'));
+      mark.type = 'button';
+      mark.addEventListener('click', () => { st.seen[k] = 1; save(); mark.remove(); refreshBar(); });
+    }
     if (k < parts.length - 1) {
       const nx = parts[k + 1];
       const fwd = foot.appendChild(el('a', 'btn pri pf-fwd', '<span>Часть ' + (k + 2) + '<span class="pf-t"> · ' + esc(nx.title) + '</span></span>' + ic(IC.arrow, 18)));
@@ -606,8 +637,9 @@ export function start(course, user, catalog) {
     setStatus();
     if (k === parts.length - 1) appendNextLesson(body, m);
 
-    // теория без своих вопросов засчитывается, когда дочитана до кнопок внизу
-    if (part.kind === 'theory' && !partQuestions(les, k).length && !st.seen[k] && 'IntersectionObserver' in window) {
+    // теория без своих вопросов (или с правилом «дочитал») засчитывается, когда дочитана до кнопок внизу
+    const byReading = rule === 'read' || (!rule && part.kind === 'theory' && !partQuestions(les, k).length);
+    if (part.type !== 'test' && byReading && !st.seen[k] && 'IntersectionObserver' in window) {
       const io = new IntersectionObserver((es) => {
         if (es.some((e) => e.isIntersecting)) {
           st.seen[k] = 1; save(); io.disconnect(); refreshBar();

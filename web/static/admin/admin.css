@@ -280,3 +280,7 @@ tr.tk-off td { opacity: .55; }
 .ag-act p { margin: 0; }
 .ag-diff { display: flex; flex-direction: column; gap: 14px; }
 @media (max-width: 860px) { .ag-queue { max-width: none; } }
+
+/* доступ к курсу в таблице курсов */
+.ad-body select.ad-access { width: auto; min-width: 130px; min-height: 34px; padding: 4px 8px; }
+.ad-grant { color: var(--acc); text-decoration: underline; font-size: 14px; }

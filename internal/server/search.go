@@ -40,9 +40,14 @@ func (s *server) search(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(normText(r.URL.Query().Get("q")))
 	only := r.URL.Query().Get("course")
 	cat := s.cat.Load()
+	see, err := s.visible(r)
+	if err != nil {
+		s.fail(w, "course access", err)
+		return
+	}
 	places, terms, defs := []Hit{}, []Hit{}, []Hit{}
 	for _, id := range cat.order {
-		if only != "" && id != only {
+		if (only != "" && id != only) || !see(id) {
 			continue
 		}
 		c := cat.parsed[id]

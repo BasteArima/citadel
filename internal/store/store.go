@@ -111,6 +111,14 @@ var migrations = []string{
 		created_at  TEXT NOT NULL
 	);
 	CREATE INDEX proposals_status ON proposals(status, course_id);`,
+	// course access: public — every signed-in user, private — admins and users granted access
+	`ALTER TABLE courses ADD COLUMN access TEXT NOT NULL DEFAULT 'public';
+	CREATE TABLE course_access (
+		course_id TEXT NOT NULL REFERENCES courses(id),
+		user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		PRIMARY KEY (course_id, user_id)
+	);
+	CREATE INDEX course_access_user ON course_access(user_id);`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

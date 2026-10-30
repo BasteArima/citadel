@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -47,11 +48,12 @@ type server struct {
 // catalog is a snapshot of the published courses. Publishing builds a new one and swaps it in,
 // so requests never see a half-updated list.
 type catalog struct {
-	order    []string
-	parsed   map[string]*course.Course
-	courses  map[string][]byte
-	listJSON []byte
-	soon     []Soon
+	order   []string
+	parsed  map[string]*course.Course
+	courses map[string][]byte
+	list    map[string]Summary
+	soon    []Soon
+	access  map[string]string // course id → public or private (decision 0012)
 }
 
 // Soon is a course that exists but was never published: the catalog shows it as «Скоро».
@@ -92,9 +94,6 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.Handle("GET /api/progress/{course}", s.api(s.getProgress))
 	mux.Handle("POST /api/progress/{course}", s.api(s.postProgress))
 	mux.Handle("GET /c/{id}/", s.page(s.coursePage))
-	mux.Handle("GET /ladder.html", s.page(func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFileFS(w, r, web.FS, "ladder.html")
-	}))
 	mux.Handle("GET /{$}", s.page(sitePage("catalog.html")))
 	mux.Handle("GET /profile", s.page(sitePage("profile.html")))
 	mux.Handle("GET /review", s.page(sitePage("review.html")))
@@ -146,8 +145,11 @@ func (s *server) reload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c := &catalog{parsed: map[string]*course.Course{}, courses: map[string][]byte{}, soon: []Soon{}}
-	list := make([]Summary, 0, len(courses))
+	access, err := s.cfg.Store.CourseAccess(ctx)
+	if err != nil {
+		return err
+	}
+	c := &catalog{parsed: map[string]*course.Course{}, courses: map[string][]byte{}, list: map[string]Summary{}, soon: []Soon{}, access: access}
 	for _, cr := range courses {
 		data, err := json.Marshal(cr)
 		if err != nil {
@@ -156,24 +158,64 @@ func (s *server) reload(ctx context.Context) error {
 		c.parsed[cr.ID] = cr
 		c.courses[cr.ID] = data
 		c.order = append(c.order, cr.ID)
-		list = append(list, summarize(cr))
+		c.list[cr.ID] = summarize(cr)
 	}
 	for _, ci := range all {
 		if ci.Published == 0 {
 			c.soon = append(c.soon, Soon{ID: ci.ID, Title: ci.Title, Metal: ci.Metal})
 		}
 	}
-	c.listJSON, _ = json.Marshal(list)
 	s.cat.Store(c)
 	return nil
 }
 
+// visible tells which courses the user may open: admins — all, others — public courses and
+// the private ones granted to them. A course the user may not open looks the same as a missing one.
+func (s *server) visible(r *http.Request) (func(id string) bool, error) {
+	cat, u := s.cat.Load(), userFrom(r.Context())
+	if u.Role == store.RoleAdmin {
+		return func(string) bool { return true }, nil
+	}
+	grants, err := s.cfg.Store.UserCourses(r.Context(), u.ID)
+	if err != nil {
+		return nil, err
+	}
+	return func(id string) bool { return cat.access[id] != store.AccessPrivate || slices.Contains(grants, id) }, nil
+}
+
+// published returns the published course the user may open, or false. If access cannot be
+// read, the course is treated as closed: the caller answers 404, the error goes to the log.
+func (s *server) published(r *http.Request, id string) ([]byte, bool) {
+	data, ok := s.cat.Load().courses[id]
+	if !ok {
+		return nil, false
+	}
+	see, err := s.visible(r)
+	if err != nil {
+		s.log.Error("course access", "err", err)
+		return nil, false
+	}
+	return data, see(id)
+}
+
 func (s *server) listCourses(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.cat.Load().listJSON)
+	cat := s.cat.Load()
+	see, err := s.visible(r)
+	if err != nil {
+		s.fail(w, "course access", err)
+		return
+	}
+	out := []Summary{}
+	for _, id := range cat.order {
+		if see(id) {
+			out = append(out, cat.list[id])
+		}
+	}
+	writeValue(w, out)
 }
 
 func (s *server) getCourse(w http.ResponseWriter, r *http.Request) {
-	data, ok := s.cat.Load().courses[r.PathValue("id")]
+	data, ok := s.published(r, r.PathValue("id"))
 	if !ok {
 		jsonError(w, http.StatusNotFound, "course not found")
 		return
@@ -187,7 +229,7 @@ func (s *server) listBlocks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) coursePage(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.cat.Load().courses[r.PathValue("id")]; !ok {
+	if _, ok := s.published(r, r.PathValue("id")); !ok {
 		http.NotFound(w, r)
 		return
 	}

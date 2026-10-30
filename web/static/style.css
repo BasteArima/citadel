@@ -724,3 +724,8 @@ a.cp-l:hover { background: var(--panel-2); }
   .sk-back { padding: 8px; }
   .sk-foot { display: none; }
 }
+/* правило «Засчитывается: вручную» — кнопки отметки части и урока */
+.pf-mark { display: inline-flex; align-items: center; min-height: 44px; }
+.manual-done { margin-top: 28px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+#page .manual-done p { margin: 0 0 12px; }
+.manual-done .btn { min-height: 44px; }

@@ -112,7 +112,7 @@ COURSE.lessons['iface-design'] = {
 
   hands: {
     title: 'Развяжи сервис и базу',
-    goal: 'Сделать сервис заказов проверяемым без базы: объявить маленький интерфейс у потребителя и передавать зависимость через конструктор. Это ровно то, что ты будешь делать на шаге 1.7 лестницы.',
+    goal: 'Сделать сервис заказов проверяемым без базы: объявить маленький интерфейс у потребителя и передавать зависимость через конструктор. Так же устроены сервисы, которые ты будешь писать сам.',
     steps: [
       { t: 'Запусти тест', d: 'Из папки <code>study/practice</code>. В <code>i2</code> лежит пакет <code>orders</code>: заказ, хранилище <code>PgStore</code>, сервис и тест с готовым фейком.', cmd: 'go test ./i2',
         out: '# practice/i2 [practice/i2.test]\ni2\\service_test.go:32:25: cannot use fake (variable of type *fakeStore) as *PgStore value in argument to NewOrderService\nFAIL\tpractice/i2 [build failed]',

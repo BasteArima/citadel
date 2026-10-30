@@ -302,3 +302,32 @@ func TestProposals(t *testing.T) {
 		t.Fatalf("list: %+v", list)
 	}
 }
+
+func TestCourseAccess(t *testing.T) {
+	s, ctx := open(t), context.Background()
+	if _, err := s.ImportContent(ctx, []*course.Course{testCourse("Go")}); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := s.SignIn(ctx, "Гость", false)
+	if a, _ := s.CourseAccess(ctx); a["go"] != AccessPublic {
+		t.Fatalf("a new course must be public: %v", a)
+	}
+	if err := s.SetCourseAccess(ctx, "go", "secret"); err == nil {
+		t.Fatal("unknown access accepted")
+	}
+	if err := s.SetCourseAccess(ctx, "go", AccessPrivate); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetUserCourses(ctx, u.ID, []string{"go", "nope"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.UserCourses(ctx, u.ID); len(got) != 1 || got[0] != "go" {
+		t.Fatalf("grants (an unknown course is skipped): %v", got)
+	}
+	if g, _ := s.Grants(ctx); len(g[u.ID]) != 1 {
+		t.Fatalf("all grants: %v", g)
+	}
+	if err := s.SetUserCourses(ctx, 999, nil); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown user: %v", err)
+	}
+}

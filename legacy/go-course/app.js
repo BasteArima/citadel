@@ -1142,10 +1142,6 @@
     page.appendChild(el('div', 'crumb', '<span>Практикум</span>'));
     page.appendChild(el('h1', 'title', 'Практикум'));
     page.appendChild(el('p', 'lead', 'Здесь ты не читаешь, а пишешь код. Всё лежит у тебя в репозитории и работает без интернета.'));
-    page.appendChild(el('h2', null, 'Лестница — сервисы с нуля'));
-    page.appendChild(el('p', null, '8 уровней по 8 шагов: каталог товаров, корзина на Redis, заказы и транзакции, гонки на складе, Kafka, индексы, саги, профилирование. У каждого шага — ТЗ, критерий готовности и вопросы на защиту.'));
-    var a = el('a', 'start', '<small>Открыть</small><b>Лестница бэкендера →</b>');
-    a.href = '../ladder.html'; page.appendChild(a);
     page.appendChild(el('h2', null, 'Задания к урокам'));
     page.appendChild(el('p', null, 'Запускай из папки <code>study/practice</code>. Сначала предскажи или напиши, потом запусти.'));
     var t = '<table><thead><tr><th>Команда</th><th>Тема</th><th>Урок</th></tr></thead><tbody>' +
