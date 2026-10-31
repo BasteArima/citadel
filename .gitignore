@@ -10,6 +10,9 @@
 *.db-shm
 *.db-wal
 
+# синтез речи для локального запуска: python -m venv .tts (docs/guides/self-hosting.md)
+/.tts/
+
 # сборка
 /bin/
 /dist/

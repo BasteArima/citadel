@@ -14,6 +14,7 @@
 2. `docs/dev/ROADMAP.md` — этапы и что сейчас в работе. Работай по нему сверху вниз.
 3. `docs/dev/CONTENT-FORMAT.md` — если трогаешь курсы, блоки или редактор.
 4. `docs/dev/LESSON-WORKFLOW.md` — если пишешь или правишь уроки.
+   `docs/dev/AUDIO.md` — если озвучиваешь курс: подход, варианты голоса, что выбрано, журнал.
 5. `docs/dev/decisions/` — принятые решения. Не пересматривай их молча: если решение мешает, напиши новое и сошлись на старое.
 
 ## Где что лежит
@@ -30,10 +31,12 @@
 | `internal/course/` | формат v1: типы, реестр блоков, проверка курса, операции правок агента (`changes.go`) |
 | `internal/legacy/` | конвертер Go-курса из v0 в v1 |
 | `internal/runner/` | исполнитель кода курсов: одноразовые контейнеры через Docker API ([0013](docs/dev/decisions/0013-running-course-code.md)) |
-| `internal/server/` | HTTP: вход и сессии, API курсов и прогресса, API админки (`admin.go`, `admin_agents.go`), API агента (`agent.go`), MCP-сервер (`mcp.go`), запуск кода (`run.go`), поиск (`search.go`), встроенный фронтенд |
-| `internal/store/` | SQLite: версии курсов, доступ к курсам, пользователи, сессии, прогресс, токены и правки агентов, бэкап |
-| `.env.example` | настройки сервиса: код доступа, админы, секрет исполнителя кода. Свои значения — в `.env`, он не в git |
-| `web/` | фронтенд, встраивается в бинарник: `course.html` и движок на ES-модулях в `static/engine/` (типы блоков — `blocks/`); каталог и профиль — `catalog.html`, `profile.html` и `static/site/`; админка — `admin.html` и `static/admin/`; стили — `static/style.css` (общие) и `static/site.css` |
+| `internal/speech/` | озвучка: текст частей с главами и `hash`, словарь произношения, синтез через `edge-tts`, склейка MP3 ([0015](docs/dev/decisions/0015-narration-recorded-by-server.md)) |
+| `internal/server/` | HTTP: вход и сессии, API курсов и прогресса, API админки (`admin.go`, `admin_agents.go`), API агента (`agent.go`), MCP-сервер (`mcp.go`), запуск кода (`run.go`), поиск (`search.go`), озвучка (`audio.go`), встроенный фронтенд |
+| `internal/store/` | SQLite: версии курсов, доступ к курсам, пользователи, сессии, прогресс, токены и правки агентов, записи озвучки, бэкап |
+| `.env.example` | настройки сервиса: код доступа, админы, секрет исполнителя кода, путь к `edge-tts` и прокси для него. Свои значения — в `.env`, он не в git |
+| `.tts/` | окружение Python с `edge-tts` для локального запуска озвучки; не в git |
+| `web/` | фронтенд, встраивается в бинарник: `course.html` и движок на ES-модулях в `static/engine/` (типы блоков — `blocks/`, плеер озвучки — `player.js`); каталог и профиль — `catalog.html`, `profile.html` и `static/site/`; админка — `admin.html` и `static/admin/`; стили — `static/style.css` (общие) и `static/site.css` |
 | `content/<id>/course.json` | курсы в формате v1 — начальная загрузка: дальше курс живёт версиями в базе и правится в админке ([0009](docs/dev/decisions/0009-database-is-the-source.md)). Go-курс собирается из `legacy/go-course/` командой `task convert` и попадает в базу через «Импорт JSON»; `content/postgres/` — второй курс, «PostgreSQL для бэкендера» |
 | `Taskfile.yml` | команды разработки |
 | `Dockerfile`, `compose.yaml` | образ и запуск на Docker Desktop: citadel, исполнитель кода, прокси к Docker; база — в томе `citadel-data`. Как поднять у себя — `docs/guides/self-hosting.md` |

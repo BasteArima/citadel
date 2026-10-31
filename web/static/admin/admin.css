@@ -304,3 +304,25 @@ tr.tk-off td { opacity: .55; }
 .ad-theme button { flex: 1; min-height: 34px; border: 0; border-radius: 7px; background: none; color: #9aa4b0; cursor: pointer; font: 500 13px var(--body); }
 .ad-theme button[aria-pressed="true"] { background: #1c2128; color: #fff; }
 @media (max-width: 860px) { .ad-side a.ad-back { margin: 0; } .ad-theme { display: none; } }
+
+/* озвучка */
+.au-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.au-stat { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; }
+.au-stat span { font-size: 13px; color: var(--mut); }
+.au-stat b { font-size: 20px; font-weight: 600; }
+.au-job { display: flex; flex-direction: column; gap: 8px; }
+.au-job p, .au-job ul { margin: 0; }
+.au-job.bad { border-color: var(--rose); }
+.au-split > .ad-table-w { flex-basis: 700px; }
+.au-table td:first-child { min-width: 240px; }
+.au-btns { white-space: nowrap; }
+.au-btns .btn + .btn { margin-left: 6px; }
+.au-lex .ad-sub { font-size: 13.5px; }
+.au-words:empty { display: none; }
+.au-words { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.au-words li, .au-add { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+.au-add { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; }
+.au-words code { font: 500 13.5px var(--mono); overflow: hidden; text-overflow: ellipsis; }
+.au-words span, .au-add span { color: var(--dim); }
+.au-try { display: flex; gap: 8px; }
+.au-try .btn { flex: none; }

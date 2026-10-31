@@ -112,7 +112,22 @@ func (v *validator) passport() {
 		}
 		seen[r] = true
 	}
+	if sp := c.Speech; sp != nil {
+		if sp.Voice != "" && !ValidVoice(sp.Voice) {
+			v.errf("паспорт", "голос озвучки %q: ожидается имя вида ru-RU-SvetlanaNeural", sp.Voice)
+		}
+		for from, to := range sp.Lexicon {
+			if strings.TrimSpace(from) == "" || strings.TrimSpace(to) == "" {
+				v.errf("паспорт", "словарь произношения: пустое слово или чтение у %q", from)
+			}
+		}
+	}
 }
+
+var voiceName = regexp.MustCompile(`^[a-z]{2,3}-[A-Z]{2}-[A-Za-z]+Neural$`)
+
+// ValidVoice tells whether a narration voice name looks like ru-RU-SvetlanaNeural.
+func ValidVoice(v string) bool { return voiceName.MatchString(v) }
 
 func (v *validator) node(n *Node, parent *Node) {
 	path := "узел " + n.ID

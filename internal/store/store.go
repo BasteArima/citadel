@@ -121,6 +121,19 @@ var migrations = []string{
 	CREATE INDEX course_access_user ON course_access(user_id);`,
 	// results of running the «predict» blocks of a proposal (decision 0013)
 	`ALTER TABLE proposals ADD COLUMN runs TEXT NOT NULL DEFAULT '';`,
+	// narration recordings: the MP3 lies in <data>/audio, here — what text it was made from (docs/dev/AUDIO.md)
+	`CREATE TABLE audio (
+		course_id TEXT NOT NULL REFERENCES courses(id),
+		node      TEXT NOT NULL,
+		hash      TEXT NOT NULL,
+		voice     TEXT NOT NULL,
+		file      TEXT NOT NULL,
+		dur       REAL NOT NULL,
+		chapters  TEXT NOT NULL,
+		chars     INTEGER NOT NULL,
+		made_at   TEXT NOT NULL,
+		PRIMARY KEY (course_id, node)
+	);`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

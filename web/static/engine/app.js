@@ -9,9 +9,11 @@ import { initRich, rich, trackTerms, takeTerms } from './rich.js';
 import { linkIcon, metalName } from '../site/shared.js';
 import { openSearch as openSiteSearch, allCourses, bindSearchKeys } from '../site/search.js';
 import { markTheme, setDue } from '../site/topbar.js';
+import { createPlayer } from './player.js';
 
-// course — курс v1, user — кто вошёл, catalog — список курсов (для «Опирается на» и «Что дальше»).
-export function start(course, user, catalog) {
+// course — курс v1, user — кто вошёл, catalog — список курсов (для «Опирается на» и «Что дальше»),
+// audio — записанная озвучка частей (player.js).
+export function start(course, user, catalog, audio) {
   const X = indexCourse(course);
   const C = course;
   const STAGES = X.review; // интервалы карточек: «Забыл», «С трудом», «Помню»
@@ -25,6 +27,8 @@ export function start(course, user, catalog) {
   const lessonLabel = (C.labels && C.labels.lesson) || 'Урок';
   const blockCtx = { tool: C.tool, csLabel: C.labels && C.labels.cs };
   initRich(X);
+  const player = createPlayer(audio || {}, { rate: () => S.ui.rate || 1, setRate: (r) => { S.ui.rate = r; save(); } });
+  player.onChange(() => renderTop());
 
   const meta = X.meta, ready = X.ready;
   const isDone = (id) => !!(S.lessons[id] && S.lessons[id].done);
@@ -62,7 +66,7 @@ export function start(course, user, catalog) {
       const m = meta(current), les = X.lesson(current), ps = les.parts;
       const k = ps ? Math.min(Math.max(currentPart, 1), ps.length) - 1 : 0;
       lessonHead = '<div class="tb-lesson"><small>' + lessonLabel + ' ' + m.n + (ps ? ' · часть ' + (k + 1) + ' из ' + ps.length : '') + '</small><b>' + esc(m.t) + '</b></div>' +
-        (ps && ps[k].kind === 'theory' && canSpeak ? '<button type="button" class="tb-ic tb-listen" data-act="listen" aria-label="Слушать часть">' + ic(IC.sound, 18) + '</button>' : '');
+        (ps && ps[k].kind === 'theory' && (canSpeak || player.has(ps[k].node.id)) ? listenTop(player.state(ps[k].node.id) === 'playing') : '');
       if (ps) strip = '<div class="tb-strip" aria-hidden="true">' + ps.map((p, i) => '<i class="' + (partDone(les, i) ? 'ok' : '') + (i === k ? ' cur' : '') + '"></i>').join('') + '</div>';
     }
     // шапку отдаёт сервер (top.go) — та же, что на страницах сайта; здесь только дополняем её на месте,
@@ -102,6 +106,11 @@ export function start(course, user, catalog) {
   showSide.addEventListener('click', () => { S.ui.focus = false; save(); applyFocus(); side.querySelector('.sd-hide')?.focus(); });
   function applyFocus() {
     document.body.classList.toggle('reading', !!S.ui.focus);
+    player.place();
+  }
+  function listenTop(playing) {
+    return '<button type="button" class="tb-ic tb-listen" data-act="listen" aria-label="' + (playing ? 'Пауза' : 'Слушать часть') + '"' +
+      (playing ? ' aria-pressed="true"' : '') + '>' + ic(playing ? IC.pause : IC.sound, 18) + '</button>';
   }
 
   // ── меню ──
@@ -474,7 +483,9 @@ export function start(course, user, catalog) {
     row.querySelector('[data-sp="stop"]').hidden = !speech.on;
     row.querySelector('[data-sp="rate"]').textContent = String(S.ui.rate).replace('.', ',') + '×';
   }
-  function listenRow(min, voice) {
+  // Есть запись части — кнопка включает плеер внизу (player.js); нет — читает голос браузера.
+  function listenRow(min, voice, partNode, about) {
+    if (player.has(partNode)) return recordRow(partNode, about);
     if (!canSpeak) return null;
     const row = el('div', 'listen');
     row.setAttribute('data-min', min);
@@ -492,6 +503,7 @@ export function start(course, user, catalog) {
         if (speech.on && !speech.paused) { speech.cur = null; ss.cancel(); speakNext(); }
       } else if (a === 'stop') speakStop();
       else if (!speech.on) {
+        player.pause();
         speech.items = voice.filter((x) => x.isConnected && x.innerText.trim());
         speech.on = true; speech.paused = false; speech.i = 0;
         speech.cur = null; ss.cancel(); speakNext();
@@ -501,6 +513,22 @@ export function start(course, user, catalog) {
     });
     speech.row = row;
     speakUi();
+    return row;
+  }
+
+  function recordRow(partNode, about) {
+    const row = el('div', 'listen');
+    row.innerHTML = '<button type="button" class="btn listen-b" data-sp="play"></button>' +
+      '<span class="listen-n">запись · главы, скорость и перемотка — в плеере внизу</span>';
+    const b = row.querySelector('[data-sp="play"]');
+    const draw = () => {
+      const st = player.state(partNode);
+      b.innerHTML = st === 'playing' ? ic(IC.pause) + '<span>Пауза</span>' :
+        ic(IC.sound) + '<span>' + (st === 'paused' ? 'Продолжить' : 'Слушать часть · ' + Math.max(1, Math.round(player.dur(partNode) / 60)) + ' мин') + '</span>';
+    };
+    b.addEventListener('click', () => { speakStop(); player.toggle(partNode, about); });
+    onLeave(player.onChange(draw));
+    draw();
     return row;
   }
 
@@ -540,7 +568,11 @@ export function start(course, user, catalog) {
     body.appendChild(el('div', 'pt-meta', 'Часть ' + (k + 1) + ' из ' + parts.length + ' · ' + (part.kind === 'theory' ? 'теория' : 'практика') + ' · ≈ ' + min + ' мин'));
     body.appendChild(el('h2', 'pt-title', esc(part.title)));
     const voice = [];
-    if (part.kind === 'theory') { const lr = listenRow(min, voice); if (lr) body.appendChild(lr); }
+    if (part.kind === 'theory') {
+      const about = { course: C.title, lesson: lessonLabel + ' ' + m.n, part: k + 1, title: part.title };
+      const lr = listenRow(min, voice, part.node.id, about);
+      if (lr) body.appendChild(lr);
+    }
     if (k === 0) voice.push(...appendSimple(body, les));
 
     const foot = el('div', 'pt-foot');
@@ -580,6 +612,9 @@ export function start(course, user, catalog) {
     else if (part.type === 'test') appendTest(body, les, st, true, refreshBar);
     else {
       voice.push(...appendBlocks(body, part.blocks));
+      // заголовки части — главы записи: плеер подсвечивает тот, что звучит
+      player.setHeadings([].slice.call(body.querySelectorAll(':scope > h2:not(.pt-title), :scope > h3'))
+        .map((h) => ({ node: part.node.id, title: h.textContent.trim(), el: h })));
       const own = part.questions;
       if (own.length) {
         const head = el('div', 'qs-head self-check', '<h3>Проверь себя</h3><p>' +
@@ -1083,6 +1118,7 @@ export function start(course, user, catalog) {
   function route() {
     pop.hidden = true;
     speakStop(); speech.row = null;
+    player.setHeadings([]);
     leave();
     takeTerms();
     const seg = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/');

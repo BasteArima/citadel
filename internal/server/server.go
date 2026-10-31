@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"citadel/internal/course"
+	"citadel/internal/speech"
 	"citadel/internal/store"
 	"citadel/web"
 )
@@ -29,6 +30,9 @@ type Config struct {
 	// the runner of course code (decision 0013); empty URL — running is off
 	RunnerURL    string
 	RunnerSecret string
+	// narration (docs/dev/AUDIO.md): where the MP3 files lie and what makes them; nil Synth — recording is off
+	AudioDir string
+	Synth    speech.Synth
 }
 
 // Summary is a course as listed in the catalog.
@@ -49,6 +53,8 @@ type server struct {
 	cat     atomic.Pointer[catalog]
 	limiter *limiter
 	runs    runLocks
+	audio   audioJobs
+	ctx     context.Context // lives as long as the service: background jobs stop with it
 }
 
 // catalog is a snapshot of the published courses. Publishing builds a new one and swaps it in,
@@ -59,7 +65,8 @@ type catalog struct {
 	courses map[string][]byte
 	list    map[string]Summary
 	soon    []Soon
-	access  map[string]string // course id → public or private (decision 0012)
+	access  map[string]string            // course id → public or private (decision 0012)
+	speech  map[string]map[string]string // course id → part id → hash of its narration text
 }
 
 // Soon is a course that exists but was never published: the catalog shows it as «Скоро».
@@ -74,7 +81,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	if cfg.AccessCode == "" {
 		return nil, errors.New("access code is empty")
 	}
-	s := &server{cfg: cfg, log: cfg.Log, limiter: newLimiter(10, 10*time.Minute)}
+	s := &server{cfg: cfg, log: cfg.Log, limiter: newLimiter(10, 10*time.Minute), ctx: ctx, audio: audioJobs{jobs: map[string]*audioJob{}}}
 	if err := s.reload(ctx); err != nil {
 		return nil, err
 	}
@@ -110,6 +117,8 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	s.mcpRoutes(mux)
 	// running course code: admins and agents (decision 0013)
 	s.runRoutes(mux)
+	// narration recordings: students play, admins record
+	s.audioRoutes(mux)
 	return s.logRequests(mux), nil
 }
 
@@ -169,7 +178,7 @@ func (s *server) reload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c := &catalog{parsed: map[string]*course.Course{}, courses: map[string][]byte{}, list: map[string]Summary{}, soon: []Soon{}, access: access}
+	c := &catalog{parsed: map[string]*course.Course{}, courses: map[string][]byte{}, list: map[string]Summary{}, soon: []Soon{}, access: access, speech: map[string]map[string]string{}}
 	for _, cr := range courses {
 		data, err := json.Marshal(cr)
 		if err != nil {
@@ -179,6 +188,11 @@ func (s *server) reload(ctx context.Context) error {
 		c.courses[cr.ID] = data
 		c.order = append(c.order, cr.ID)
 		c.list[cr.ID] = summarize(cr)
+		hashes := map[string]string{}
+		for _, p := range speech.Parts(cr) {
+			hashes[p.Node] = p.Hash
+		}
+		c.speech[cr.ID] = hashes
 	}
 	for _, ci := range all {
 		if ci.Published == 0 {

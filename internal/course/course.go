@@ -29,6 +29,7 @@ type Course struct {
 	Howto    []string          `json:"howto,omitempty"`
 	Requires []string          `json:"requires,omitempty"` // ids of courses this one builds on
 	Legacy   string            `json:"legacy,omitempty"`   // where the course came from: "v0" — the old Go engine, whose progress file can be imported
+	Speech   *Speech           `json:"speech,omitempty"`   // narration settings: voice and pronunciation (docs/dev/AUDIO.md)
 	Glossary map[string]Term   `json:"glossary"`
 	Root     []*Node           `json:"root"`
 }
@@ -39,6 +40,13 @@ type Tool struct {
 	Version string `json:"version"`
 	File    string `json:"file,omitempty"` // default file name of code and «predict» blocks, e.g. main.go or query.sql
 	Cmd     string `json:"cmd,omitempty"`  // default command that runs a «predict» block, e.g. go run . or psql -f query.sql
+}
+
+// Speech holds the narration settings of a course. The recordings themselves are not part
+// of the course: the service makes them from the published text (docs/dev/AUDIO.md).
+type Speech struct {
+	Voice   string            `json:"voice,omitempty"`   // e.g. ru-RU-SvetlanaNeural; empty — the service default
+	Lexicon map[string]string `json:"lexicon,omitempty"` // how a word is written → how it is read
 }
 
 // Term is a glossary entry.

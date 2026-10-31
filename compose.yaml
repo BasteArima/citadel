@@ -15,6 +15,7 @@ services:
     env_file: .env
     environment:
       CITADEL_RUNNER_URL: http://runner:8090
+      CITADEL_TTS: edge-tts # синтез озвучки уже в образе (решение 0015); путь из .env — для локального запуска
     volumes:
       - citadel-data:/app/data
     networks: [web, runner]

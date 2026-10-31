@@ -3,6 +3,7 @@
 //   #/                       курсы
 //   #/c/<курс>/edit/<узел>   редактор узла
 //   #/c/<курс>/questions     вопросы и словарь (#/c/<курс>/glossary — сразу словарь)
+//   #/c/<курс>/audio         озвучка: записи частей и словарь произношения
 //   #/c/<курс>/versions/<v>  версии и разница
 //   #/users                  пользователи
 //   #/agents                 правки агентов (этап 6)
@@ -11,6 +12,7 @@ import { draft, openDraft, onDraft, save, publishFlow } from './draft.js';
 import { renderEditor } from './editor.js';
 import { renderQuestions } from './questions.js';
 import { renderVersions, authorLabel } from './versions.js';
+import { renderAudio } from './audio.js';
 import { renderTokens, renderAgents, pendingCount } from './agents.js';
 import { readTheme, saveTheme, applyTheme } from '../site/topbar.js';
 
@@ -30,6 +32,7 @@ function shell(current) {
     ['courses', '#/', 'Курсы'],
     ['edit', c ? '#/c/' + c + '/edit' : '#/', 'Редактор'],
     ['questions', c ? '#/c/' + c + '/questions' : '#/', 'Вопросы и словарь'],
+    ['audio', c ? '#/c/' + c + '/audio' : '#/', 'Озвучка'],
     ['versions', c ? '#/c/' + c + '/versions' : '#/', 'Версии'],
     ['agents', '#/agents', 'Правки агентов'],
     ['users', '#/users', 'Пользователи и токены']
@@ -300,6 +303,7 @@ async function route() {
     const main = shell(current);
     if (view === 'edit') offBar = renderEditor(main, parts[3] || '', courseBar);
     else if (view === 'questions' || view === 'glossary') offBar = renderQuestions(main, view, courseBar);
+    else if (view === 'audio') offBar = renderAudio(main, courseBar);
     else if (view === 'versions') offBar = renderVersions(main, +parts[3] || 0, courseBar);
     else location.hash = '#/c/' + id + '/edit';
     return;

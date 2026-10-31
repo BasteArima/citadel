@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -26,6 +27,7 @@ import (
 	"citadel/internal/legacy"
 	"citadel/internal/runner"
 	"citadel/internal/server"
+	"citadel/internal/speech"
 	"citadel/internal/store"
 )
 
@@ -117,8 +119,19 @@ func serve(args []string) error {
 		log.Info("course", "id", im.ID, "version", im.Version, "new_version", im.New)
 	}
 
-	h, err := server.New(ctx, server.Config{Store: st, AccessCode: code, Admins: admins, Log: log,
-		RunnerURL: os.Getenv("CITADEL_RUNNER_URL"), RunnerSecret: os.Getenv("CITADEL_RUNNER_SECRET")})
+	cfg := server.Config{Store: st, AccessCode: code, Admins: admins, Log: log,
+		RunnerURL: os.Getenv("CITADEL_RUNNER_URL"), RunnerSecret: os.Getenv("CITADEL_RUNNER_SECRET"),
+		AudioDir: filepath.Join(*data, "audio")}
+	// narration is recorded by edge-tts (decision 0015): CITADEL_TTS or edge-tts from PATH
+	tts := envOr("CITADEL_TTS", "edge-tts")
+	if path, err := exec.LookPath(tts); err == nil {
+		proxy := os.Getenv("CITADEL_TTS_PROXY")
+		cfg.Synth = speech.EdgeTTS{Cmd: path, Timeout: 90 * time.Second, Tries: 3, Proxy: proxy}
+		log.Info("narration", "tts", path, "proxy", proxy != "")
+	} else {
+		log.Info("narration off: edge-tts not found", "tts", tts)
+	}
+	h, err := server.New(ctx, cfg)
 	if err != nil {
 		return err
 	}
