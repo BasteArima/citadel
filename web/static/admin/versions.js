@@ -191,7 +191,7 @@ function blockFields(a, b) {
 }
 
 // Разница по словам: удалённое зачёркнуто, добавленное подсвечено.
-function words(a, b) {
+export function words(a, b) {
   const ta = a.split(/(\s+)/), tb = b.split(/(\s+)/);
   if (ta.length * tb.length > 250000) return '<del>' + esc(a.slice(0, 300)) + '</del> <ins>' + esc(b.slice(0, 300)) + '</ins>';
   let out = '', buf = { del: '', add: '' };

@@ -20,6 +20,12 @@ const testCode = "test-access-code"
 
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	return newTestServerWith(t, func(*Config) {})
+}
+
+// newTestServerWith lets a test change the config, e.g. point it at a fake runner.
+func newTestServerWith(t *testing.T, tune func(*Config)) *httptest.Server {
+	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "citadel.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +43,9 @@ func newTestServer(t *testing.T) *httptest.Server {
 	if _, err := st.ImportContent(ctx, []*course.Course{c}); err != nil {
 		t.Fatal(err)
 	}
-	h, err := New(ctx, Config{Store: st, AccessCode: testCode, Admins: []string{"Baste"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	cfg := Config{Store: st, AccessCode: testCode, Admins: []string{"Baste"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	tune(&cfg)
+	h, err := New(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

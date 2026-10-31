@@ -153,6 +153,7 @@ type Proposal struct {
 	DecidedAt   string          `json:"decidedAt"`
 	Version     int             `json:"version"` // the draft version made on accept
 	CreatedAt   string          `json:"createdAt"`
+	Runs        json.RawMessage `json:"runs,omitempty"` // server runs of its «predict» blocks; empty — not run (yet)
 }
 
 // AddProposal stores a proposal and returns its id.
@@ -170,12 +171,12 @@ func (s *Store) AddProposal(ctx context.Context, p Proposal) (int64, error) {
 	return res.LastInsertId()
 }
 
-const proposalCols = `id, course_id, token_id, agent, title, description, new_course, base, changes, status, checks, comment, decided_by, decided_at, version, created_at`
+const proposalCols = `id, course_id, token_id, agent, title, description, new_course, base, changes, status, checks, comment, decided_by, decided_at, version, created_at, runs`
 
 func scanProposal(sc interface{ Scan(...any) error }, withData bool) (Proposal, error) {
 	var p Proposal
-	var changes, checks, data string
-	dest := []any{&p.ID, &p.CourseID, &p.TokenID, &p.Agent, &p.Title, &p.Description, &p.NewCourse, &p.Base, &changes, &p.Status, &checks, &p.Comment, &p.DecidedBy, &p.DecidedAt, &p.Version, &p.CreatedAt}
+	var changes, checks, data, runs string
+	dest := []any{&p.ID, &p.CourseID, &p.TokenID, &p.Agent, &p.Title, &p.Description, &p.NewCourse, &p.Base, &changes, &p.Status, &checks, &p.Comment, &p.DecidedBy, &p.DecidedAt, &p.Version, &p.CreatedAt, &runs}
 	if withData {
 		dest = append(dest, &data)
 	}
@@ -183,6 +184,9 @@ func scanProposal(sc interface{ Scan(...any) error }, withData bool) (Proposal, 
 		return p, err
 	}
 	p.Changes, p.Checks, p.Data = json.RawMessage(changes), json.RawMessage(checks), json.RawMessage(data)
+	if runs != "" {
+		p.Runs = json.RawMessage(runs)
+	}
 	return p, nil
 }
 
@@ -286,4 +290,10 @@ func (s *Store) AcceptProposal(ctx context.Context, id int64, courseID string, d
 		return 0, ErrConflict
 	}
 	return last + 1, tx.Commit()
+}
+
+// SetProposalRuns stores the results of running a proposal's «predict» blocks.
+func (s *Store) SetProposalRuns(ctx context.Context, id int64, runs []byte) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE proposals SET runs = ? WHERE id = ?`, string(runs), id)
+	return err
 }

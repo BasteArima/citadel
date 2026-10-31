@@ -119,6 +119,8 @@ var migrations = []string{
 		PRIMARY KEY (course_id, user_id)
 	);
 	CREATE INDEX course_access_user ON course_access(user_id);`,
+	// results of running the «predict» blocks of a proposal (decision 0013)
+	`ALTER TABLE proposals ADD COLUMN runs TEXT NOT NULL DEFAULT '';`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

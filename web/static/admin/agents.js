@@ -1,7 +1,7 @@
 // Агенты в админке: токены (выпустить, подключить одной командой, отозвать) и очередь правок.
 // Агент не публикует: принятая правка становится версией черновика, публикует админ (решение 0003).
 import { esc, h, req, toast, when, plural, dialog, confirmDialog, AREAS, areaOf } from './ui.js';
-import { diffCourses, renderDiff } from './versions.js';
+import { diffCourses, renderDiff, words } from './versions.js';
 import { loadSpecs } from './blocks.js';
 
 const STATUS = { pending: ['acc', 'ждёт'], accepted: ['good', 'принята'], rejected: ['', 'отклонена'], invalid: ['bad', 'ошибка схемы'] };
@@ -179,9 +179,10 @@ export function renderAgents(main, selected, onDecided) {
     checks.innerHTML = '<span class="lbl">Проверка сервера</span><ul class="tk-pills">' + AREAS.map((a) => {
       const ps = by[a[0]] || [], errs = ps.filter((x) => !x.warning).length;
       return '<li class="ad-pill ' + (!ps.length ? 'good' : errs ? 'bad' : 'warn') + '">' + (!ps.length ? '✓ ' : errs ? '✕ ' : '! ') + esc(a[1].toLowerCase()) + '</li>';
-    }).join('') + '</ul><p class="ad-small ad-mut">Выводы программ сервер проверяет только на наличие: получить их агент должен запуском у себя — сверь с описанием правки.</p>' +
+    }).join('') + '</ul><p class="ad-small ad-mut">Здесь проверяется только, что вывод у «Предскажи» есть. Совпадает ли он с настоящим запуском — в карточке «Запуск на сервере» ниже.</p>' +
       ((ck.problems || []).length ? '<ul class="ad-probs">' + ck.problems.map((x) => '<li class="' + (x.warning ? 'warn' : 'bad') + '">' + esc(x.path + ': ' + x.msg) + '</li>').join('') + '</ul>' : '');
     box.appendChild(checks);
+    box.appendChild(runsCard(p));
 
     const diffBox = h('div', 'ag-diff');
     box.appendChild(diffBox);
@@ -231,4 +232,34 @@ export function renderAgents(main, selected, onDecided) {
     }
     box.appendChild(act);
   }
+}
+
+// Запуск «Предскажи» на сервере (решение 0013): сервер прогоняет блоки, которые правка добавила
+// или изменила, и сравнивает вывод с тем, что прислал агент.
+function runsCard(p) {
+  const card = h('div', 'ad-card ag-checks');
+  const runs = Array.isArray(p.runs) ? p.runs : null;
+  if (!runs) {
+    card.innerHTML = '<span class="lbl">Запуск на сервере</span><p class="ad-small ad-mut">' +
+      (p.status === 'pending' ? 'Ещё не запускалось: сервер прогоняет «Предскажи» в фоне, обнови правку через минуту. Если запуск на сервере не настроен, этой проверки не будет.' : 'Не запускалось.') + '</p>';
+    return card;
+  }
+  if (!runs.length) {
+    card.innerHTML = '<span class="lbl">Запуск на сервере</span><p class="ad-small ad-mut">Правка не добавляет и не меняет блоков «Предскажи и запусти».</p>';
+    return card;
+  }
+  const pill = { match: ['good', '✓ вывод совпал'], differs: ['warn', '! вывод другой'], error: ['bad', '✕ не запустилось'] };
+  card.innerHTML = '<span class="lbl">Запуск на сервере · ' + runs.length + ' ' + plural(runs.length, 'блок', 'блока', 'блоков') + ' «Предскажи»</span><div class="ag-runs"></div>';
+  const list = card.querySelector('.ag-runs');
+  runs.forEach((r) => {
+    const st = pill[r.status] || ['', r.status];
+    const row = h('div', 'ag-run');
+    row.innerHTML = '<div class="ad-row"><span class="ad-pill ' + st[0] + '">' + st[1] + '</span><span class="ad-small ad-mut">узел ' + esc(r.node) + ', блок ' + (r.block + 1) + (r.version ? ' · ' + esc(r.version) : '') + '</span></div>' +
+      (r.error ? '<p class="ad-err">' + esc(r.error) + '</p>' : '') +
+      (r.status === 'differs' ? '<div class="v-body v-fields"></div><p class="ad-small ad-mut">Зачёркнуто — вывод агента, подсвечено — что получилось на сервере.</p>' : '');
+    const d = row.querySelector('.v-body');
+    if (d) d.innerHTML = words(String(r.expected || '').replace(/\n+$/, ''), String(r.got || '').replace(/\n+$/, ''));
+    list.appendChild(row);
+  });
+  return card;
 }

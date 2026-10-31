@@ -1,7 +1,8 @@
 // Формы блоков в редакторе. Простые блоки правятся полями, сложные (таблица, схема, анимация,
 // задание руками…) — как JSON с проверкой. Любой блок можно открыть как JSON кнопкой «{ }».
 // Типы и названия — из реестра сервера (GET /api/blocks).
-import { esc, h, req, walk } from './ui.js';
+import { esc, h, req, walk, toast } from './ui.js';
+import { words } from './versions.js';
 
 export const SPECS = {};
 export async function loadSpecs() {
@@ -168,6 +169,7 @@ const FORMS = {
     box.appendChild(out);
     input(box, b, 'out', b.err ? 'Текст ошибки компиляции или паники' : 'Вывод программы', { ctx, rows: Math.max(2, Math.min(12, (b.out || '').split('\n').length + 1)), mono: true, keep: true });
     check(box, b, 'err', 'Программа не компилируется или падает — показать вывод как ошибку', ctx);
+    runBox(box, b, ctx);
     input(box, b, 'after', 'После запуска · объяснение' + TEXT_HINT, { ctx, rows: 2 });
   },
   question(box, b, ctx) { questionForm(box, b, ctx); }
@@ -225,4 +227,48 @@ export function questionForm(box, b, ctx) {
   const ex = h('label', 'ad-check-l', '<input type="checkbox"' + (b.exam === false ? '' : ' checked') + '> Брать в контрольную по разделу');
   ex.querySelector('input').addEventListener('change', (e) => { if (e.target.checked) delete b.exam; else b.exam = false; ctx.onChange(); });
   box.appendChild(ex);
+}
+
+// Запуск на сервере (решение 0013): код уходит исполнителю, тот запускает его в одноразовом
+// контейнере без сети на версии из паспорта. Кнопка есть, только если на сервере включён запуск
+// для инструмента курса.
+let runnerInfo = null;
+const runnerReady = () => runnerInfo || (runnerInfo = req('GET', '/api/admin/runner').then((r) => (r.ok ? r.data : { available: false })));
+const trimOut = (s) => String(s || '').replace(/[ \t]+$/gm, '').replace(/\n+$/, '');
+
+function runBox(box, b, ctx) {
+  const wrap = h('div', 'ed-run');
+  box.appendChild(wrap);
+  const tool = (ctx.course.tool || {}).name;
+  runnerReady().then((info) => {
+    if (!info.available || !(info.tools || []).includes(tool)) return;
+    wrap.innerHTML = '<button type="button" class="btn ed-run-b">Запустить на сервере</button><span class="ad-small ad-mut">песочница без сети, ' + esc(tool) + ' из паспорта курса; первая сборка — до минуты</span><div class="ed-run-r" aria-live="polite"></div>';
+    const btn = wrap.querySelector('button'), res = wrap.querySelector('.ed-run-r');
+    btn.addEventListener('click', async () => {
+      if (!String(b.code || '').trim()) { toast('Сначала код', 'warn'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Запускаю…';
+      res.innerHTML = '';
+      const r = await req('POST', '/api/admin/run', { course: ctx.course.id, file: b.file || '', code: b.code });
+      btn.disabled = false;
+      btn.textContent = 'Запустить ещё раз';
+      if (!r.ok) { res.innerHTML = '<p class="ad-err">' + esc(r.data.error || 'Ошибка ' + r.status) + '</p>'; return; }
+      const x = r.data, got = trimOut(x.output), same = got === trimOut(b.out);
+      res.innerHTML = '<div class="ed-run-h"><b>' + esc(x.version || tool) + '</b> · ' + (x.ms / 1000).toFixed(1) + ' с · код выхода ' + x.exitCode +
+        (x.timedOut ? ' · <span class="ad-err">время вышло</span>' : '') + (x.truncated ? ' · вывод обрезан' : '') + '</div>' +
+        '<pre class="ed-run-o"></pre>' +
+        (same ? '<p class="ad-ok">✓ Совпадает с сохранённым выводом</p>'
+          : '<div class="ed-run-d"><span class="lbl">Разница с сохранённым</span><div class="v-body v-fields"></div></div><button type="button" class="btn pri ed-run-use">Подставить вывод</button>');
+      res.querySelector('.ed-run-o').textContent = x.output || '(пусто)';
+      const d = res.querySelector('.ed-run-d .v-body');
+      if (d) d.innerHTML = words(trimOut(b.out), got);
+      const use = res.querySelector('.ed-run-use');
+      if (use) use.addEventListener('click', () => {
+        b.out = got;
+        if (x.exitCode !== 0) b.err = true; else delete b.err;
+        ctx.onReplace(b);
+        toast('Вывод подставлен из запуска на ' + (x.version || tool), 'good');
+      });
+    });
+  });
 }

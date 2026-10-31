@@ -1,5 +1,10 @@
 # Пока сервис живёт на Docker Desktop на ПК владельца: http://localhost:8080.
 # Поднять: task up (или docker compose up -d --build). Настройки — в .env (см. .env.example).
+#
+# Запуск кода курсов (решение 0013): citadel отдаёт код исполнителю (runner), тот создаёт под каждый
+# запуск одноразовый контейнер без сети и томов. К Docker исполнитель ходит только через прокси,
+# который пропускает операции с контейнерами и больше ничего. Сети runner и docker — внутренние:
+# из них нет выхода наружу, а сам citadel до прокси не достаёт.
 services:
   citadel:
     build: .
@@ -8,8 +13,11 @@ services:
     ports:
       - "8080:8080"
     env_file: .env
+    environment:
+      CITADEL_RUNNER_URL: http://runner:8090
     volumes:
       - citadel-data:/app/data
+    networks: [web, runner]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
@@ -17,6 +25,47 @@ services:
       timeout: 3s
       start_period: 5s
       retries: 3
+
+  runner:
+    image: citadel:local
+    container_name: citadel-runner
+    entrypoint: ["citadel", "runner"]
+    env_file: .env
+    environment:
+      DOCKER_HOST: tcp://docker-proxy:2375
+    networks: [runner, docker]
+    depends_on: [citadel, docker-proxy]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: citadel-docker-proxy
+    environment:
+      CONTAINERS: 1 # создать, запустить, дождаться, логи, убить, удалить
+      POST: 1       # методы кроме GET — только для разрешённых выше путей
+      # всё остальное (образы, тома, сети, exec, info, build…) закрыто по умолчанию
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [docker]
+    restart: unless-stopped
+
+  # Образ, в котором исполнитель запускает Go-код. Сервис только скачивает его при `up` и выходит:
+  # самому исполнителю скачивать образы прокси не разрешает.
+  go-toolchain:
+    image: golang:1.27-alpine
+    command: ["go", "version"]
+    network_mode: none
+    restart: "no"
+
+networks:
+  web: {}
+  runner:
+    internal: true
+  docker:
+    internal: true
 
 volumes:
   # база SQLite: курсы с версиями, пользователи, прогресс. Бэкап — task backup.

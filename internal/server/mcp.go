@@ -131,6 +131,15 @@ var mcpTools = []mcpTool{
 			}
 			return s.agentCreate(ctx, a)
 		}},
+	{Name: "run_code", Description: "Запустить код на сервере в одноразовой песочнице без сети, на версии инструмента из паспорта курса (сейчас — Go). Вернёт вывод, код выхода и версию. Так получают вывод для «Предскажи и запусти», а не из памяти.",
+		InputSchema: obj(map[string]any{"course": courseProp, "code": strProp("полная программа, например package main …"), "file": strProp("имя файла, по умолчанию из паспорта, например main.go")}, "course", "code"),
+		call: func(s *server, ctx context.Context, raw json.RawMessage) (any, error) {
+			a, err := argsOf[runArgs](raw)
+			if err != nil {
+				return nil, err
+			}
+			return s.agentRun(ctx, a)
+		}},
 	{Name: "proposal_status", Description: "Статус своего предложения: pending — ждёт, accepted — принято в черновик (version), rejected — отклонено (comment — комментарий админа), invalid — не прошло проверку.",
 		InputSchema: obj(map[string]any{"id": map[string]any{"type": "integer", "description": "id предложения"}}, "id"),
 		call: func(s *server, ctx context.Context, raw json.RawMessage) (any, error) {

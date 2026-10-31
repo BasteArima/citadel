@@ -24,6 +24,9 @@ type Config struct {
 	AccessCode string   // the service access code, from CITADEL_ACCESS_CODE
 	Admins     []string // names that get the admin role
 	Log        *slog.Logger
+	// the runner of course code (decision 0013); empty URL — running is off
+	RunnerURL    string
+	RunnerSecret string
 }
 
 // Summary is a course as listed in the catalog.
@@ -43,6 +46,7 @@ type server struct {
 	log     *slog.Logger
 	cat     atomic.Pointer[catalog]
 	limiter *limiter
+	runs    runLocks
 }
 
 // catalog is a snapshot of the published courses. Publishing builds a new one and swaps it in,
@@ -102,6 +106,8 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	// agents, by token
 	s.agentRoutes(mux)
 	s.mcpRoutes(mux)
+	// running course code: admins and agents (decision 0013)
+	s.runRoutes(mux)
 	return s.logRequests(mux), nil
 }
 

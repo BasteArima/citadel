@@ -4,6 +4,7 @@
 //	citadel check       validate courses in the content directory
 //	citadel convert-v0  convert the legacy Go course to format v1
 //	citadel backup      write a consistent copy of the database
+//	citadel runner      run course code in throwaway containers (decision 0013)
 package main
 
 import (
@@ -23,6 +24,7 @@ import (
 
 	"citadel/internal/course"
 	"citadel/internal/legacy"
+	"citadel/internal/runner"
 	"citadel/internal/server"
 	"citadel/internal/store"
 )
@@ -42,6 +44,8 @@ func main() {
 		err = convertV0(os.Args[2:])
 	case "backup":
 		err = backup(os.Args[2:])
+	case "runner":
+		err = runRunner(os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
@@ -53,7 +57,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: citadel serve | check | convert-v0 | backup [flags]")
+	fmt.Fprintln(os.Stderr, "usage: citadel serve | check | convert-v0 | backup | runner [flags]")
 }
 
 func dbPath(dataDir string) string { return filepath.Join(dataDir, "citadel.db") }
@@ -113,7 +117,8 @@ func serve(args []string) error {
 		log.Info("course", "id", im.ID, "version", im.Version, "new_version", im.New)
 	}
 
-	h, err := server.New(ctx, server.Config{Store: st, AccessCode: code, Admins: admins, Log: log})
+	h, err := server.New(ctx, server.Config{Store: st, AccessCode: code, Admins: admins, Log: log,
+		RunnerURL: os.Getenv("CITADEL_RUNNER_URL"), RunnerSecret: os.Getenv("CITADEL_RUNNER_SECRET")})
 	if err != nil {
 		return err
 	}
@@ -260,4 +265,44 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// runRunner serves the runner: Citadel sends it code, it runs the code in a fresh container.
+// Settings: CITADEL_RUNNER_SECRET (shared with Citadel), DOCKER_HOST (in compose — the socket
+// proxy), CITADEL_RUNNER_RUNTIME (runsc for gVisor), CITADEL_GO_IMAGE.
+func runRunner(args []string) error {
+	fs := flag.NewFlagSet("runner", flag.ExitOnError)
+	addr := fs.String("addr", envOr("CITADEL_RUNNER_ADDR", ":8090"), "listen address")
+	envFile := fs.String("env", ".env", "file with KEY=VALUE settings; real environment variables win")
+	fs.Parse(args)
+	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if err := loadEnvFile(*envFile); err != nil {
+		return err
+	}
+	secret := os.Getenv("CITADEL_RUNNER_SECRET")
+	if len(secret) < 24 {
+		return errors.New("CITADEL_RUNNER_SECRET must be set, at least 24 characters (see .env.example)")
+	}
+	docker, err := runner.NewDocker(envOr("DOCKER_HOST", "unix:///var/run/docker.sock"))
+	if err != nil {
+		return err
+	}
+	goTC := runner.Go
+	goTC.Image = envOr("CITADEL_GO_IMAGE", goTC.Image)
+	rs := &runner.Server{Docker: docker, Secret: secret, Runtime: os.Getenv("CITADEL_RUNNER_RUNTIME"),
+		Tools: map[string]runner.Toolchain{goTC.Tool: goTC}, Log: log}
+	srv := &http.Server{Addr: *addr, Handler: rs.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	log.Info("runner listening", "addr", *addr, "runtime", rs.Runtime, "go_image", goTC.Image)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		sctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)
+		defer cancel()
+		srv.Shutdown(sctx)
+	}()
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }

@@ -138,7 +138,8 @@ const agentRules = `Ты работаешь с курсом платформы C
 - id узлов и вопросов — ключи прогресса учеников: не меняй и не переиспользуй их. Новый вопрос урока — id «урок.qN» со следующим свободным N.
 - Текст блоков — простой HTML; термин словаря — {{ключ}} или {{ключ|текст}}, ссылка на узел — {{>id}}. Ссылаться можно только на существующие термины и узлы.
 - Правка — список операций (changes): put_node заменяет узел целиком или вставляет новый (parent, before/after), delete_node, put_term, delete_term, set_passport. Сначала прочитай узел (get_node), потом пришли его новую версию целиком.
-- Перед отправкой прогони check_changes: правку с ошибками схемы принять нельзя.`
+- Перед отправкой прогони check_changes: правку с ошибкой схемы принять нельзя.
+- Вывод «Предскажи и запусти» проверяй запуском: run_code запускает код на сервере на версии из паспорта (если на сервере включён запуск). После отправки сервер сам прогонит изменённые блоки «Предскажи», и админ увидит, совпал ли вывод.`
 
 func agentSchema() any {
 	return map[string]any{
@@ -364,6 +365,9 @@ func (s *server) storeProposal(ctx context.Context, p store.Proposal, c *course.
 		return nil, err
 	}
 	s.log.Info("proposal", "id", id, "course", p.CourseID, "agent", t.Name, "status", p.Status)
+	if p.Status == store.ProposalPending && s.cfg.RunnerURL != "" {
+		go s.verifyProposal(id) // the queue shows whether the outputs match a server run
+	}
 	msg := "Предложение в очереди: админ примет его в черновик или отклонит. Следи за решением через proposal_status."
 	if p.Status == store.ProposalInvalid {
 		msg = "Проверка нашла ошибки: такое предложение принять нельзя. Исправь и пришли новое."
