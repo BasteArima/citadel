@@ -12,6 +12,7 @@ import { renderEditor } from './editor.js';
 import { renderQuestions } from './questions.js';
 import { renderVersions, authorLabel } from './versions.js';
 import { renderTokens, renderAgents, pendingCount } from './agents.js';
+import { readTheme, saveTheme, applyTheme } from '../site/topbar.js';
 
 const LAST = 'citadel-admin-course';
 let me = null;
@@ -37,12 +38,27 @@ function shell(current) {
   app.innerHTML = '<div class="ad">' +
     '<nav class="ad-side" aria-label="Админка">' +
     '<a class="ad-brand" href="#/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="#9aa4b0" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="#8ab4f8" stroke-width="2.5"/></svg>Citadel <span>админ</span></a>' +
+    '<a class="ad-back" href="/">← На сайт</a>' +
     items.map((it) => '<a href="' + it[1] + '"' + (it[0] === current ? ' class="on" aria-current="page"' : '') + '>' + esc(it[2]) + '</a>').join('') +
-    '<span class="ad-sp"></span><a href="/">← На сайт</a></nav>' +
+    '<span class="ad-sp"></span>' + themeSwitch() + '</nav>' +
     '<div class="ad-main" id="ad-main"></div></div>';
   refreshBadge();
   return document.getElementById('ad-main');
 }
+
+// Тема — та же, что на сайте и в курсах (site/topbar.js).
+function themeSwitch() {
+  const t = readTheme();
+  return '<div class="ad-theme" role="group" aria-label="Тема">' + [['auto', 'Авто'], ['light', 'Светлая'], ['dark', 'Тёмная']].map((x) =>
+    '<button type="button" data-theme-set="' + x[0] + '" aria-pressed="' + (t === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('.ad-theme [data-theme-set]');
+  if (!b) return;
+  saveTheme(b.dataset.themeSet);
+  applyTheme(b.dataset.themeSet);
+  b.parentNode.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+});
 
 // Верхняя строка страниц курса: путь, состояние черновика, «Сохранить», «Опубликовать…».
 export function courseBar(main, crumbs) {

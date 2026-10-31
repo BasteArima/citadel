@@ -4,6 +4,8 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -98,9 +100,9 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.Handle("GET /api/progress/{course}", s.api(s.getProgress))
 	mux.Handle("POST /api/progress/{course}", s.api(s.postProgress))
 	mux.Handle("GET /c/{id}/", s.page(s.coursePage))
-	mux.Handle("GET /{$}", s.page(sitePage("catalog.html")))
-	mux.Handle("GET /profile", s.page(sitePage("profile.html")))
-	mux.Handle("GET /review", s.page(sitePage("review.html")))
+	mux.Handle("GET /{$}", s.page(sitePage("catalog.html", "catalog")))
+	mux.Handle("GET /profile", s.page(sitePage("profile.html", "profile")))
+	mux.Handle("GET /review", s.page(sitePage("review.html", "review")))
 	// admins only
 	s.adminRoutes(mux)
 	// agents, by token
@@ -113,19 +115,31 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 
 // noCache makes the browser re-check static files: embedded files carry no modification
 // time, so without it an update of the service could leave a stale engine in the cache.
+// An ETag from the file content turns the re-check into a short 304 instead of a full download,
+// so moving between pages stays fast.
 func noCache(h http.Handler) http.Handler {
+	etags := map[string]string{}
+	fs.WalkDir(web.FS, "static", func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			if data, err := web.FS.ReadFile(path); err == nil {
+				sum := sha256.Sum256(data)
+				etags["/"+path] = `"` + hex.EncodeToString(sum[:8]) + `"`
+			}
+		}
+		return nil
+	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
+		if tag, ok := etags[r.URL.Path]; ok {
+			w.Header().Set("ETag", tag)
+		}
 		h.ServeHTTP(w, r)
 	})
 }
 
-// sitePage serves a page of the site around the courses: the catalog, the profile.
-func sitePage(name string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-cache")
-		http.ServeFileFS(w, r, web.FS, name)
-	}
+// sitePage serves a page of the site around the courses with the header filled in (top.go).
+func sitePage(name, current string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) { withTop(w, r, name, current, false) }
 }
 
 func summarize(c *course.Course) Summary {
@@ -239,8 +253,7 @@ func (s *server) coursePage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Cache-Control", "no-cache")
-	http.ServeFileFS(w, r, web.FS, "course.html")
+	withTop(w, r, "course.html", "catalog", true)
 }
 
 func writeJSON(w http.ResponseWriter, data []byte) {

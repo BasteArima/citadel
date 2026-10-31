@@ -104,6 +104,16 @@ export function loadState(courseId, hooks) {
     schedule(1000);
   };
 
+  // убрать карточку: на сервер уходит пустое значение с новым временем — так удаление доходит и до
+  // других устройств (более новая отметка побеждает), а пустая карточка нигде не считается
+  S.dropCard = function (key) {
+    items[key] = { v: {}, at: Date.now() };
+    delete S.cards[key];
+    dirty = true; gen++;
+    persist();
+    schedule(1000);
+  };
+
   S.lesson = function (id) {
     const st = S.lessons[id] || (S.lessons[id] = {});
     st.t = st.t || {};

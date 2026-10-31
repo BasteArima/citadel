@@ -1,10 +1,12 @@
 // Каталог: «Повторить сегодня» по всем курсам, «Продолжить с того же места» и плитки курсов.
-import { api, esc, plural, today, header, linkIcon, metalName, courseState, lastPlace } from './shared.js';
+import { api, esc, plural, today, linkIcon, metalName, courseState, lastPlace } from './shared.js';
 import { initSiteSearch } from './search.js';
+import { siteTop } from './topbar.js';
 
 initSiteSearch();
 
 const app = document.getElementById('app');
+const top = siteTop('catalog');
 const FILTERS = [['all', 'Все'], ['active', 'В процессе'], ['new', 'Не начатые'], ['done', 'Пройденные']];
 const STATE = { done: ['Пройден', 'good'], active: ['В процессе', 'acc'], new: ['Не начат', ''] };
 
@@ -20,7 +22,8 @@ try {
 
 function render(user, courses, soon) {
   const byId = Object.fromEntries(courses.map((c) => [c.id, c]));
-  app.innerHTML = header(user, 'catalog', courses.reduce((s, c) => s + c.due, 0)) +
+  top.update(user, courses.reduce((s, c) => s + c.due, 0));
+  app.innerHTML =
     '<main class="site-main">' +
       '<div><h1>Курсы</h1><p class="site-sub">Каждый пройденный курс — звено твоей цепи.</p></div>' +
       '<div class="top-cards">' + reviewCard(courses) + continueCard(courses, byId) + '</div>' +

@@ -73,21 +73,6 @@ export function linkIcon(metal, part, size) {
     (part > 0 ? '<rect class="lk-metal" x="4" y="6" width="48" height="28" rx="14" stroke-width="5"' + dash + '/>' : '') + '</svg>';
 }
 
-// Шапка сайта: логотип, разделы (у «Повторений» — сколько карточек на сегодня), кто вошёл.
-export function header(user, current, due) {
-  const nav = [['/', 'Курсы', 'catalog'], ['/review', 'Повторения', 'review'], ['/profile', 'Профиль', 'profile']];
-  if (user.role === 'admin') nav.push(['/admin', 'Админка', 'admin']);
-  return '<header class="site-top">' +
-    '<a class="site-brand" href="/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg><span class="site-brand-t">Citadel</span></a>' +
-    '<nav class="site-nav" aria-label="Разделы">' + nav.map((n) =>
-      '<a href="' + n[0] + '"' + (n[2] === current ? ' aria-current="page"' : '') + '>' + n[1] +
-      (n[2] === 'review' && due ? ' <b class="nav-badge">' + due + '</b>' : '') + '</a>').join('') + '</nav>' +
-    '<span class="site-sp"></span>' +
-    '<button type="button" class="tb-search" data-search aria-label="Поиск по всем курсам, Ctrl K"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Поиск</span><span class="kbd">Ctrl K</span></button>' +
-    '<a class="site-me" href="/profile" aria-label="Профиль: ' + esc(user.name) + '">' + esc(user.name.slice(0, 1).toUpperCase()) + '</a>' +
-    '</header>';
-}
-
 // Тема из настроек движка (общих для всех курсов).
 export const UI_KEY = 'citadel-ui';
 export function readUI() {

@@ -1,10 +1,12 @@
 // Профиль: цепь из звеньев-курсов, сводка, перенос прогресса файлом, тема и выход.
-import { api, esc, plural, today, header, metalName, courseState, readUI, applyTheme, UI_KEY } from './shared.js';
+import { api, esc, plural, today, metalName, courseState, readUI, applyTheme, UI_KEY } from './shared.js';
 import { initSiteSearch } from './search.js';
+import { siteTop } from './topbar.js';
 
 initSiteSearch();
 
 const app = document.getElementById('app');
+const top = siteTop('profile');
 const FILE_FORMAT = 'citadel-progress';
 
 let user, courses;
@@ -25,7 +27,8 @@ function render() {
   const forged = courses.filter((c) => courseState(c) === 'done').length;
   const forging = courses.filter((c) => courseState(c) === 'active').length;
   const answered = sum((c) => c.solved), right = sum((c) => c.firstRight);
-  app.innerHTML = header(user, 'profile', sum((c) => c.due)) +
+  top.update(user, sum((c) => c.due));
+  app.innerHTML =
     '<main class="site-main">' +
       '<div class="me-h"><span class="me-av" aria-hidden="true">' + esc(user.name.slice(0, 1).toUpperCase()) + '</span>' +
         '<div><h1>' + esc(user.name) + '</h1><p class="site-sub">' + (user.role === 'admin' ? 'Ученик и админ' : 'Ученик') + '</p></div></div>' +
@@ -166,6 +169,7 @@ function wire() {
     ui.theme = b.getAttribute('data-t');
     try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (err) { /* тема только на этот раз */ }
     applyTheme(ui.theme);
+    top.redraw();
     document.querySelectorAll('#theme button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   });
 

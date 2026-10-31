@@ -28,7 +28,9 @@ export function renderQuestion(q, label, store, onAnswer) {
     whyBox.className = 'why ' + (ok ? 'ok' : 'no');
     whyBox.innerHTML = '<b>' + (ok ? 'Верно' : 'Не совсем') + '</b>' +
       (ok ? '' : '<p class="why-right">Верный ответ: ' + rich(rightAnswer(q)) + '</p>') + rich(q.why || '') +
-      (ok ? '' : '<p class="why-note">Первая попытка учтена: вопрос засчитан и вернётся в повторениях.</p>');
+      (ok ? '' : '<p class="why-note">Первая попытка учтена: вопрос засчитан и уже в карточках повторения.</p>');
+    // после ответа вопрос можно положить в карточки (или убрать оттуда) — если страница это умеет
+    if (store.card) whyBox.appendChild(cardButton(store.card));
   }
   function markDone(state) {
     box.classList.add('solved');
@@ -126,3 +128,17 @@ export const question = {
   render: (b, ctx) => renderQuestion(b, ctx.label, ctx.store, ctx.onSolve),
   questions: (b) => [b]
 };
+
+// «+ В карточки» / «✓ В карточках»: повторное нажатие убирает карточку. c — { has, toggle, when }.
+export function cardButton(c) {
+  const w = el('div', 'card-tg');
+  const draw = () => {
+    const has = c.has();
+    w.innerHTML = '<button type="button" class="btn card-tg-b" aria-pressed="' + has + '" title="' + (has ? 'Нажми, чтобы убрать из карточек' : 'Вернётся в «Повторениях»: вспомнить и оценить себя') + '">' +
+      (has ? '✓ В карточках' : '+ В карточки') + '</button>' +
+      (has ? '<span class="card-tg-h">вернётся в <a href="/review">«Повторениях»</a> ' + c.when + '</span>' : '');
+    w.querySelector('button').addEventListener('click', () => { c.toggle(); draw(); });
+  };
+  draw();
+  return w;
+}

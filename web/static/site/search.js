@@ -121,6 +121,6 @@ export function bindSearchKeys(open) {
 // Страницы сайта (каталог, профиль, повторения): кнопка «Поиск» в шапке и Ctrl K — по всем курсам.
 export function initSiteSearch() {
   const open = () => openSearch({ scopes: [allCourses] });
-  document.addEventListener('click', (e) => { if (e.target.closest('[data-search]')) open(); });
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-act="search"]')) open(); });
   bindSearchKeys(open);
 }

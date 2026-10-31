@@ -1,12 +1,14 @@
 // Повторения: одна очередь карточек из всех курсов (решение 0008).
 // Карточка — вопрос, где первая попытка была с ошибкой, или фраза «Скажи на собесе».
 // Вспомни вслух → «Показать ответ» → «Забыл / С трудом / Помню»; оценка двигает следующий показ.
-import { api, esc, today, header, nextCard, inDays, courseText } from './shared.js';
+import { api, esc, today, nextCard, inDays, courseText } from './shared.js';
 import { initSiteSearch } from './search.js';
+import { siteTop } from './topbar.js';
 
 initSiteSearch();
 
 const app = document.getElementById('app');
+const top = siteTop('review');
 const SAY_RE = /^\s*<b>\s*Как сказать на собесе:?\s*<\/b>\s*/;
 
 let user, overview, queue = [], pos = 0, shown = false, graded = 0;
@@ -70,7 +72,8 @@ function questionCard(les, qid, course) {
 function render() {
   const total = queue.length, due = overview.reduce((s, c) => s + c.due, 0);
   const card = queue[pos];
-  app.innerHTML = header(user, 'review', Math.max(due - graded, 0)) +
+  top.update(user, Math.max(due - graded, 0));
+  app.innerHTML =
     '<main class="site-main rv">' +
       '<div class="rv-grid"><div class="rv-main">' +
         '<div class="row" style="justify-content:space-between;align-items:flex-end"><div><h1>Повторить сегодня</h1>' +

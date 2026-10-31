@@ -2,11 +2,13 @@
 // озвучка и повторения. Курс приходит из API в формате v1, блоки рисуют модули из blocks/.
 import { el, esc, ic, IC, today, addDays, plural, copyText, reduceMotion, onLeave, leave, readable } from './util.js';
 import { renderBlock, speakables, questionsOf } from './blocks/index.js';
+import { cardButton } from './blocks/question.js';
 import { indexCourse } from './course.js';
 import { loadState } from './progress.js';
 import { initRich, rich, trackTerms, takeTerms } from './rich.js';
 import { linkIcon, metalName } from '../site/shared.js';
 import { openSearch as openSiteSearch, allCourses, bindSearchKeys } from '../site/search.js';
+import { markTheme, setDue } from '../site/topbar.js';
 
 // course — курс v1, user — кто вошёл, catalog — список курсов (для «Опирается на» и «Что дальше»).
 export function start(course, user, catalog) {
@@ -53,7 +55,6 @@ export function start(course, user, catalog) {
 
   function renderTop() {
     const due = cardsDue(), isLesson = !!(current && ready(current));
-    const themes = [['auto', 'Авто', ''], ['light', 'Светлая', IC.sun], ['dark', 'Тёмная', IC.moon]];
     // На телефоне в уроке шапка компактная: где ты («Урок 13 · Часть 2 из 4»), озвучка и полоска частей.
     // На широком экране этих элементов не видно — там то же есть в меню и над текстом.
     let lessonHead = '', strip = '';
@@ -64,22 +65,13 @@ export function start(course, user, catalog) {
         (ps && ps[k].kind === 'theory' && canSpeak ? '<button type="button" class="tb-ic tb-listen" data-act="listen" aria-label="Слушать часть">' + ic(IC.sound, 18) + '</button>' : '');
       if (ps) strip = '<div class="tb-strip" aria-hidden="true">' + ps.map((p, i) => '<i class="' + (partDone(les, i) ? 'ok' : '') + (i === k ? ' cur' : '') + '"></i>').join('') + '</div>';
     }
-    // общая шапка сайта, как в каталоге и профиле; курс и путь внутри него — в меню слева
-    top.innerHTML =
-      '<button type="button" class="tb-ic tb-menu" data-act="menu" aria-controls="side" aria-expanded="' + side.classList.contains('open') + '" aria-label="Меню уроков">' + ic(IC.menu, 20) + '</button>' +
-      lessonHead +
-      '<a class="tb-home" href="/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg><span>Citadel</span></a>' +
-      '<nav class="tb-nav" aria-label="Разделы"><a href="/" aria-current="page">Курсы</a><a href="/review">Повторения</a><a href="/profile">Профиль</a>' + (user.role === 'admin' ? '<a href="/admin">Админка</a>' : '') + '</nav>' +
-      '<div class="tb-tools">' +
-        '<button type="button" class="tb-search" data-act="search" aria-label="Поиск по курсу, Ctrl K">' + ic('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', 16) +
-          '<span>Поиск</span><span class="kbd">Ctrl K</span></button>' +
-        (due ? '<a class="tb-due" href="/review" title="Повторить сегодня">' + ic(IC.repeat) + '<span>Повторить</span><b>' + due + '</b></a>' : '') +
-        (isLesson ? '<button type="button" class="tb-ic tb-focus" data-act="focus" aria-pressed="' + !!S.ui.focus + '" aria-label="Режим чтения: скрыть меню" title="Режим чтения">' + ic(IC.focus, 18) + '</button>' : '') +
-        '<div class="tb-theme" role="group" aria-label="Тема">' + themes.map((t) =>
-          '<button type="button" data-theme-set="' + t[0] + '" aria-pressed="' + (S.theme === t[0]) + '"' +
-          (t[2] ? ' aria-label="' + t[1] + '" title="' + t[1] + '">' + ic(t[2]) : '>' + t[1]) + '</button>').join('') + '</div>' +
-        '<a class="tb-me" href="/profile" aria-label="Профиль: ' + esc(user.name) + '">' + esc(user.name.slice(0, 1).toUpperCase()) + '</a>' +
-      '</div>' + strip;
+    // шапку отдаёт сервер (top.go) — та же, что на страницах сайта; здесь только дополняем её на месте,
+    // не перерисовывая: так она не моргает
+    top.querySelector('.tb-lesson-w').innerHTML = lessonHead;
+    top.querySelector('.tb-strip-w').innerHTML = strip;
+    top.querySelector('.tb-menu').setAttribute('aria-expanded', String(side.classList.contains('open')));
+    setDue(top, due, 'catalog');
+    markTheme(top, S.theme);
     document.body.classList.toggle('in-lesson', isLesson);
   }
   top.addEventListener('click', (e) => {
@@ -92,7 +84,6 @@ export function start(course, user, catalog) {
       side.classList.toggle('open', open);
       a.setAttribute('aria-expanded', String(open));
     }
-    if (a.getAttribute('data-act') === 'focus') { S.ui.focus = !S.ui.focus; save(); applyFocus(); renderTop(); }
     // озвучка из шапки на телефоне — та же кнопка, что над текстом части
     if (a.getAttribute('data-act') === 'listen') { const p = page.querySelector('.listen [data-sp="play"]'); if (p) p.click(); }
     if (a.getAttribute('data-act') === 'search') openSearch();
@@ -102,9 +93,15 @@ export function start(course, user, catalog) {
     const b = top.querySelector('[data-act="menu"]');
     if (b) b.setAttribute('aria-expanded', 'false');
   }
-  // режим чтения: только на странице урока, прячет меню и оставляет колонку текста
+  // Меню курса можно скрыть кнопкой на нём самом; вернуть — кнопкой «Меню» слева (только на широком
+  // экране: на телефоне меню и так выезжает по кнопке в шапке). Выбор запоминается (ui.focus).
+  const showSide = el('button', 'side-show', ic(IC.menu, 18) + '<span>Меню</span>');
+  showSide.type = 'button';
+  showSide.setAttribute('aria-label', 'Показать меню курса');
+  document.body.appendChild(showSide);
+  showSide.addEventListener('click', () => { S.ui.focus = false; save(); applyFocus(); side.querySelector('.sd-hide')?.focus(); });
   function applyFocus() {
-    document.body.classList.toggle('reading', !!(S.ui.focus && current && ready(current)));
+    document.body.classList.toggle('reading', !!S.ui.focus);
   }
 
   // ── меню ──
@@ -169,7 +166,8 @@ export function start(course, user, catalog) {
   }
   function renderSide() {
     const done = doneCount(ALL);
-    let h = '<div class="sd-prog"><div class="sd-prog-t"><span>Курс</span><span>' + done + ' из ' + TOTAL + '</span></div>' +
+    let h = '<button type="button" class="sd-hide" data-act="hide-side" aria-label="Скрыть меню курса">' + ic(IC.back, 16) + '<span>Скрыть меню</span></button>' +
+      '<div class="sd-prog"><div class="sd-prog-t"><span>Курс</span><span>' + done + ' из ' + TOTAL + '</span></div>' +
       '<div class="bar"><i style="width:' + (done / TOTAL * 100) + '%"></i></div></div>' +
       '<ul class="sd-links"><li><a class="sd-a" href="/">' + ic(IC.back) + '<span class="sd-t">Все курсы</span></a></li>' +
       '<li><a class="sd-a sd-course" href="#"' + (current === '' ? ' aria-current="page"' : '') + '>' + ic(IC.home) + '<span class="sd-t">' + esc(C.title) + '</span></a></li>' +
@@ -181,30 +179,21 @@ export function start(course, user, catalog) {
         ic(open ? IC.down : IC.chev, 14) + '<span class="sd-t">' + esc(sec.name) + '</span><span class="sd-cnt">' + doneCount(sec.lessons) + ' / ' + sec.lessons.length + '</span></button>' +
         (open ? '<ul class="sd-list">' + sectionItems(sec) + '</ul>' : '') + '</div>';
     });
-    h += '<div class="sd-user"><div class="sd-user-t"><span class="sd-user-n">' + esc(user.name) + '</span>' +
-      '<span class="sd-sync" id="sd-sync" role="status"></span></div>' +
-      '<button type="button" class="btn sd-out" data-act="logout">Выйти</button></div>';
+    h += '<p class="sd-sync" id="sd-sync" role="status" hidden></p>';
     side.innerHTML = h;
     syncUi();
   }
-  // состояние синхронизации прогресса — под именем в меню
+  // Синхронизация прогресса в меню видна, только когда что-то не так: нет связи. Кто вошёл, выход
+  // и обычное «сохранено на сервере» — в профиле.
   function syncUi() {
     const s = document.getElementById('sd-sync');
     if (!s) return;
     const st = S.sync.state;
-    s.className = 'sd-sync' + (st === 'offline' || st === 'signed-out' ? ' warn' : '');
-    s.textContent = {
-      busy: 'синхронизирую…',
-      ok: 'прогресс сохранён на сервере',
-      offline: 'нет связи: прогресс сохранён здесь и уйдёт позже',
-      'signed-out': 'нужно войти снова'
-    }[st] || '';
+    s.hidden = st !== 'offline';
+    s.textContent = st === 'offline' ? 'Нет связи: прогресс сохранён в браузере и уйдёт на сервер, когда связь появится.' : '';
   }
   side.addEventListener('click', (e) => {
-    if (e.target.closest('[data-act="logout"]')) {
-      fetch('/api/logout', { method: 'POST' }).finally(() => { location.href = '/login'; });
-      return;
-    }
+    if (e.target.closest('[data-act="hide-side"]')) { S.ui.focus = true; save(); applyFocus(); showSide.focus(); return; }
     const s = e.target.closest('[data-sec]');
     if (s) { const sec = X.sections.find((x) => x.id === s.getAttribute('data-sec')); S.ui.open[sec.id] = !secOpen(sec); save(); renderSide(); return; }
     const r = e.target.closest('[data-run]');
@@ -223,7 +212,18 @@ export function start(course, user, catalog) {
         save();
         if (!ok) addCard(lessonId, q.id);
         renderTop();
-      }
+      },
+      card: cardToggle(lessonId, q.id)
+    };
+  }
+  // Карточка повторения для вопроса или фразы «Скажи на собесе»: добавить и убрать одной кнопкой.
+  // Ошибка первой попытки кладёт вопрос в карточки сама; убрать его можно так же.
+  function cardToggle(lessonId, ref) {
+    const key = 'card:' + lessonId + ':' + ref;
+    return {
+      has: () => !!S.cards[key],
+      toggle: () => { if (S.cards[key]) S.dropCard(key); else addCard(lessonId, ref); renderTop(); },
+      when: inDays(STAGES[0])
     };
   }
 
@@ -311,12 +311,15 @@ export function start(course, user, catalog) {
   function appendSimple(to, les) {
     const lead = el('p', 'lead', rich(les.lead));
     to.appendChild(lead);
-    const paras = (les.simple || []).filter((p) => !SAY_RE.test(p));
-    if (!paras.length) return [lead];
+    const paras = (les.simple || []).filter((p) => !SAY_RE.test(p)), say = sayOf(les);
+    if (!paras.length && !say) return [lead];
     const box = el('section', 'simple');
     box.setAttribute('aria-label', 'Коротко');
-    box.innerHTML = '<div class="simple-b"><div class="kind">Простыми словами</div>' + paras.map((p) => '<p>' + rich(p) + '</p>').join('') + '</div>';
+    box.innerHTML = '<div class="simple-b"><div class="kind">Простыми словами</div>' + paras.map((p) => '<p>' + rich(p) + '</p>').join('') +
+      (say ? '<div class="simple-say"><div class="kind">Как сказать на собесе</div><p>' + rich(say) + '</p></div>' : '') + '</div>';
     to.appendChild(box);
+    // фразу для собеса можно отправить в карточки: в «Повторениях» её нужно будет сказать своими словами
+    if (say) box.querySelector('.simple-say').appendChild(cardButton(cardToggle(les.id, 'say')));
     return [lead].concat(readable(box.querySelector('.simple-b')));
   }
 
@@ -329,7 +332,7 @@ export function start(course, user, catalog) {
     return { main, rail };
   }
 
-  // Правая колонка: на что опирается урок, термины на странице, фраза для собеса.
+  // Правая колонка: на что опирается урок и термины на странице.
   function fillRail(rail, les, termsLabel) {
     const deps = (les.node.deps || []).map(meta).filter(Boolean);
     if (deps.length) {
@@ -340,24 +343,6 @@ export function start(course, user, catalog) {
     if (keys.length) {
       rail.appendChild(el('section', 'card rail-card', '<h2 class="lbl">' + termsLabel + ' · ' + keys.length + '</h2><div class="rail-terms">' +
         keys.map((k) => '<button type="button" class="term chip" data-k="' + k + '">' + esc(C.glossary[k].t) + '</button>').join('') + '</div>'));
-    }
-    const say = sayOf(les);
-    if (say) {
-      const card = el('section', 'card rail-card rail-say', '<h2 class="lbl">Скажи на собесе</h2><p>' + rich(say) + '</p>' +
-        '<div class="rail-say-b"><button type="button" class="btn say-card"></button>' +
-        '<button type="button" class="btn say-cp">' + ic(IC.copy) + '<span>Скопировать</span></button></div>');
-      const cp = card.querySelector('.say-cp');
-      cp.addEventListener('click', () => copyText(card.querySelector('p').innerText, cp, card.querySelector('p')));
-      // «+ В карточки»: фраза уйдёт в повторения — вспомнить её своими словами
-      const add = card.querySelector('.say-card');
-      const drawAdd = () => {
-        const has = hasCard(les.id, 'say');
-        add.disabled = has;
-        add.innerHTML = has ? ic(IC.check) + '<span>В карточках</span>' : '<span>+ В карточки</span>';
-      };
-      add.addEventListener('click', () => { addCard(les.id, 'say'); drawAdd(); renderTop(); });
-      drawAdd();
-      rail.appendChild(card);
     }
   }
 

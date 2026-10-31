@@ -1,16 +1,5 @@
 /* Страницы вокруг курсов: каталог и профиль. Токены цветов — из style.css. */
 
-.site-top { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
-            padding: 10px 24px; background: var(--bg); border-bottom: 1px solid var(--line); }
-.site-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--txt); font-weight: 700; font-size: 18px; text-decoration: none; }
-.site-nav { display: flex; gap: 4px; flex-wrap: wrap; }
-.site-nav a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; color: var(--mut); font-weight: 500; text-decoration: none; }
-.site-nav a:hover { background: var(--panel-2); color: var(--txt); }
-.site-nav a[aria-current="page"] { background: var(--acc-soft); color: var(--acc); }
-.site-sp { flex: 1; }
-.site-me { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%;
-           background: var(--txt); color: var(--bg); font-weight: 600; text-decoration: none; }
-
 .site-main { max-width: 1120px; margin: 0 auto; padding: 36px 24px 72px; display: flex; flex-direction: column; gap: 28px; }
 .site-main h1 { margin: 0; font-size: 34px; line-height: 1.15; letter-spacing: -.02em; }
 .site-main h2 { margin: 0; font-size: 22px; line-height: 1.25; }
@@ -45,8 +34,6 @@
 
 .empty { padding: 40px 24px; border: 1px dashed var(--line-2); border-radius: 12px; text-align: center; color: var(--mut); }
 
-.nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; margin-left: 6px; padding: 0 6px;
-              border-radius: 999px; background: var(--acc-fill); color: var(--acc-ink); font-size: 12px; font-weight: 600; }
 
 /* повторения */
 .rv-grid { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
@@ -110,15 +97,6 @@
 .chain .metal-silver { --metal-d: #c3cad3; } .chain .metal-gold { --metal-d: #e0bd5a; } .chain .metal-steel { --metal-d: #8fb0d0; }
 
 @media (max-width: 640px) {
-  .site-top { padding: 8px 16px; flex-wrap: nowrap; gap: 6px; }
-  .site-brand { font-size: 16px; }
-  .site-brand-t { display: none; }
-  .site-nav { flex-wrap: nowrap; gap: 0; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-  .site-nav::-webkit-scrollbar { display: none; }
-  .site-nav a { flex: none; }
-  .site-sp { display: none; }
-  .site-nav a { padding: 0 8px; font-size: 15px; }
-  .nav-badge { margin-left: 4px; }
   .site-main { padding: 24px 16px 56px; }
   .site-main h1 { font-size: 28px; }
   .chain { padding: 20px; }

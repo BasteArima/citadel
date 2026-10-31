@@ -57,6 +57,8 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
+/* место под полосу прокрутки есть всегда: иначе на длинных страницах шапка сдвигается влево */
+html { scrollbar-gutter: stable; }
 body { margin: 0; background: var(--bg); color: var(--txt); font: 16px/1.7 var(--body); }
 a { color: var(--acc); }
 button { font: inherit; color: inherit; }
@@ -89,7 +91,11 @@ button { font: inherit; color: inherit; }
 .tb-theme { display: inline-flex; gap: 2px; padding: 3px; border-radius: 11px; border: 1px solid var(--line-2); background: var(--panel); }
 .tb-theme button { min-width: 38px; min-height: 38px; padding: 0 9px; border: 0; border-radius: 8px; background: none;
                    color: var(--mut); cursor: pointer; font-size: 13px; display: inline-grid; place-items: center; }
-.tb-theme button[aria-pressed="true"] { background: var(--panel-2); color: var(--txt); box-shadow: inset 0 0 0 1px var(--line); }
+/* нажатая кнопка темы — по <html data-theme>: его ставит скрипт в <head> до первого кадра */
+:root:not([data-theme]) .tb-theme [data-theme-set="auto"], :root[data-theme="light"] .tb-theme [data-theme-set="light"],
+:root[data-theme="dark"] .tb-theme [data-theme-set="dark"] { background: var(--panel-2); color: var(--txt); box-shadow: inset 0 0 0 1px var(--line); }
+/* места, которые движок курса заполняет сам: компактная шапка урока и полоска частей (телефон) */
+.tb-lesson-w, .tb-strip-w { display: contents; }
 
 /* ── каркас ── */
 .layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: calc(100% - var(--top-h)); }
@@ -97,6 +103,18 @@ button { font: inherit; color: inherit; }
         background: var(--side); border-right: 1px solid var(--line); padding: 18px 12px 40px; }
 .main { min-width: 0; padding: 40px max(20px, 4vw) 90px; }
 body.reading .layout { grid-template-columns: minmax(0, 1fr); }
+/* Содержимое курса — по центру экрана, а не по центру места справа от меню: .main растянута влево
+   под меню (меню рисуется поверх), а первая колонка её сетки не уже меню. Так колонка текста стоит
+   на одном месте и с меню, и без него; если экран узкий, она отодвигается ровно настолько, чтобы не
+   зайти под меню. */
+.layout { --sbw: 290px; }
+body.reading .layout { --sbw: 0px; }
+.main { --mp: max(20px, 4vw); --pw: 1240px; --pmin: 960px; --L: calc(var(--sbw) + var(--mp)); margin-left: calc(-1 * var(--sbw));
+        padding: 40px 0 90px; display: grid; align-content: start;
+        /* поля слева и справа равны (содержимое ровно по центру экрана), пока колонка не уже --pmin;
+           дальше правое поле уступает, и колонка сдвигается ровно настолько, чтобы не зайти под меню */
+        grid-template-columns: minmax(var(--L), 1fr) minmax(0, var(--pw)) minmax(clamp(var(--mp), calc(100% - var(--L) - var(--pmin)), var(--L)), 1fr); }
+.main:has(.ls) { --pw: 820px; --pmin: 680px; row-gap: 24px; }
 body.reading .side { display: none; }
 
 /* компактная шапка урока — только на телефоне (макет «Урок · телефон») */
@@ -125,7 +143,8 @@ body.reading .side { display: none; }
           width: min(330px, 90vw); z-index: 25; transform: translateX(-102%); transition: transform .2s ease;
           box-shadow: 0 0 40px rgba(0,0,0,.35); }
   .side.open { transform: none; }
-  .main { padding: 24px 16px 40px; }
+  .layout { --sbw: 0px; }
+  .main { --mp: 16px; margin-left: 0; padding: 24px 0 40px; }
 }
 
 /* ── меню ── */
@@ -172,11 +191,13 @@ body.reading .side { display: none; }
 .k-core { color: var(--acc); } .k-deep { color: var(--rose); } .k-backend { color: var(--good); } .k-sd { color: var(--blue); }
 
 /* ── урок: колонка текста и правая колонка (макет «Урок · часть») ── */
-#page { max-width: 1240px; margin: 0 auto; }
-.ls { display: flex; flex-wrap: wrap; gap: 24px 48px; align-items: flex-start; }
-.ls-main { flex: 999 1 560px; min-width: 0; max-width: 820px; }
-.ls-rail { flex: 1 1 260px; max-width: 320px; min-width: 0; display: flex; flex-direction: column; gap: 14px;
-           position: sticky; top: calc(var(--top-h) + 24px); }
+#page { grid-column: 2; min-width: 0; }
+/* урок: колонка текста (820) — средняя колонка .main, правая колонка — справа от неё, если хватает места, иначе под текстом */
+#page:has(> .ls), .ls { display: contents; }
+.ls-main { grid-column: 2; min-width: 0; }
+.ls-rail { grid-column: 3; justify-self: start; margin-left: 48px; width: min(320px, calc(100% - 48px - var(--mp))); min-width: 0;
+           display: flex; flex-direction: column; gap: 14px; align-self: start; position: sticky; top: calc(var(--top-h) + 24px); }
+@media (max-width: 1559px) { .ls-rail { grid-column: 2; margin-left: 0; width: auto; position: static; } }
 .ls-rail:empty { display: none; }
 .rail-card { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
 #page .rail-card h2.lbl { margin: 0; font-size: 12px; letter-spacing: .06em; line-height: 1.4; }
@@ -185,16 +206,12 @@ body.reading .side { display: none; }
 .rail-terms { display: flex; flex-wrap: wrap; gap: 6px; }
 .rail-terms .term.chip { border-bottom: 0; cursor: pointer; background: var(--blue-soft); color: var(--blue); font-size: 13px; }
 .rail-terms .term.chip:hover { color: var(--txt); }
-.rail-say-b { display: flex; flex-wrap: wrap; gap: 8px; }
-.rail-say .btn { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; }
-.rail-say .say-card:disabled { opacity: 1; color: var(--good); border-color: var(--good); }
 /* вопрос, где первая попытка была с ошибкой */
 .why-right { margin: 6px 0 !important; font-weight: 600; }
 .why-note { margin: 8px 0 0 !important; font-size: 14px; color: var(--mut); }
 .q.missed .q-n .st { color: var(--rose); }
 /* без левого меню (режим чтения) колонки встают рядом раньше; на узком экране правая колонка — под текстом */
-@media (max-width: 1520px) { body:not(.reading) .ls-rail { position: static; max-width: none; flex-basis: 100%; } }
-@media (max-width: 1230px) { .ls-rail { position: static; max-width: none; flex-basis: 100%; } }
+
 
 /* ── части урока таблетками ── */
 .pills ol { display: flex; flex-wrap: wrap; gap: 6px; margin: 22px 0 0; padding: 0; list-style: none; }
@@ -272,13 +289,8 @@ details.terms summary { cursor: pointer; padding: 11px 16px; font-size: 14px; co
 details.terms ul { margin: 0; padding: 4px 16px 14px 34px; font-size: 14px; columns: 2 220px; }
 details.terms li { break-inside: avoid; margin-top: 4px; }
 
-/* кто вошёл и синхронизация — внизу меню */
-.sd-user { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding: 12px 8px 0; border-top: 1px solid var(--line); }
-.sd-user-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.sd-user-n { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sd-sync { font-size: 12.5px; color: var(--mut); }
-.sd-sync.warn { color: var(--rose); }
-.sd-out { flex: none; padding: 6px 12px; font-size: 13px; }
+/* синхронизация в меню — только когда нет связи */
+.sd-sync { margin: 18px 8px 0; padding: 10px 12px; border-radius: 8px; background: var(--rose-soft); color: var(--rose); font-size: 13px; line-height: 1.45; }
 
 /* перенос прогресса из прежней версии курса */
 details.import { margin-top: 32px; }
@@ -689,7 +701,7 @@ a.cp-l:hover { background: var(--panel-2); }
 @media print {
   .top, .side, .ref-tabs, .nt-tools, .crumb, .pop, .nt-more { display: none !important; }
   .layout { display: block; }
-  .main { padding: 0; }
+  .main { padding: 0; margin: 0; display: block; }
   body { background: #fff; color: #000; }
   .nt-l { break-inside: avoid; border-color: #ccc; }
 }
@@ -729,3 +741,33 @@ a.cp-l:hover { background: var(--panel-2); }
 .manual-done { margin-top: 28px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
 #page .manual-done p { margin: 0 0 12px; }
 .manual-done .btn { min-height: 44px; }
+
+/* скрыть меню курса — кнопкой на самом меню; вернуть — кнопкой «Меню» у левого края */
+.sd-hide { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; margin: 0 0 12px; padding: 0 10px; border: 1px solid var(--line-2);
+           border-radius: 8px; background: var(--panel); color: var(--mut); cursor: pointer; font-size: 14px; }
+.sd-hide:hover { color: var(--txt); border-color: var(--acc-fill); }
+.side-show { display: none; position: fixed; z-index: 20; left: 12px; top: calc(var(--top-h) + 14px); align-items: center; gap: 6px; min-height: 40px;
+             padding: 0 12px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel); color: var(--txt); cursor: pointer; box-shadow: var(--shadow); }
+body.reading .side-show { display: inline-flex; }
+@media (max-width: 880px) { .sd-hide, body.reading .side-show { display: none; } }
+
+/* шапка: счётчик карточек у «Повторений»; на страницах сайта (без меню курса) разделы на телефоне прокручиваются */
+.nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; margin-left: 6px; padding: 0 6px;
+             border-radius: 999px; background: var(--acc-fill); color: var(--acc-ink); font-size: 12px; font-weight: 600; }
+@media (max-width: 880px) {
+  .top.site { flex-wrap: nowrap; }
+  .top.site .tb-home span, .top.site .tb-theme, .top.site .tb-due { display: none; }
+  .top.site .tb-nav { display: flex; flex: 1 1 auto; min-width: 0; gap: 0; overflow-x: auto; scrollbar-width: none; }
+  .top.site .tb-nav::-webkit-scrollbar { display: none; }
+  .top.site .tb-nav a { flex: none; padding: 0 8px; }
+  .top.site .tb-tools { margin-left: 0; flex-wrap: nowrap; }
+  .nav-badge { margin-left: 4px; }
+}
+
+/* «+ В карточки» у вопроса после ответа и у фразы для собеса; повторное нажатие убирает карточку */
+.card-tg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 12px; }
+.card-tg-b { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; font-size: 14px; }
+.card-tg-b[aria-pressed="true"] { color: var(--good); border-color: var(--good); }
+.card-tg-h { font-size: 13px; color: var(--mut); }
+.simple-say { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+#page .simple-say p { margin-top: 6px; }
