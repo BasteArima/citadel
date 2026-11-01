@@ -177,6 +177,9 @@ func (s *server) adminImport(w http.ResponseWriter, r *http.Request) {
 		}
 		err = s.cfg.Store.CreateCourse(r.Context(), c.ID, data, author)
 		vi.Version = 1
+		if err == nil && c.IsProject() {
+			err = s.cfg.Store.SetCourseAccess(r.Context(), c.ID, store.AccessPrivate) // decision 0016
+		}
 	case err == nil:
 		vi.Version, err = s.cfg.Store.SaveDraft(r.Context(), c.ID, data, vi.Version, author, "импорт JSON")
 	}

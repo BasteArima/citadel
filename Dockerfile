@@ -10,7 +10,7 @@ COPY internal ./internal
 COPY web ./web
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/citadel ./cmd/citadel
 
-# Запуск: бинарник и курсы, без компилятора и исходников.
+# Запуск: бинарник и тестовый курс, без компилятора и исходников. Свои курсы в образ не входят.
 FROM alpine:3.22
 # edge-tts — синтез озвучки (решение 0015): Python-пакет в своём окружении, версия закреплена
 RUN apk add --no-cache python3 && python3 -m venv /opt/edge-tts && \
@@ -18,7 +18,7 @@ RUN apk add --no-cache python3 && python3 -m venv /opt/edge-tts && \
     ln -s /opt/edge-tts/bin/edge-tts /usr/local/bin/edge-tts
 RUN adduser -D -H -u 10001 citadel && mkdir -p /app/data && chown citadel /app/data
 COPY --from=build /out/citadel /usr/local/bin/citadel
-COPY content /app/content
+COPY content-demo /app/content
 WORKDIR /app
 USER citadel
 ENV CITADEL_ADDR=:8080 \

@@ -84,15 +84,20 @@ func TestBlockTypeFirst(t *testing.T) {
 	}
 }
 
-// TestContent checks every course in the repository, the same as `citadel check`.
+// TestContent checks the test course and, where they exist, the owner's courses.
 func TestContent(t *testing.T) {
-	courses, err := LoadDir(filepath.Join("..", "..", "content"))
+	courses, err := LoadDir(filepath.Join("..", "..", "content-demo"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(courses) == 0 {
-		t.Fatal("no courses in content/")
+		t.Fatal("no courses in content-demo/")
 	}
+	own, err := LoadDir(filepath.Join("..", "..", "content"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	courses = append(courses, own...)
 	for _, c := range courses {
 		for _, p := range Errors(Validate(c)) {
 			t.Errorf("%s: %s", c.ID, p)

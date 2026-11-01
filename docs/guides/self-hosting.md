@@ -33,6 +33,21 @@ Nginx Proxy Manager передаёт заголовок `X-Forwarded-Proto: http
 
 Если NPM и Citadel на одной машине в Docker, можно не открывать порт наружу: убери `ports` из `compose.yaml`, подключи контейнер к сети NPM и укажи в Forward Hostname имя контейнера `citadel`.
 
+## Portainer и готовый образ
+
+Образ собирает GitHub Actions и публикует в `ghcr.io/bastearima/citadel`. В нём только код и тестовый курс.
+
+1. В Portainer: **Stacks → Add stack**, вставь в редактор `deploy/portainer-stack.yml`.
+2. В разделе переменных задай `CITADEL_PORT`, `CITADEL_ADMINS`, `CITADEL_ACCESS_CODE` и `CITADEL_RUNNER_SECRET` вручную или файлом через **Load variables from .env file**.
+3. Нажми **Deploy the stack**. Контейнер `go-toolchain` скачает образ Go и завершится, это нормально.
+4. Свои курсы загрузи в админке: **Курсы → Импорт JSON**, затем опубликуй. Тестовый курс стек не загружает: сервис стартует пустым.
+
+Обновить: **Stacks → citadel → Update the stack** с включённым **Re-pull image**. Том с базой останется на месте.
+
+## Свои курсы
+
+Папка `content/` не попадает в git и в образ. Команда `task run` загружает курсы из неё, а если её нет — тестовый курс из `content-demo/`. Чтобы `task up` тоже брал свои курсы, добавь в `.env` строку `CITADEL_CONTENT_DIR=./content`.
+
 ## Обновление
 
 ```
@@ -89,7 +104,7 @@ docker exec citadel sh -c 'echo "Проверка" > /tmp/t.txt && edge-tts --vo
 
 ## Подключить агента
 
-В админке, «Пользователи и токены» → «+ Новый токен»: название, права (читать, предлагать правки, создавать курсы) и курсы. После создания админка один раз покажет токен и готовую команду для Claude Code:
+Вкладки с настройками есть для Claude Code, Codex, Cursor, Antigravity, Gemini CLI и других MCP-клиентов. В админке, «Пользователи и токены» → «+ Новый токен»: название, права (читать, предлагать правки, создавать курсы) и курсы. После создания админка один раз покажет токен и готовую команду для Claude Code:
 
 ```
 claude mcp add --scope user --transport http citadel https://<твой домен>/mcp --header "Authorization: Bearer cit_…"

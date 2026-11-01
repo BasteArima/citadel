@@ -18,6 +18,8 @@ services:
       CITADEL_TTS: edge-tts # синтез озвучки уже в образе (решение 0015); путь из .env — для локального запуска
     volumes:
       - citadel-data:/app/data
+      # какие курсы загрузить при старте: по умолчанию тестовый, свои — CITADEL_CONTENT_DIR=./content в .env
+      - ${CITADEL_CONTENT_DIR:-./content-demo}:/app/content:ro
     networks: [web, runner]
     restart: unless-stopped
     healthcheck:

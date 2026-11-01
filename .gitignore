@@ -13,6 +13,10 @@
 # синтез речи для локального запуска: python -m venv .tts (docs/guides/self-hosting.md)
 /.tts/
 
+# курсы владельца: личные, в репозиторий и образ не попадают (решение 0017)
+/content/
+/legacy/go-course/
+
 # сборка
 /bin/
 /dist/

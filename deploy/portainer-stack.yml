@@ -1,0 +1,64 @@
+# Стек для Portainer: тот же набор сервисов, что в compose.yaml, но образ готовый, из GitHub.
+# Как поднять: docs/guides/self-hosting.md, раздел «Portainer и готовый образ».
+services:
+  citadel:
+    image: ghcr.io/bastearima/citadel:latest
+    ports:
+      - "${CITADEL_PORT:-8088}:8080"
+    environment:
+      CITADEL_ACCESS_CODE: ${CITADEL_ACCESS_CODE}
+      CITADEL_ADMINS: ${CITADEL_ADMINS}
+      CITADEL_RUNNER_SECRET: ${CITADEL_RUNNER_SECRET}
+      CITADEL_RUNNER_URL: http://runner:8090
+      CITADEL_TTS: edge-tts
+      CITADEL_CONTENT: /app/no-content # тестовый курс здесь не нужен: свои курсы загружаются в админке
+    volumes:
+      - citadel-data:/app/data
+    networks: [web, runner]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+  runner:
+    image: ghcr.io/bastearima/citadel:latest
+    entrypoint: ["citadel", "runner"]
+    environment:
+      CITADEL_RUNNER_SECRET: ${CITADEL_RUNNER_SECRET}
+      DOCKER_HOST: tcp://docker-proxy:2375
+    networks: [runner, docker]
+    depends_on: [citadel, docker-proxy]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    environment:
+      CONTAINERS: 1
+      POST: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [docker]
+    restart: unless-stopped
+
+  # только скачивает образ, в котором исполнитель запускает Go-код, и сразу выходит
+  go-toolchain:
+    image: golang:1.27-alpine
+    command: ["go", "version"]
+    network_mode: none
+    restart: "no"
+
+networks:
+  web: {}
+  runner:
+    internal: true
+  docker:
+    internal: true
+
+volumes:
+  citadel-data:

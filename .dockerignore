@@ -1,4 +1,5 @@
-# В образ попадают только cmd, internal, web, content и go.mod/go.sum.
+# В образ попадают только cmd, internal, web, тестовый курс content-demo и go.mod/go.sum.
+content
 .git
 .claude
 .idea

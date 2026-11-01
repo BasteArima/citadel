@@ -67,7 +67,7 @@ func dbPath(dataDir string) string { return filepath.Join(dataDir, "citadel.db")
 func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", envOr("CITADEL_ADDR", ":8080"), "listen address")
-	content := fs.String("content", envOr("CITADEL_CONTENT", "content"), "directory with <id>/course.json")
+	content := fs.String("content", envOr("CITADEL_CONTENT", defaultContent()), "directory with <id>/course.json")
 	data := fs.String("data", envOr("CITADEL_DATA", "data"), "directory for the database")
 	envFile := fs.String("env", ".env", "file with KEY=VALUE settings; real environment variables win")
 	fs.Parse(args)
@@ -176,7 +176,7 @@ func backup(args []string) error {
 
 func check(args []string) error {
 	fs := flag.NewFlagSet("check", flag.ExitOnError)
-	content := fs.String("content", "content", "directory with <id>/course.json")
+	content := fs.String("content", defaultContent(), "directory with <id>/course.json")
 	fs.Parse(args)
 
 	courses, err := course.LoadDir(*content)
@@ -244,6 +244,15 @@ func convertV0(args []string) error {
 	}
 	fmt.Printf("wrote %s (%d bytes)\n", *out, len(data))
 	return nil
+}
+
+// defaultContent is content/ with the owner's courses, which is not in git (decision 0017),
+// or the test course of the repository.
+func defaultContent() string {
+	if st, err := os.Stat("content"); err == nil && st.IsDir() {
+		return "content"
+	}
+	return "content-demo"
 }
 
 // loadEnvFile sets variables from a KEY=VALUE file for local runs. A missing file is fine:

@@ -74,32 +74,49 @@ export function renderTokens(box, courses) {
   }
 }
 
-// Подключение агента: готовая команда для Claude Code и JSON для других MCP-клиентов.
+// Как подключить агента: у каждого клиента своя команда или свой файл настроек.
+// У всех один и тот же сервер: Streamable HTTP на /mcp и токен в заголовке Authorization.
+function connectTabs(url, secret) {
+  const auth = 'Bearer ' + secret;
+  const config = (entry) => JSON.stringify({ mcpServers: { citadel: Object.assign(entry, { headers: { Authorization: auth } }) } }, null, 2);
+  return [
+    { id: 'cc', label: 'Claude Code', hint: 'Выполни команду в терминале на своём ПК. Claude Code сохранит адрес и токен у себя в конфиге.',
+      text: 'claude mcp add --scope user --transport http citadel ' + url + ' --header "Authorization: ' + auth + '"' },
+    { id: 'codex', label: 'Codex', hint: 'Codex берёт токен из переменной окружения. Выполни первую команду в PowerShell (в Linux и macOS вместо неё — export), открой новый терминал и выполни вторую.',
+      text: 'setx CITADEL_TOKEN "' + secret + '"\ncodex mcp add citadel --url ' + url + ' --bearer-token-env-var CITADEL_TOKEN' },
+    { id: 'cursor', label: 'Cursor', hint: 'Добавь в файл ~/.cursor/mcp.json.', text: config({ url }) },
+    { id: 'antigravity', label: 'Antigravity', hint: 'Добавь в файл ~/.gemini/config/mcp_config.json и обнови список серверов в настройках MCP.', text: config({ serverUrl: url }) },
+    { id: 'gemini', label: 'Gemini CLI', hint: 'Добавь в файл ~/.gemini/settings.json.', text: config({ httpUrl: url }) },
+    { id: 'other', label: 'Другой MCP-клиент', hint: 'Настройки для клиента с поддержкой Streamable HTTP. Названия полей у клиентов могут отличаться.', text: config({ type: 'http', url }) }
+  ];
+}
+
 // Токен показывается один раз и больше нигде не хранится — ни на сервере, ни в странице.
 function showConnect(box, token, secret) {
   const url = location.origin + '/mcp';
-  const cc = 'claude mcp add --scope user --transport http citadel ' + url + ' --header "Authorization: Bearer ' + secret + '"';
-  const json = '{ "mcpServers": { "citadel": {\n    "type": "http",\n    "url": "' + url + '",\n    "headers": { "Authorization": "Bearer ' + secret + '" } } } }';
+  const tabs = connectTabs(url, secret);
   box.innerHTML = '';
   const s = h('section', 'ad-card tk-made');
   s.setAttribute('aria-labelledby', 'tk-made-h');
   s.innerHTML = '<div class="ad-row"><div class="tk-made-t"><h3 id="tk-made-h">Токен ' + esc(token.name) + ' создан — подключи агента</h3>' +
-    '<p class="ad-sub">Выполни одну команду в PowerShell или терминале на своём ПК. Claude Code сохранит адрес и токен у себя в конфиге — агенту вводить токен не нужно.</p></div>' +
+    '<p class="ad-sub">Подойдёт любой агент с поддержкой MCP. Токен сохранится в его настройках, вводить его в чат не нужно.</p></div>' +
     '<span class="ad-sp"></span><button type="button" class="btn" id="tk-done">Готово</button></div>' +
-    '<div class="tk-tabs" role="tablist" aria-label="Агент"><button type="button" role="tab" aria-selected="true" data-t="cc">Claude Code</button><button type="button" role="tab" aria-selected="false" data-t="json">Другой MCP-клиент</button></div>' +
-    '<div class="tk-cmd"><pre></pre><button type="button" class="btn" id="tk-copy">Скопировать</button></div>' +
+    '<div class="tk-tabs" role="tablist" aria-label="Агент">' + tabs.map((t) => '<button type="button" role="tab" aria-selected="false" data-t="' + t.id + '">' + esc(t.label) + '</button>').join('') + '</div>' +
+    '<p class="ad-sub tk-hint"></p><div class="tk-cmd"><pre></pre><button type="button" class="btn" id="tk-copy">Скопировать</button></div>' +
     '<ul class="tk-facts"><li><strong>Что агент сможет</strong><br><span>' + facts(token) + '</span></li>' +
     '<li><strong>Чего не сможет</strong><br><span>публиковать, видеть прогресс учеников, управлять токенами</span></li>' +
     '<li><strong>Токен виден один раз</strong><br><span>потерял — отзови и выпусти новый</span></li></ul>';
   box.appendChild(s);
   const pre = s.querySelector('pre');
-  let text = cc;
-  const show = (t) => {
-    text = t === 'cc' ? cc : json;
+  let text = '';
+  const show = (id) => {
+    const t = tabs.find((x) => x.id === id);
+    text = t.text;
     pre.textContent = text;
-    s.querySelectorAll('[role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === t)));
+    s.querySelector('.tk-hint').textContent = t.hint;
+    s.querySelectorAll('[role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === id)));
   };
-  show('cc');
+  show(tabs[0].id);
   s.querySelectorAll('[role=tab]').forEach((b) => b.addEventListener('click', () => show(b.dataset.t)));
   s.querySelector('#tk-copy').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(text); toast('Скопировано', 'good'); } catch (e) { toast('Не скопировалось: выдели текст и скопируй вручную', 'warn'); }

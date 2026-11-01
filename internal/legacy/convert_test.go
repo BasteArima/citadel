@@ -16,11 +16,20 @@ import (
 
 var legacyDir = filepath.Join("..", "..", "legacy", "go-course")
 
+// needLegacy skips a test on a clean clone: the Go course is not in git (decision 0017).
+func needLegacy(t *testing.T) {
+	t.Helper()
+	if _, err := os.Stat(legacyDir); err != nil {
+		t.Skip("no legacy/go-course here")
+	}
+}
+
 var goOptions = Options{ID: "go", Metal: "iron", Review: []int{1, 3, 7}, Pages: []string{"glossary", "notes", "exam", "tools"}}
 
 // TestRoundTrip converts the real v0 course to v1, turns it back with toV0
 // and checks that nothing was lost: every block, question and field.
 func TestRoundTrip(t *testing.T) {
+	needLegacy(t)
 	raw, err := Load(legacyDir)
 	if err != nil {
 		t.Fatal(err)
@@ -283,6 +292,7 @@ func lenOf(v any) any {
 }
 
 func TestQuestionIDs(t *testing.T) {
+	needLegacy(t)
 	c, err := ConvertDir(legacyDir, goOptions)
 	if err != nil {
 		t.Fatal(err)
@@ -362,6 +372,7 @@ func TestConvertBlock(t *testing.T) {
 // TestContentUpToDate fails when content/go/course.json was not regenerated after
 // a change in legacy/go-course or in the converter.
 func TestContentUpToDate(t *testing.T) {
+	needLegacy(t)
 	c, err := ConvertDir(legacyDir, goOptions)
 	if err != nil {
 		t.Fatal(err)
