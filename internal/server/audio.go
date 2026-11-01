@@ -186,36 +186,91 @@ func (s *server) adminAudioMake(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusNotFound, "курс не опубликован: озвучивается опубликованный текст")
 		return
 	}
-	recs, err := s.cfg.Store.Audio(r.Context(), id)
+	todo, err := s.partsToRecord(r.Context(), c, req.Nodes)
 	if err != nil {
 		s.fail(w, "audio", err)
 		return
-	}
-	var todo []speech.Part
-	for _, p := range speech.Parts(c) {
-		a, ok := recs[p.Node]
-		if len(req.Nodes) > 0 && slices.Contains(req.Nodes, p.Node) || len(req.Nodes) == 0 && (!ok || a.Hash != p.Hash) {
-			todo = append(todo, p)
-		}
 	}
 	if len(todo) == 0 {
 		jsonError(w, http.StatusBadRequest, "нечего озвучивать: все части записаны по опубликованному тексту")
 		return
 	}
-
-	ctx, cancel := context.WithCancel(s.ctx)
-	s.audio.mu.Lock()
-	if job := s.audio.jobs[id]; job != nil && job.Running {
-		s.audio.mu.Unlock()
-		cancel()
+	if !s.startRecording(c, todo) {
 		jsonError(w, http.StatusConflict, "озвучка этого курса уже идёт")
 		return
 	}
-	s.audio.jobs[id] = &audioJob{Running: true, Total: len(todo), Errors: []string{}, cancel: cancel}
-	s.audio.mu.Unlock()
-
-	go s.recordParts(ctx, id, speech.Voice(c), todo)
 	writeValue(w, s.audio.get(id))
+}
+
+// partsToRecord returns the given parts; without a list — every part that is stale or has no recording.
+func (s *server) partsToRecord(ctx context.Context, c *course.Course, nodes []string) ([]speech.Part, error) {
+	recs, err := s.cfg.Store.Audio(ctx, c.ID)
+	if err != nil {
+		return nil, err
+	}
+	var todo []speech.Part
+	for _, p := range speech.Parts(c) {
+		a, ok := recs[p.Node]
+		if len(nodes) > 0 && slices.Contains(nodes, p.Node) || len(nodes) == 0 && (!ok || a.Hash != p.Hash) {
+			todo = append(todo, p)
+		}
+	}
+	return todo, nil
+}
+
+// startRecording starts the background job of a course; false — one is already running.
+func (s *server) startRecording(c *course.Course, todo []speech.Part) bool {
+	ctx, cancel := context.WithCancel(s.ctx)
+	s.audio.mu.Lock()
+	if job := s.audio.jobs[c.ID]; job != nil && job.Running {
+		s.audio.mu.Unlock()
+		cancel()
+		return false
+	}
+	s.audio.jobs[c.ID] = &audioJob{Running: true, Total: len(todo), Errors: []string{}, cancel: cancel}
+	s.audio.mu.Unlock()
+	go s.recordParts(ctx, c.ID, speech.Voice(c), todo)
+	return true
+}
+
+// recordMissing records what the published text of a course lacks. A running job is left alone:
+// the hourly pass picks up whatever changed while it worked.
+func (s *server) recordMissing(id string) {
+	if !s.cfg.AutoRecord || s.cfg.Synth == nil || s.cfg.AudioDir == "" {
+		return
+	}
+	c := s.cat.Load().parsed[id]
+	if c == nil {
+		return
+	}
+	todo, err := s.partsToRecord(s.ctx, c, nil)
+	if err != nil {
+		s.log.Error("narration", "course", id, "err", err)
+		return
+	}
+	if len(todo) > 0 && s.startRecording(c, todo) {
+		s.log.Info("narration started", "course", id, "parts", len(todo))
+	}
+}
+
+// keepRecorded keeps recordings up to date without anyone pressing a button: at the start of the
+// service and every hour, so a course recovers by itself after the speech service was down.
+func (s *server) keepRecorded() {
+	if !s.cfg.AutoRecord {
+		return
+	}
+	tick := time.NewTicker(time.Hour)
+	defer tick.Stop()
+	for {
+		for _, id := range s.cat.Load().order {
+			s.recordMissing(id)
+		}
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
 }
 
 func (s *server) recordParts(ctx context.Context, id, voice string, parts []speech.Part) {
@@ -241,6 +296,9 @@ func (s *server) recordParts(ctx context.Context, id, voice string, parts []spee
 				msg = "сервис синтеза не ответил ни с одной попытки — проверь доступ сервера к speech.platform.bing.com или задай прокси CITADEL_TTS_PROXY"
 			}
 			s.audio.update(id, func(j *audioJob) { j.Errors = append(j.Errors, label+": "+msg) })
+			if errors.Is(err, speech.ErrNoAnswer) {
+				return // the rest would only wait for the same timeouts; the hourly pass tries again
+			}
 		}
 		s.audio.update(id, func(j *audioJob) { j.Done++ })
 	}

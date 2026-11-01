@@ -34,6 +34,8 @@ type Config struct {
 	// narration (docs/dev/AUDIO.md): where the MP3 files lie and what makes them; nil Synth — recording is off
 	AudioDir string
 	Synth    speech.Synth
+	// record new and changed parts without a button (decision 0018)
+	AutoRecord bool
 }
 
 // Summary is a course as listed in the catalog.
@@ -126,6 +128,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	s.runRoutes(mux)
 	// narration recordings: students play, admins record
 	s.audioRoutes(mux)
+	go s.keepRecorded()
 	return s.logRequests(mux), nil
 }
 

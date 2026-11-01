@@ -479,9 +479,7 @@ code, pre, .sc-box .s, .sc-tok text { font-variant-ligatures: none; font-feature
 
 .listen { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; }
 .listen .btn { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; border-radius: 999px; }
-.listen-r { min-width: 56px; justify-content: center; font-variant-numeric: tabular-nums; }
 .listen-n { font-size: 13px; color: var(--mut); }
-.reading-now { background: var(--acc-soft); border-radius: 6px; box-shadow: 0 0 0 4px var(--acc-soft); }
 
 .codebox { margin-top: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--code-bg); overflow: hidden; }
 .codebox pre { margin: 0; border: 0; border-radius: 0; }

@@ -19,7 +19,7 @@ try {
     getJSON('/api/me'),
     getJSON('/api/courses/' + encodeURIComponent(id)),
     getJSON('/api/courses'),
-    // озвучка не обязательна: без неё части читает голос браузера
+    // озвучка не обязательна: без неё у части просто нет кнопки «Слушать»
     getJSON('/api/courses/' + encodeURIComponent(id) + '/audio').then((a) => a.parts).catch(() => ({})),
     // шаги проектов, где пригодятся уроки курса: без них просто нет врезки
     getJSON('/api/courses/' + encodeURIComponent(id) + '/applied').catch(() => ({}))

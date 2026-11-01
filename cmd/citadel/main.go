@@ -127,6 +127,7 @@ func serve(args []string) error {
 	if path, err := exec.LookPath(tts); err == nil {
 		proxy := os.Getenv("CITADEL_TTS_PROXY")
 		cfg.Synth = speech.EdgeTTS{Cmd: path, Timeout: 90 * time.Second, Tries: 3, Proxy: proxy}
+		cfg.AutoRecord = true
 		log.Info("narration", "tts", path, "proxy", proxy != "")
 	} else {
 		log.Info("narration off: edge-tts not found", "tts", tts)

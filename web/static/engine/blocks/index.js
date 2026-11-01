@@ -11,5 +11,5 @@ import { spec } from './spec.js';
 
 register(heading, text, list, code, table, callout, scheme, steps, anim, predict, question, hands, embed, spec);
 
-export { renderBlock, speakables, questionsOf } from './registry.js';
+export { renderBlock, questionsOf } from './registry.js';
 export { renderQuestion } from './question.js';

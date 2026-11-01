@@ -1,17 +1,15 @@
 // Простые блоки: заголовок, абзац, список, код, таблица, врезка, схема, заглушка для песочницы.
-import { el, esc, ic, IC, codeHead, readable } from '../util.js';
+import { el, esc, ic, IC, codeHead } from '../util.js';
 import { rich } from '../rich.js';
 
 export const heading = {
   type: 'heading',
-  render: (b) => el(b.level === 3 ? 'h3' : 'h2', null, rich(b.text)),
-  speak: (node) => readable(node)
+  render: (b) => el(b.level === 3 ? 'h3' : 'h2', null, rich(b.text))
 };
 
 export const text = {
   type: 'text',
-  render: (b) => el('p', null, rich(b.html)),
-  speak: (node) => readable(node)
+  render: (b) => el('p', null, rich(b.html))
 };
 
 export const list = {
@@ -20,8 +18,7 @@ export const list = {
     const ul = el(b.ordered ? 'ol' : 'ul', 'list');
     b.items.forEach((li) => ul.appendChild(el('li', null, rich(li))));
     return ul;
-  },
-  speak: (node) => readable(node)
+  }
 };
 
 export const code = {
@@ -35,8 +32,7 @@ export const code = {
     f.appendChild(cb);
     if (b.cap) f.appendChild(el('div', 'cap', rich(b.cap)));
     return f;
-  },
-  speak: (node) => readable(node)
+  }
 };
 
 export const table = {
@@ -45,8 +41,7 @@ export const table = {
     const t = '<table><thead><tr>' + b.head.map((x) => '<th>' + rich(x) + '</th>').join('') + '</tr></thead><tbody>' +
       b.rows.map((r) => '<tr>' + r.map((x) => '<td>' + rich(x) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
     return el('div', 'tbl', t);
-  },
-  speak: (node) => readable(node)
+  }
 };
 
 export const callout = {
@@ -59,8 +54,7 @@ export const callout = {
     }
     const label = b.title || { note: 'Важно', warn: 'Осторожно' }[b.kind] || '';
     return el('div', 'callout ' + b.kind, '<b>' + esc(label) + '</b>' + rich(b.html));
-  },
-  speak: (node) => readable(node)
+  }
 };
 
 export const scheme = {

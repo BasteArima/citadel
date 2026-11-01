@@ -147,3 +147,48 @@ func TestNarration(t *testing.T) {
 }
 
 func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }
+
+// TestAutoRecord: the service records a part by itself at the start and after a publish.
+func TestAutoRecord(t *testing.T) {
+	synth := &fakeSynth{}
+	ts := newTestServerWith(t, func(c *Config) { c.Synth, c.AudioDir, c.AutoRecord = synth, t.TempDir(), true })
+	admin := signIn(t, ts, "Baste")
+	publish := func(text string, base int) {
+		t.Helper()
+		data, _ := json.Marshal(map[string]any{"base": base, "course": map[string]any{
+			"schema": 1, "id": "go", "title": "Go", "metal": "iron", "tool": map[string]any{"name": "Go", "version": "1.27"}, "review": []int{1, 3, 7}, "glossary": map[string]any{},
+			"root": []any{map[string]any{"id": "s", "kind": "section", "title": "Раздел", "children": []any{
+				map[string]any{"id": "a", "kind": "lesson", "title": "А", "children": []any{
+					map[string]any{"id": "a.1", "kind": "part", "title": "Теория", "blocks": []any{map[string]any{"type": "text", "html": text}}},
+				}},
+			}}},
+		}})
+		if resp, body := do(t, admin, "PUT", ts.URL+"/api/admin/courses/go/draft", string(data)); resp.StatusCode != 200 {
+			t.Fatalf("save: %d %s", resp.StatusCode, body)
+		}
+		if resp, body := do(t, admin, "POST", ts.URL+"/api/admin/courses/go/publish", `{"version":`+itoa(base+1)+`}`); resp.StatusCode != 200 {
+			t.Fatalf("publish: %d %s", resp.StatusCode, body)
+		}
+	}
+	recorded := func(want string) {
+		t.Helper()
+		for range 300 {
+			_, body := do(t, admin, "GET", ts.URL+"/api/courses/go/audio", "")
+			synth.mu.Lock()
+			last := ""
+			if len(synth.texts) > 0 {
+				last = synth.texts[len(synth.texts)-1]
+			}
+			synth.mu.Unlock()
+			if strings.Contains(body, "a.1") && strings.Contains(last, want) {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatalf("no recording of %q: %q", want, synth.texts)
+	}
+	publish("Первый текст.", 1)
+	recorded("Первый текст.")
+	publish("Второй текст.", 2)
+	recorded("Второй текст.")
+}

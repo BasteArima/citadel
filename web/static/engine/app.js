@@ -1,7 +1,7 @@
 // Движок курса: шапка, меню, маршруты, страницы урока, главная, словарь, страницы курса,
 // озвучка и повторения. Курс приходит из API в формате v1, блоки рисуют модули из blocks/.
-import { el, esc, ic, IC, today, addDays, plural, copyText, reduceMotion, onLeave, leave, readable } from './util.js';
-import { renderBlock, speakables, questionsOf } from './blocks/index.js';
+import { el, esc, ic, IC, today, addDays, plural, copyText, reduceMotion, onLeave, leave } from './util.js';
+import { renderBlock, questionsOf } from './blocks/index.js';
 import { cardButton } from './blocks/question.js';
 import { indexCourse } from './course.js';
 import { loadState } from './progress.js';
@@ -66,7 +66,7 @@ export function start(course, user, catalog, audio, applied) {
       const m = meta(current), les = X.lesson(current), ps = les.parts;
       const k = ps ? Math.min(Math.max(currentPart, 1), ps.length) - 1 : 0;
       lessonHead = '<div class="tb-lesson"><small>' + lessonLabel + ' ' + m.n + (ps ? ' · часть ' + (k + 1) + ' из ' + ps.length : '') + '</small><b>' + esc(m.t) + '</b></div>' +
-        (ps && ps[k].kind === 'theory' && (canSpeak || player.has(ps[k].node.id)) ? listenTop(player.state(ps[k].node.id) === 'playing') : '');
+        (ps && ps[k].kind === 'theory' && player.has(ps[k].node.id) ? listenTop(player.state(ps[k].node.id) === 'playing') : '');
       if (ps) strip = '<div class="tb-strip" aria-hidden="true">' + ps.map((p, i) => '<i class="' + (partDone(les, i) ? 'ok' : '') + (i === k ? ' cur' : '') + '"></i>').join('') + '</div>';
     }
     // шапку отдаёт сервер (top.go) — та же, что на страницах сайта; здесь только дополняем её на месте,
@@ -321,7 +321,7 @@ export function start(course, user, catalog, audio, applied) {
     const lead = el('p', 'lead', rich(les.lead));
     to.appendChild(lead);
     const paras = (les.simple || []).filter((p) => !SAY_RE.test(p)), say = sayOf(les);
-    if (!paras.length && !say) return [lead];
+    if (!paras.length && !say) return;
     const box = el('section', 'simple');
     box.setAttribute('aria-label', 'Коротко');
     box.innerHTML = '<div class="simple-b"><div class="kind">Простыми словами</div>' + paras.map((p) => '<p>' + rich(p) + '</p>').join('') +
@@ -329,7 +329,6 @@ export function start(course, user, catalog, audio, applied) {
     to.appendChild(box);
     // фразу для собеса можно отправить в карточки: в «Повторениях» её нужно будет сказать своими словами
     if (say) box.querySelector('.simple-say').appendChild(cardButton(cardToggle(les.id, 'say')));
-    return [lead].concat(readable(box.querySelector('.simple-b')));
   }
 
   // Урок: колонка текста и правая колонка. На узком экране правая уходит под текст.
@@ -355,15 +354,8 @@ export function start(course, user, catalog, audio, applied) {
     }
   }
 
-  // Блоки по порядку; возвращает элементы, которые читает озвучка.
   function appendBlocks(to, blocks, ctx) {
-    const voice = [];
-    blocks.forEach((b) => {
-      const node = renderBlock(b, ctx || blockCtx);
-      voice.push(...speakables(b, node));
-      to.appendChild(node);
-    });
-    return voice;
+    blocks.forEach((b) => to.appendChild(renderBlock(b, ctx || blockCtx)));
   }
 
   // partsMode: вопросы, привязанные к частям теории, на финальной странице не повторяются,
@@ -455,78 +447,9 @@ export function start(course, user, catalog, audio, applied) {
   }
 
   // ── озвучка ──
-  // Голос браузера читает текст части по очереди; код, схемы и вопросы остаются на экране.
-  // Что читать, решают модули блоков (speak) — список собирается при отрисовке части.
-  const speech = { on: false, paused: false, items: [], i: 0, row: null, cur: null };
-  const canSpeak = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
-  function speakStop() {
-    if (!canSpeak) return;
-    speech.on = false; speech.paused = false; speech.cur = null;
-    window.speechSynthesis.cancel();
-    speakMark(null);
-    speakUi();
-  }
-  function speakMark(node) {
-    [].forEach.call(document.querySelectorAll('.reading-now'), (x) => x.classList.remove('reading-now'));
-    if (node) node.classList.add('reading-now');
-  }
-  function ruVoice() {
-    return window.speechSynthesis.getVoices().filter((v) => /^ru/i.test(v.lang))[0] || null;
-  }
-  function speakNext() {
-    if (!speech.on) return;
-    if (speech.i >= speech.items.length) { speakStop(); return; }
-    const node = speech.items[speech.i];
-    const u = new SpeechSynthesisUtterance(node.innerText.replace(/\s+/g, ' '));
-    u.lang = 'ru-RU'; u.rate = S.ui.rate;
-    const v = ruVoice(); if (v) u.voice = v;
-    speech.cur = u;
-    u.onend = () => { if (speech.cur === u && speech.on && !speech.paused) { speech.i++; speakNext(); } };
-    speakMark(node);
-    window.speechSynthesis.speak(u);
-  }
-  function speakUi() {
-    const row = speech.row;
-    if (!row) return;
-    row.querySelector('[data-sp="play"]').innerHTML = speech.on && !speech.paused ? ic(IC.pause) + '<span>Пауза</span>' :
-      ic(IC.sound) + '<span>' + (speech.on ? 'Продолжить' : 'Слушать часть · ' + row.getAttribute('data-min') + ' мин') + '</span>';
-    row.querySelector('[data-sp="stop"]').hidden = !speech.on;
-    row.querySelector('[data-sp="rate"]').textContent = String(S.ui.rate).replace('.', ',') + '×';
-  }
-  // Есть запись части — кнопка включает плеер внизу (player.js); нет — читает голос браузера.
-  function listenRow(min, voice, partNode, about) {
-    if (player.has(partNode)) return recordRow(partNode, about);
-    if (!canSpeak) return null;
-    const row = el('div', 'listen');
-    row.setAttribute('data-min', min);
-    row.innerHTML = '<button type="button" class="btn listen-b" data-sp="play"></button>' +
-      '<button type="button" class="btn" data-sp="stop" aria-label="Остановить" hidden>' + ic(IC.stop) + '</button>' +
-      '<button type="button" class="btn listen-r" data-sp="rate" title="Скорость"></button>' +
-      '<span class="listen-n">читает голос браузера, код и схемы — на экране</span>';
-    row.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-sp]');
-      if (!b) return;
-      const a = b.getAttribute('data-sp'), ss = window.speechSynthesis;
-      if (a === 'rate') {
-        const rates = [1, 1.25, 1.5, 0.9];
-        S.ui.rate = rates[(rates.indexOf(S.ui.rate) + 1) % rates.length]; save();
-        if (speech.on && !speech.paused) { speech.cur = null; ss.cancel(); speakNext(); }
-      } else if (a === 'stop') speakStop();
-      else if (!speech.on) {
-        player.pause();
-        speech.items = voice.filter((x) => x.isConnected && x.innerText.trim());
-        speech.on = true; speech.paused = false; speech.i = 0;
-        speech.cur = null; ss.cancel(); speakNext();
-      } else if (speech.paused) { speech.paused = false; ss.resume(); }
-      else { speech.paused = true; ss.pause(); }
-      speakUi();
-    });
-    speech.row = row;
-    speakUi();
-    return row;
-  }
-
-  function recordRow(partNode, about) {
+  // Кнопка включает плеер внизу (player.js). Записи делает сервер; пока записи нет, кнопки тоже нет.
+  function listenRow(partNode, about) {
+    if (!player.has(partNode)) return null;
     const row = el('div', 'listen');
     row.innerHTML = '<button type="button" class="btn listen-b" data-sp="play"></button>' +
       '<span class="listen-n">запись · главы, скорость и перемотка — в плеере внизу</span>';
@@ -536,7 +459,7 @@ export function start(course, user, catalog, audio, applied) {
       b.innerHTML = st === 'playing' ? ic(IC.pause) + '<span>Пауза</span>' :
         ic(IC.sound) + '<span>' + (st === 'paused' ? 'Продолжить' : 'Слушать часть · ' + Math.max(1, Math.round(player.dur(partNode) / 60)) + ' мин') + '</span>';
     };
-    b.addEventListener('click', () => { speakStop(); player.toggle(partNode, about); });
+    b.addEventListener('click', () => player.toggle(partNode, about));
     onLeave(player.onChange(draw));
     draw();
     return row;
@@ -577,13 +500,12 @@ export function start(course, user, catalog, audio, applied) {
     const body = el('div', 'part-body'); main.appendChild(body);
     body.appendChild(el('div', 'pt-meta', 'Часть ' + (k + 1) + ' из ' + parts.length + ' · ' + (part.kind === 'theory' ? 'теория' : 'практика') + ' · ≈ ' + min + ' мин'));
     body.appendChild(el('h2', 'pt-title', esc(part.title)));
-    const voice = [];
     if (part.kind === 'theory') {
       const about = { course: C.title, lesson: lessonLabel + ' ' + m.n, part: k + 1, title: part.title };
-      const lr = listenRow(min, voice, part.node.id, about);
+      const lr = listenRow(part.node.id, about);
       if (lr) body.appendChild(lr);
     }
-    if (k === 0) voice.push(...appendSimple(body, les));
+    if (k === 0) appendSimple(body, les);
 
     const foot = el('div', 'pt-foot');
     const status = el('div', 'pt-status');
@@ -621,7 +543,7 @@ export function start(course, user, catalog, audio, applied) {
     if (part.type === 'hands') body.appendChild(renderHands(part.hands, st, les.id, refreshBar));
     else if (part.type === 'test') appendTest(body, les, st, true, refreshBar);
     else {
-      voice.push(...appendBlocks(body, part.blocks));
+      appendBlocks(body, part.blocks);
       // заголовки части — главы записи: плеер подсвечивает тот, что звучит
       player.setHeadings([].slice.call(body.querySelectorAll(':scope > h2:not(.pt-title), :scope > h3'))
         .map((h) => ({ node: part.node.id, title: h.textContent.trim(), el: h })));
@@ -632,7 +554,6 @@ export function start(course, user, catalog, audio, applied) {
           ' по этой части. Часть засчитается, когда ответишь верно. Эти вопросы входят в проверку урока.</p>' +
           '<p class="kbd-hint">Цифры 1–9 выбирают ответ в вопросе, где курсор. Enter — к следующему вопросу.</p>');
         body.appendChild(head);
-        voice.push(...readable(head));
         own.forEach((q, j) => {
           body.appendChild(renderBlock(q, Object.assign({}, blockCtx, {
             label: 'Вопрос ' + (j + 1) + ' из ' + own.length,
@@ -1127,7 +1048,6 @@ export function start(course, user, catalog, audio, applied) {
   // ── маршруты ──
   function route() {
     pop.hidden = true;
-    speakStop(); speech.row = null;
     player.setHeadings([]);
     leave();
     takeTerms();

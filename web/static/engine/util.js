@@ -94,9 +94,3 @@ export function cmdBlock(text) {
 
 // Элементы, которые читает озвучка: заголовки третьего уровня, абзацы, пункты списков, врезка C#.
 const READABLE = 'h3, p, li, .cs-b';
-export function readable(node) {
-  const out = [];
-  if (node.nodeType === 1 && node.matches(READABLE)) out.push(node);
-  if (node.querySelectorAll) out.push(...node.querySelectorAll(READABLE));
-  return out;
-}

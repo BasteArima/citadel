@@ -2,7 +2,6 @@
 //
 //   type       тип блока, как в поле type курса v1
 //   render     (block, ctx) → DOM-узел
-//   speak      (node, block) → элементы, которые читает озвучка; нет функции — блок не озвучивается
 //   questions  (block) → вопросы, от которых зависит выполнение части; нет функции — блок не влияет
 //
 // ctx: { tool } — инструмент курса; для вопросов ещё { label, store, onSolve }, для задания руками { store, onChange }.
@@ -16,11 +15,6 @@ export function register(...mods) { mods.forEach((m) => modules.set(m.type, m));
 export function renderBlock(b, ctx) {
   const m = modules.get(b.type);
   return m ? m.render(b, ctx) : stub(b);
-}
-
-export function speakables(b, node) {
-  const m = modules.get(b.type);
-  return m && m.speak ? m.speak(node, b) : [];
 }
 
 export function questionsOf(b) {

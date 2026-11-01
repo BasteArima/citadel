@@ -13,7 +13,7 @@ export function renderAudio(main, courseBar) {
   const page = h('div', 'ad-page');
   main.appendChild(page);
   page.innerHTML = '<div class="ad-head"><div><span class="ad-sub">' + esc(c.title) + '</span><h1>Озвучка</h1>' +
-    '<p class="ad-sub">Записи делаются по опубликованному тексту. Ученик слышит запись, только если она совпадает с текстом; иначе — голос браузера.</p></div>' +
+    '<p class="ad-sub">Записи делаются по опубликованному тексту. Сервис записывает новые и изменённые части сам. Пока записи нет, у части нет кнопки «Слушать».</p></div>' +
     '<div class="ad-acts" id="au-acts"></div></div>' +
     '<div id="au-job" hidden></div>' +
     '<section class="au-stats" aria-label="Сводка" id="au-stats"></section>' +

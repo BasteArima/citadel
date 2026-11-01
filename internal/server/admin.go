@@ -275,6 +275,7 @@ func (s *server) adminPublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("course published", "id", id, "version", req.Version, "by", userFrom(r.Context()).Name)
+	s.recordMissing(id)
 	writeValue(w, map[string]any{"published": req.Version})
 }
 
