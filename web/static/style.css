@@ -585,6 +585,13 @@ details.callout.cs[open] .cs-more { display: none; }
 /* ── общие кусочки: карточка, чипы, прогресс, подпись (движок и страницы сайта) ── */
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.applied { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; margin: 24px 0 0; padding: 16px 18px;
+           background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.applied > div { flex: 999 1 320px; min-width: 0; }
+.applied .lbl { color: var(--acc); }
+.applied b { font-size: 17px; font-weight: 600; line-height: 1.35; }
+.applied p { margin: 2px 0 0; font-size: 15px; line-height: 1.5; color: var(--mut); }
+.applied .btn { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; color: var(--txt); white-space: nowrap; }
 .chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px;
         background: var(--panel-2); color: var(--mut); font-size: 13px; font-weight: 500; white-space: nowrap; line-height: 1; }
 .chip.acc { background: var(--acc-soft); color: var(--acc); }

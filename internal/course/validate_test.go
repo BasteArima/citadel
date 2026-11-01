@@ -99,3 +99,39 @@ func TestContent(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateProject(t *testing.T) {
+	step := func(id string, b Block) *Node {
+		return &Node{ID: id, Kind: KindLesson, Title: id, Blocks: []Block{b}}
+	}
+	base := func(steps ...*Node) *Course {
+		return &Course{Schema: SchemaVersion, Type: TypeProject, ID: "p", Title: "П", Metal: "steel", Tool: Tool{Name: "Go", Version: "1.27"},
+			Root: []*Node{{ID: "l", Kind: KindSection, Title: "Уровень", Tag: "guided", Children: steps}}}
+	}
+	good := Block{"type": "spec", "task": "Задача", "done": []any{"готово"},
+		"viva":  []any{map[string]any{"id": "v1", "q": "?", "a": "ответ"}},
+		"hints": []any{map[string]any{"title": "Начни", "text": "так"}},
+		"api":   []any{map[string]any{"req": "GET /", "res": "200"}}}
+	if errs := Errors(Validate(base(step("a", good)))); len(errs) > 0 {
+		t.Fatalf("good project: %v", errs)
+	}
+	bad := map[string]*Course{
+		"unknown type":  {Schema: SchemaVersion, Type: "game", ID: "p", Title: "П", Metal: "steel", Tool: Tool{Name: "Go", Version: "1"}, Root: []*Node{{ID: "x", Kind: KindPage, Title: "С", Blocks: []Block{{"type": "text", "html": "x"}}}}},
+		"no spec":       base(step("a", Block{"type": "text", "html": "x"})),
+		"no done":       base(step("a", Block{"type": "spec", "task": "Задача"})),
+		"viva answer":   base(step("a", Block{"type": "spec", "task": "З", "done": []any{"г"}, "viva": []any{map[string]any{"id": "v", "q": "?"}}})),
+		"viva repeated": base(step("a", Block{"type": "spec", "task": "З", "done": []any{"г"}, "viva": []any{map[string]any{"id": "v", "q": "?", "a": "о"}}}), step("b", Block{"type": "spec", "task": "З", "done": []any{"г"}, "viva": []any{map[string]any{"id": "v", "q": "?", "a": "о"}}})),
+		"hint":          base(step("a", Block{"type": "spec", "task": "З", "done": []any{"г"}, "hints": []any{map[string]any{"title": "x"}}})),
+		"kind":          base(step("a", Block{"type": "spec", "kind": "bug", "task": "З", "done": []any{"г"}})),
+		"page in root":  {Schema: SchemaVersion, Type: TypeProject, ID: "p", Title: "П", Metal: "steel", Tool: Tool{Name: "Go", Version: "1"}, Root: []*Node{{ID: "x", Kind: KindPage, Title: "С", Blocks: []Block{{"type": "text", "html": "x"}}}}},
+	}
+	for name, c := range bad {
+		if len(Errors(Validate(c))) == 0 {
+			t.Errorf("%s: no errors", name)
+		}
+	}
+	nums := base(step("a", good), step("b", good)).StepNum()
+	if nums["b"] != "1.2" {
+		t.Errorf("step number: %v", nums)
+	}
+}

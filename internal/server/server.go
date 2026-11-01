@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
 	"sync/atomic"
 	"time"
@@ -38,6 +39,7 @@ type Config struct {
 // Summary is a course as listed in the catalog.
 type Summary struct {
 	ID       string      `json:"id"`
+	Type     string      `json:"type,omitempty"` // "project" — a project (decision 0016)
 	Title    string      `json:"title"`
 	Subtitle string      `json:"subtitle,omitempty"`
 	Metal    string      `json:"metal"`
@@ -72,6 +74,7 @@ type catalog struct {
 // Soon is a course that exists but was never published: the catalog shows it as «Скоро».
 type Soon struct {
 	ID    string `json:"id"`
+	Type  string `json:"type,omitempty"`
 	Title string `json:"title"`
 	Metal string `json:"metal"`
 }
@@ -110,6 +113,10 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.Handle("GET /{$}", s.page(sitePage("catalog.html", "catalog")))
 	mux.Handle("GET /profile", s.page(sitePage("profile.html", "profile")))
 	mux.Handle("GET /review", s.page(sitePage("review.html", "review")))
+	mux.Handle("GET /projects", s.page(sitePage("projects.html", "projects")))
+	mux.Handle("GET /p/{id}/", s.page(s.projectPage))
+	mux.Handle("GET /api/courses/{id}/links", s.api(s.stepLinks))
+	mux.Handle("GET /api/courses/{id}/applied", s.api(s.appliedIn))
 	// admins only
 	s.adminRoutes(mux)
 	// agents, by token
@@ -152,7 +159,7 @@ func sitePage(name, current string) http.HandlerFunc {
 }
 
 func summarize(c *course.Course) Summary {
-	sum := Summary{ID: c.ID, Title: c.Title, Subtitle: c.Subtitle, Metal: c.Metal, Tool: c.Tool, Requires: c.Requires}
+	sum := Summary{ID: c.ID, Type: c.Type, Title: c.Title, Subtitle: c.Subtitle, Metal: c.Metal, Tool: c.Tool, Requires: c.Requires}
 	c.Walk(func(n *course.Node, _ *course.Node) {
 		if n.Kind == course.KindLesson {
 			sum.Lessons++
@@ -196,7 +203,7 @@ func (s *server) reload(ctx context.Context) error {
 	}
 	for _, ci := range all {
 		if ci.Published == 0 {
-			c.soon = append(c.soon, Soon{ID: ci.ID, Title: ci.Title, Metal: ci.Metal})
+			c.soon = append(c.soon, Soon{ID: ci.ID, Type: ci.Type, Title: ci.Title, Metal: ci.Metal})
 		}
 	}
 	s.cat.Store(c)
@@ -263,8 +270,14 @@ func (s *server) listBlocks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) coursePage(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.published(r, r.PathValue("id")); !ok {
+	id := r.PathValue("id")
+	if _, ok := s.published(r, id); !ok {
 		http.NotFound(w, r)
+		return
+	}
+	// links to a project from search, cards and the profile come here: the #step survives the redirect
+	if s.cat.Load().parsed[id].IsProject() {
+		http.Redirect(w, r, "/p/"+url.PathEscape(id)+"/", http.StatusFound)
 		return
 	}
 	withTop(w, r, "course.html", "catalog", true)

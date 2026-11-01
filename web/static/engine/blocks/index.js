@@ -7,8 +7,9 @@ import { anim } from './anim.js';
 import { predict } from './predict.js';
 import { question } from './question.js';
 import { hands } from './hands.js';
+import { spec } from './spec.js';
 
-register(heading, text, list, code, table, callout, scheme, steps, anim, predict, question, hands, embed);
+register(heading, text, list, code, table, callout, scheme, steps, anim, predict, question, hands, embed, spec);
 
 export { renderBlock, speakables, questionsOf } from './registry.js';
 export { renderQuestion } from './question.js';

@@ -34,7 +34,7 @@ func topHTML(name, role, current string, inCourse bool) string {
 	}
 	b.WriteString(`<a class="tb-home" href="/">` + logo + `<span>Citadel</span></a>`)
 	b.WriteString(`<nav class="tb-nav" aria-label="Разделы">`)
-	nav := [][3]string{{"/", "Курсы", "catalog"}, {"/review", "Повторения", "review"}, {"/profile", "Профиль", "profile"}}
+	nav := [][3]string{{"/", "Курсы", "catalog"}, {"/projects", "Проекты", "projects"}, {"/review", "Повторения", "review"}, {"/profile", "Профиль", "profile"}}
 	if role == "admin" {
 		nav = append(nav, [3]string{"/admin", "Админка", "admin"})
 	}

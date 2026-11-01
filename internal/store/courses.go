@@ -41,7 +41,7 @@ func (s *Store) ImportContent(ctx context.Context, courses []*course.Course) ([]
 		if err != nil {
 			return nil, err
 		}
-		res, err := s.importOne(ctx, c.ID, data, hashOf(data))
+		res, err := s.importOne(ctx, c, data, hashOf(data))
 		if err != nil {
 			return nil, fmt.Errorf("import %s: %w", c.ID, err)
 		}
@@ -55,7 +55,8 @@ func hashOf(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (s *Store) importOne(ctx context.Context, id string, data []byte, hash string) (Imported, error) {
+func (s *Store) importOne(ctx context.Context, c *course.Course, data []byte, hash string) (Imported, error) {
+	id := c.ID
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Imported{}, err
@@ -67,7 +68,12 @@ func (s *Store) importOne(ctx context.Context, id string, data []byte, hash stri
 	err = tx.QueryRowContext(ctx, `SELECT version, hash, author FROM course_versions WHERE course_id = ? ORDER BY version DESC LIMIT 1`, id).Scan(&last, &lastHash, &lastAuthor)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		if _, err := tx.ExecContext(ctx, `INSERT INTO courses (id, created_at) VALUES (?, ?)`, id, now()); err != nil {
+		// a new project stays closed until an admin opens it: its tasks are still being tried out (decision 0016)
+		access := AccessPublic
+		if c.IsProject() {
+			access = AccessPrivate
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO courses (id, created_at, access) VALUES (?, ?, ?)`, id, now(), access); err != nil {
 			return Imported{}, err
 		}
 	case err != nil:
@@ -132,6 +138,7 @@ type CourseInfo struct {
 	ID        string      `json:"id"`
 	Title     string      `json:"title"` // from the latest version
 	Metal     string      `json:"metal"`
+	Type      string      `json:"type,omitempty"`
 	Published int         `json:"published"` // 0 — never published
 	Latest    VersionInfo `json:"latest"`
 }
@@ -157,7 +164,7 @@ func (s *Store) Courses(ctx context.Context) ([]CourseInfo, error) {
 		}
 		ci.Latest.Published = ci.Latest.Version == ci.Published
 		if c, err := course.Decode([]byte(data)); err == nil {
-			ci.Title, ci.Metal = c.Title, c.Metal
+			ci.Title, ci.Metal, ci.Type = c.Title, c.Metal, c.Type
 		}
 		out = append(out, ci)
 	}

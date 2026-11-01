@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 )
 
 // SchemaVersion is the current version of the course format.
@@ -17,6 +18,7 @@ const SchemaVersion = 1
 // Course is one course: passport fields plus the node tree.
 type Course struct {
 	Schema   int               `json:"schema"`
+	Type     string            `json:"type,omitempty"` // empty — a course, "project" — a project (decision 0016)
 	ID       string            `json:"id"`
 	Title    string            `json:"title"`
 	Subtitle string            `json:"subtitle,omitempty"`
@@ -32,6 +34,29 @@ type Course struct {
 	Speech   *Speech           `json:"speech,omitempty"`   // narration settings: voice and pronunciation (docs/dev/AUDIO.md)
 	Glossary map[string]Term   `json:"glossary"`
 	Root     []*Node           `json:"root"`
+}
+
+// TypeProject marks a project: levels of steps with a task to build, shown by its own pages.
+const TypeProject = "project"
+
+// IsProject tells a project from a course.
+func (c *Course) IsProject() bool { return c.Type == TypeProject }
+
+// StepNum returns the number of every step of a project, «level.step»: 1.2 is the second step
+// of the first level. Numbers come from the order in the tree, so they need no maintenance.
+func (c *Course) StepNum() map[string]string {
+	out := map[string]string{}
+	level := 0
+	for _, s := range c.Root {
+		if s.Kind != KindSection {
+			continue
+		}
+		level++
+		for i, l := range s.Children {
+			out[l.ID] = strconv.Itoa(level) + "." + strconv.Itoa(i+1)
+		}
+	}
+	return out
 }
 
 // Tool is the tool whose outputs the course shows, with the version they were obtained on.

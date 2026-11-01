@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проекты · Citadel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/site.css">
+<script>
+  try {
+    var th = JSON.parse(localStorage.getItem('citadel-ui') || '{}').theme;
+    if (th === 'light' || th === 'dark') document.documentElement.setAttribute('data-theme', th);
+  } catch (e) {}
+</script>
+<script type="module" src="/static/site/projects.js"></script>
+</head>
+<body>
+<header class="top site" id="top"></header>
+<div id="app"><main class="site-main"><p class="site-sub">Загружаю проекты…</p></main></div>
+</body>
+</html>

@@ -11,7 +11,7 @@ export async function loadSpecs() {
   (r.data.blocks || []).forEach((s) => { SPECS[s.type] = s; });
 }
 
-const JSON_ONLY = ['table', 'scheme', 'steps', 'anim', 'hands', 'embed'];
+const JSON_ONLY = ['table', 'scheme', 'steps', 'anim', 'hands', 'embed', 'spec'];
 const CALLOUTS = [['note', 'Заметка'], ['warn', 'Осторожно'], ['cs', 'Боковая врезка (свёрнута; подпись — labels.cs курса)']];
 const QKINDS = [['choice', 'выбор варианта'], ['text', 'ввод ответа'], ['order', 'порядок']];
 
@@ -41,6 +41,7 @@ export function newBlock(type, course, lesson) {
     case 'question': return { type, id: nextQuestionId(course, lesson.id), kind: 'choice', q: '', opts: ['', ''], a: 0, why: '' };
     case 'hands': return { type, title: '', goal: '', steps: [{ t: '', cmd: '', out: '' }], trouble: [], check: [] };
     case 'embed': return { type, src: '' };
+    case 'spec': return { type, task: '', done: [''] };
     default: return { type };
   }
 }

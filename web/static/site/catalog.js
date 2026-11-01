@@ -2,6 +2,7 @@
 import { api, esc, plural, today, linkIcon, metalName, courseState, lastPlace } from './shared.js';
 import { initSiteSearch } from './search.js';
 import { siteTop } from './topbar.js';
+import { projectTile, soonProjectTile } from './projects-ui.js';
 
 initSiteSearch();
 
@@ -20,13 +21,20 @@ try {
   app.innerHTML = '<main class="site-main"><p class="site-err">Не удалось загрузить курсы: ' + esc(e.message) + '</p></main>';
 }
 
-function render(user, courses, soon) {
-  const byId = Object.fromEntries(courses.map((c) => [c.id, c]));
-  top.update(user, courses.reduce((s, c) => s + c.due, 0));
+function render(user, everything, allSoon) {
+  const projects = everything.filter((c) => c.type === 'project');
+  const courses = everything.filter((c) => c.type !== 'project');
+  const soon = allSoon.filter((c) => c.type !== 'project');
+  const soonProjects = allSoon.filter((c) => c.type === 'project');
+  const byId = Object.fromEntries(everything.map((c) => [c.id, c]));
+  top.update(user, everything.reduce((s, c) => s + c.due, 0));
   app.innerHTML =
     '<main class="site-main">' +
-      '<div><h1>Курсы</h1><p class="site-sub">Каждый пройденный курс — звено твоей цепи.</p></div>' +
-      '<div class="top-cards">' + reviewCard(courses) + continueCard(courses, byId) + '</div>' +
+      (projects.length ? '<div><h1>Курсы и проекты</h1><p class="site-sub">Курс объясняет, проект заставляет применить. Каждый пройденный — звено твоей цепи.</p></div>'
+        : '<div><h1>Курсы</h1><p class="site-sub">Каждый пройденный курс — звено твоей цепи.</p></div>') +
+      '<div class="top-cards">' + reviewCard(everything) + continueCard(courses, byId) + projectCard(projects) + '</div>' +
+      (projects.length || soonProjects.length ? '<div class="row" style="justify-content:space-between"><h2>Проекты</h2><a href="/projects">Все проекты</a></div>' +
+        '<div class="tiles">' + projects.map(projectTile).join('') + soonProjects.map(soonProjectTile).join('') + '</div>' : '') +
       '<div class="row" style="justify-content:space-between"><h2>Все курсы</h2>' +
         '<div class="segs" role="group" aria-label="Фильтр по статусу">' + FILTERS.map((f) =>
           '<button type="button" data-f="' + f[0] + '" aria-pressed="' + (filter === f[0]) + '">' + f[1] + '</button>').join('') + '</div></div>' +
@@ -79,6 +87,15 @@ function continueCard(courses, byId) {
   return '<section class="card top-card" aria-labelledby="ct"><div class="lbl" id="ct">' + (c.started ? 'Продолжить' : 'С чего начать') + '</div>' +
     '<div><p>' + esc(c.title) + '</p><h2>Урок ' + c.next.n + '. ' + esc(c.next.title) + '</h2></div>' +
     '<div class="row"><a class="btn btn-l pri" href="/c/' + encodeURIComponent(c.id) + '/#' + encodeURIComponent(c.next.id) + '">' + (c.started ? 'Продолжить' : 'Начать') + '</a></div></section>';
+}
+
+// Текущий шаг начатого проекта, а если ни один не начат — первого.
+function projectCard(projects) {
+  const c = projects.find((x) => x.started && x.next) || projects.find((x) => x.next);
+  if (!c) return '';
+  return '<section class="card top-card" aria-labelledby="pn"><div class="lbl" id="pn">' + (c.started ? 'В проекте сейчас' : 'Проект') + '</div>' +
+    '<div><p>' + esc(c.title) + '</p><h2>Шаг ' + esc(c.next.num) + '. ' + esc(c.next.title) + '</h2></div>' +
+    '<div class="row"><a class="btn btn-l pri" href="/p/' + encodeURIComponent(c.id) + '/#' + encodeURIComponent(c.next.id) + '">Открыть ТЗ</a></div></section>';
 }
 
 function soonTile(c) {

@@ -23,12 +23,15 @@ var Blocks = []BlockSpec{
 	{Type: "question", Title: "Вопрос", Required: []string{"id", "kind", "q"}},
 	{Type: "hands", Title: "Сделай руками", Required: []string{"steps"}},
 	{Type: "embed", Title: "Свой компонент", Required: []string{"src"}},
+	{Type: "spec", Title: "ТЗ шага проекта", Required: []string{"task", "done"}},
 }
 
 // Callout kinds and question kinds.
 var (
 	CalloutKinds  = []string{"note", "warn", "cs"}
 	QuestionKinds = []string{"choice", "text", "order"}
+	// ProjectHelp is how much help a level of a project gives: its tag.
+	ProjectHelp = []string{"guided", "junior", "ticket"}
 )
 
 // Spec returns the spec of a block type.

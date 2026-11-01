@@ -1,0 +1,2021 @@
+{
+  "schema": 1,
+  "type": "project",
+  "id": "marketplace",
+  "title": "Маркетплейс: бэкенд с нуля",
+  "subtitle": "Каталог, корзина, заказы, склад, очереди, оплата. Один сервис, который растёт вместе с тобой.",
+  "metal": "steel",
+  "tool": {
+    "name": "Go",
+    "version": "1.27",
+    "file": "main.go",
+    "cmd": "go run ."
+  },
+  "labels": {
+    "lesson": "Шаг",
+    "interview": "orders"
+  },
+  "review": [
+    1,
+    3,
+    7
+  ],
+  "pages": [],
+  "about": "Один сервис растёт от первого endpoint до оплаты и профилирования. Каждый шаг начинается с проблемы, которую создал предыдущий. Код пишешь сам, он живёт в твоём репозитории.",
+  "howto": [
+    "<b>Ядро пишешь руками</b>Логика, база, конкурентность — твои. Docker-compose и CI можно генерировать. Нейронку спрашивай как наставника: объясни, но не пиши за меня.",
+    "<b>Залип на 20 минут — открой подсказку</b>Это не лень, а сигнал, что в ТЗ чего-то не хватает. Подсказки не штрафуются.",
+    "<b>Шаг закрывает защита</b>Не зелёный запуск, а объяснение своего кода. Не смог объяснить — шаг открыт, и это нормально.",
+    "<b>Пауза ничего не обнуляет</b>Пропал на месяц — закрытые шаги остаются. Возвращаешься туда, где остановился."
+  ],
+  "glossary": {},
+  "root": [
+    {
+      "id": "catalog",
+      "kind": "section",
+      "title": "Каталог товаров",
+      "tag": "guided",
+      "about": "HTTP-сервис, который хранит товары и переживает перезапуск.",
+      "lead": "Итог: первый рабочий сервис на Go, который можно показать.",
+      "children": [
+        {
+          "id": "catalog.health",
+          "kind": "lesson",
+          "title": "Сервер отвечает",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Заводим новый сервис каталога. Пока нечего запускать, нечего и проверять. Подними HTTP-сервер с проверкой здоровья: по ней потом будут смотреть и мониторинг, и Docker.",
+              "build": [
+                "<code>go mod init</code> и один <code>main.go</code> в корне",
+                "Свой роутер: <code>mux := http.NewServeMux()</code>",
+                "Хендлер <code>GET /health</code> → JSON <code>{\"status\":\"ok\"}</code>",
+                "Порт из переменной окружения <code>PORT</code>, по умолчанию 8080",
+                "Сервер через <code>&amp;http.Server{}</code> с таймаутами <code>ReadTimeout</code> и <code>WriteTimeout</code>"
+              ],
+              "files": [
+                "<code>main.go</code> — пока всё здесь: роутер, хендлер, запуск"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "http"
+                },
+                {
+                  "course": "go",
+                  "id": "module"
+                }
+              ],
+              "search": [
+                "go http.Server timeouts",
+                "go servemux vs defaultservemux",
+                "go http response headers order"
+              ],
+              "hints": [
+                {
+                  "title": "С чего начать",
+                  "text": "В <code>main</code> нужны три вещи: создать роутер, повесить на него один хендлер и запустить сервер. Порядок такой же. Порт добавь последним, когда сервер уже отвечает на 8080."
+                },
+                {
+                  "title": "Как выглядит хендлер",
+                  "text": "Хендлер получает, куда писать ответ, и сам запрос. Заголовки ставятся до тела. С Go 1.22 метод пишется прямо в шаблоне маршрута.",
+                  "code": "mux.HandleFunc(\"GET /health\", health)\n\nfunc health(w http.ResponseWriter, r *http.Request) {\n    w.Header().Set(\"Content-Type\", \"application/json\")\n    w.WriteHeader(http.StatusOK)\n    w.Write([]byte(`{\"status\":\"ok\"}`))\n}"
+                },
+                {
+                  "title": "Сервер с таймаутами",
+                  "text": "Последняя подсказка. <code>http.ListenAndServe</code> таймауты задать не даёт, поэтому сервер собирается структурой. Значения подбери сам и объясни на защите.",
+                  "code": "srv := &http.Server{\n    Addr:         \":\" + port,\n    Handler:      mux,\n    ReadTimeout:  5 * time.Second,\n    WriteTimeout: 10 * time.Second,\n}\nlog.Printf(\"listening on %s\", srv.Addr)\nlog.Fatal(srv.ListenAndServe())"
+                }
+              ],
+              "done": [
+                "<code>go run .</code> поднимает сервер и пишет в лог, на каком порту",
+                "<code>curl -i localhost:8080/health</code> даёт 200 и <code>Content-Type: application/json</code>",
+                "С <code>PORT=9000</code> сервер поднимается на 9000",
+                "Любой другой путь отвечает 404"
+              ],
+              "traps": [
+                "<code>ListenAndServe</code> возвращает ошибку, например когда порт занят. Её надо залогировать, иначе сервис тихо завершится",
+                "Заголовки пишутся строго до тела: сначала <code>Header().Set</code>, потом <code>WriteHeader</code>, потом <code>Write</code>",
+                "Без своего <code>Content-Type</code> Go определит тип по содержимому, и JSON уйдёт как <code>text/plain; charset=utf-8</code>",
+                "Таймауты в <code>http.Server</code> по умолчанию не заданы. На проде медленные клиенты так исчерпывают соединения"
+              ],
+              "skip": [
+                "Фреймворки: chi и gin подождут, стандартной библиотеки хватает",
+                "Конфиг в YAML: достаточно <code>os.Getenv</code>",
+                "Логгер сложнее <code>log.Printf</code>",
+                "Graceful shutdown: он появится, когда будет что закрывать"
+              ],
+              "viva": [
+                {
+                  "id": "catalog.health.v1",
+                  "q": "Чем свой <code>ServeMux</code> лучше <code>DefaultServeMux</code>?",
+                  "a": "<code>DefaultServeMux</code> — глобальная переменная: маршруты в него может дописать любой импортированный пакет. Например, <code>net/http/pprof</code> так выставляет отладочные адреса. Свой роутер виден только там, куда его передали, и его проще подставить в тесте."
+                },
+                {
+                  "id": "catalog.health.v2",
+                  "q": "Что будет, если поставить заголовок или вызвать <code>WriteHeader</code> после первого <code>Write</code>?",
+                  "a": "Первый <code>Write</code> сам отправляет статус 200 и заголовки. Заголовок, поставленный позже, никуда не уйдёт, а второй <code>WriteHeader</code> не сменит статус: сервер только напишет в лог <code>superfluous response.WriteHeader call</code>."
+                },
+                {
+                  "id": "catalog.health.v3",
+                  "q": "Зачем серверу таймауты, если клиенты «нормальные»?",
+                  "a": "Без таймаутов один медленный или зависший клиент держит соединение и горутину сколько угодно. Таких соединений может набраться столько, что новые запросы перестанут обслуживаться. На этом построена атака Slowloris, но то же бывает и из-за плохой сети."
+                }
+              ]
+            }
+          ],
+          "n": 1
+        },
+        {
+          "id": "catalog.products",
+          "kind": "lesson",
+          "title": "Товары в памяти",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Сервер живой, но пустой. Фронту нужно создавать товары и получать их: добавь это в API. Базу пока не трогаем, хранение — в памяти.",
+              "build": [
+                "Тип <code>Product</code>: id, название, цена, категория",
+                "Хранилище в памяти на слайсе, с генерацией id",
+                "Разбор тела через <code>json.NewDecoder(r.Body)</code>",
+                "Валидация: пустое имя и отрицательная цена не проходят",
+                "Единый формат ошибки <code>{\"error\":\"...\"}</code> для всех 4xx"
+              ],
+              "api": [
+                {
+                  "req": "<code>POST /products</code><br>тело <code>{name, price, category}</code>",
+                  "res": "<b>201</b> и товар с id"
+                },
+                {
+                  "req": "<code>GET /products</code>",
+                  "res": "<b>200</b>, массив товаров"
+                },
+                {
+                  "req": "<code>GET /products/{id}</code>",
+                  "res": "<b>200</b> или <b>404</b>"
+                },
+                {
+                  "req": "Любая ошибка разбора",
+                  "res": "<b>400</b> и <code>{\"error\":\"...\"}</code>"
+                }
+              ],
+              "files": [
+                "<code>main.go</code> — роутинг и запуск",
+                "<code>product.go</code> — тип и валидация",
+                "<code>store.go</code> — хранилище в памяти"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "http"
+                },
+                {
+                  "course": "go",
+                  "id": "slice-head"
+                },
+                {
+                  "course": "go",
+                  "id": "errors"
+                }
+              ],
+              "search": [
+                "go http servemux path value",
+                "go json decoder request body",
+                "go nil slice json null"
+              ],
+              "hints": [
+                {
+                  "title": "С чего начать",
+                  "text": "Начни с типа <code>Product</code> и одного хендлера <code>POST /products</code>. Список и поиск по id допишешь, когда создание заработает. Хранилище — структура со слайсом и методами <code>Add</code>, <code>List</code> и <code>Get</code>."
+                },
+                {
+                  "title": "Как описать маршруты",
+                  "text": "Метод и параметр пишутся прямо в шаблоне маршрута, значение достаётся из запроса.",
+                  "code": "mux.HandleFunc(\"POST /products\", createProduct)\nmux.HandleFunc(\"GET /products\", listProducts)\nmux.HandleFunc(\"GET /products/{id}\", getProduct)\n\nfunc getProduct(w http.ResponseWriter, r *http.Request) {\n    id := r.PathValue(\"id\")\n    // найди товар; нет такого — 404 и {\"error\":\"...\"}\n}"
+                },
+                {
+                  "title": "Разбор тела запроса",
+                  "text": "Последняя подсказка. <code>writeError</code> — твоя функция: она пишет статус и JSON с ошибкой. Дальше только твой код.",
+                  "code": "dec := json.NewDecoder(r.Body)\ndec.DisallowUnknownFields()\n\nvar in struct {\n    Name     string `json:\"name\"`\n    Price    int64  `json:\"price\"` // копейки\n    Category string `json:\"category\"`\n}\nif err := dec.Decode(&in); err != nil {\n    writeError(w, http.StatusBadRequest, \"invalid JSON\")\n    return\n}"
+                }
+              ],
+              "done": [
+                "Создал товар: вернулся 201 и товар с проставленным id",
+                "<code>GET /products</code> на пустом каталоге отдаёт <code>[]</code>, а не <code>null</code>",
+                "Кривой JSON даёт 400 с внятным текстом, а не панику",
+                "Несуществующий id даёт 404"
+              ],
+              "traps": [
+                "<code>var products []Product</code> сериализуется в <code>null</code>. Инициализируй литералом: ровно этот баг ломает фронт",
+                "<code>DisallowUnknownFields()</code> у декодера ловит опечатки в ключах",
+                "Цена в <code>float64</code> — плохая привычка для денег. Храни целые копейки"
+              ],
+              "skip": [
+                "Удаление и обновление товара",
+                "Пагинацию: она будет на уровне «Листинг и поиск»",
+                "Авторизацию: для неё есть следующий уровень"
+              ],
+              "viva": [
+                {
+                  "id": "catalog.products.v1",
+                  "q": "Почему <code>json.Decoder</code> лучше, чем <code>io.ReadAll</code> с <code>Unmarshal</code>?",
+                  "a": "Decoder читает тело как поток и сразу умеет <code>DisallowUnknownFields</code>. <code>ReadAll</code> сначала грузит всё тело в память. Размер тела в обоих случаях стоит ограничить через <code>http.MaxBytesReader</code>."
+                },
+                {
+                  "id": "catalog.products.v2",
+                  "q": "Откуда в ответе берётся <code>null</code> вместо <code>[]</code> и чем это ломает фронт?",
+                  "a": "Объявленный, но не заполненный слайс равен nil, а <code>encoding/json</code> пишет nil-слайс как <code>null</code>. Фронт вызывает у ответа методы массива и падает. Пустой литерал <code>[]Product{}</code> даёт <code>[]</code>."
+                },
+                {
+                  "id": "catalog.products.v3",
+                  "q": "Почему id генерирует сервер, а не присылает клиент?",
+                  "a": "Уникальность может гарантировать только тот, кто видит все товары, то есть сервер. Два клиента могут прислать один и тот же id или чужой, и тогда данные будут перезаписаны."
+                }
+              ]
+            }
+          ],
+          "n": 2
+        },
+        {
+          "id": "catalog.file",
+          "kind": "lesson",
+          "title": "Данные переживают рестарт",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Перезапустили сервис, и весь каталог пропал. Сохраняй товары в файл, чтобы рестарт ничего не терял. Сбой посреди записи тоже не должен портить данные.",
+              "build": [
+                "Сохранение каталога в <code>products.json</code> при каждом изменении",
+                "Чтение файла при старте",
+                "Запись через временный файл и <code>os.Rename</code>",
+                "Отсутствующий файл — не ошибка, а пустой каталог"
+              ],
+              "files": [
+                "<code>store.go</code> — появляются загрузка и сохранение"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "errors"
+                },
+                {
+                  "course": "go",
+                  "id": "defer"
+                }
+              ],
+              "search": [
+                "go atomic file write rename",
+                "go os.CreateTemp",
+                "go errors.Is fs.ErrNotExist"
+              ],
+              "hints": [
+                {
+                  "title": "С чего начать",
+                  "text": "Разбей работу на две функции: загрузить файл в слайс при старте и сохранить слайс в файл. Сначала сделай простую запись через <code>os.WriteFile</code> и убедись, что данные переживают рестарт. Потом делай запись надёжной."
+                },
+                {
+                  "title": "Как отличить «файла нет» от настоящей ошибки",
+                  "text": "Отсутствие файла при первом запуске — нормально, а вот ошибка прав или битый JSON — нет.",
+                  "code": "data, err := os.ReadFile(path)\nif errors.Is(err, fs.ErrNotExist) {\n    return []Product{}, nil // первый запуск\n}\nif err != nil {\n    return nil, fmt.Errorf(\"read catalog: %w\", err)\n}"
+                },
+                {
+                  "title": "Запись, которая не портит файл",
+                  "text": "Последняя подсказка. Временный файл лежит рядом с целевым: переименование атомарно только в пределах одной файловой системы.",
+                  "code": "tmp, err := os.CreateTemp(filepath.Dir(path), \"products-*.tmp\")\nif err != nil {\n    return err\n}\ndefer os.Remove(tmp.Name()) // после Rename удалять уже нечего\n\nif _, err := tmp.Write(data); err != nil {\n    tmp.Close()\n    return err\n}\nif err := tmp.Sync(); err != nil {\n    tmp.Close()\n    return err\n}\nif err := tmp.Close(); err != nil {\n    return err\n}\nreturn os.Rename(tmp.Name(), path)"
+                }
+              ],
+              "done": [
+                "Создал товар, перезапустил: товар на месте",
+                "Битый файл не роняет сервис молча, а даёт понятную ошибку в лог",
+                "После первого запуска в папке лежит валидный JSON"
+              ],
+              "traps": [
+                "Запись поверх через <code>os.Create</code> обрезает файл сразу: упал посередине — потерял всё",
+                "<code>os.Rename</code> в пределах одной файловой системы атомарен, между дисками — нет",
+                "<code>defer f.Close()</code> не гарантирует, что данные на диске. Для надёжности нужен <code>f.Sync()</code> до закрытия"
+              ],
+              "skip": [
+                "Другой формат вместо JSON",
+                "Инкрементальную запись: пиши весь файл целиком, на таком объёме это нормально"
+              ],
+              "viva": [
+                {
+                  "id": "catalog.file.v1",
+                  "q": "Зачем писать во временный файл и переименовывать, а не поверх?",
+                  "a": "Запись поверх сначала обрезает файл, поэтому сбой посередине оставит половину данных или ничего. Переименование заменяет файл одним действием: читатель видит либо старую версию, либо новую целиком."
+                },
+                {
+                  "id": "catalog.file.v2",
+                  "q": "Что останется на диске, если убить процесс <code>kill -9</code> в момент записи?",
+                  "a": "Старый <code>products.json</code> останется целым, потому что пишем не в него. Рядом может остаться недописанный временный файл: он мешает только порядку, при старте его можно не читать."
+                }
+              ]
+            }
+          ],
+          "n": 3
+        },
+        {
+          "id": "catalog.race",
+          "kind": "lesson",
+          "title": "Файл под нагрузкой",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Два запроса пришли одновременно, и файл оказался битым. HTTP-сервер обрабатывает каждый запрос в своей горутине, а твоё хранилище к этому не готово. Воспроизведи гонку, почини её и замерь скорость поиска: эта цифра понадобится после перехода на Postgres.",
+              "build": [
+                "Скрипт: 50 горутин параллельно создают товары",
+                "Запуск сервиса с детектором гонок: <code>go run -race .</code>",
+                "<code>sync.RWMutex</code> вокруг каталога и файла",
+                "Замер: сколько занимает поиск по категории на 10 000 товаров"
+              ],
+              "files": [
+                "<code>store.go</code> — появляется мьютекс",
+                "<code>cmd/load/main.go</code> — скрипт нагрузки"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "sync"
+                },
+                {
+                  "course": "go",
+                  "id": "races"
+                },
+                {
+                  "course": "go",
+                  "id": "goroutines"
+                }
+              ],
+              "search": [
+                "go race detector",
+                "go sync.RWMutex",
+                "go sync.WaitGroup Go method"
+              ],
+              "hints": [
+                {
+                  "title": "С чего начать",
+                  "text": "Сначала воспроизведи проблему и только потом чини. Запусти сервис с <code>-race</code>, запусти нагрузку и посмотри, что напишет детектор. Если на Windows Go ответит <code>-race requires cgo</code>, запускай сервис в контейнере <code>golang:1.27</code>."
+                },
+                {
+                  "title": "Скрипт нагрузки",
+                  "text": "Отдельная программа с <code>main</code> в своей папке. Каждая горутина шлёт свой запрос.",
+                  "code": "var wg sync.WaitGroup\nfor i := range 50 {\n    wg.Go(func() {\n        body := fmt.Sprintf(`{\"name\":\"item %d\",\"price\":100,\"category\":\"test\"}`, i)\n        resp, err := http.Post(url, \"application/json\", strings.NewReader(body))\n        if err != nil {\n            log.Print(err)\n            return\n        }\n        resp.Body.Close()\n    })\n}\nwg.Wait()"
+                },
+                {
+                  "title": "Где нужна блокировка",
+                  "text": "Последняя подсказка. Запись держит <code>Lock</code> и на изменение слайса, и на сохранение в файл, иначе файлы перемешаются. Чтение берёт <code>RLock</code>.",
+                  "code": "func (s *Store) Add(p Product) (Product, error) {\n    s.mu.Lock()\n    defer s.mu.Unlock()\n    // выдать id, дописать в слайс, сохранить файл\n}\n\nfunc (s *Store) List() []Product {\n    s.mu.RLock()\n    defer s.mu.RUnlock()\n    return slices.Clone(s.products)\n}"
+                }
+              ],
+              "done": [
+                "<code>-race</code> молчит под нагрузкой",
+                "После нагрузки файл валидный, а товаров ровно столько, сколько создали",
+                "Записана цифра времени поиска: её будешь сравнивать после Postgres"
+              ],
+              "traps": [
+                "Мьютекс вокруг записи в файл выстраивает все запросы в очередь. Заметь это в замере",
+                "Копирование структуры с мьютексом внутри ломает защиту. Только указательный ресивер, это ловит и <code>go vet</code>",
+                "<code>-race</code> находит только то, что реально столкнулось в этом прогоне",
+                "Если вернуть из <code>List</code> сам слайс, а не копию, гонка останется: вызывающий читает его уже без блокировки"
+              ],
+              "skip": [
+                "Оптимизацию поиска: сейчас надо честно упереться в медленный перебор"
+              ],
+              "viva": [
+                {
+                  "id": "catalog.race.v1",
+                  "q": "Почему <code>RWMutex</code>, а не обычный <code>Mutex</code>?",
+                  "a": "<code>RWMutex</code> пускает читателей одновременно, а писателя — одного. Каталог чаще читают, чем меняют, поэтому чтения не мешают друг другу. При редких чтениях или коротких секциях обычный <code>Mutex</code> может быть не хуже."
+                },
+                {
+                  "id": "catalog.race.v2",
+                  "q": "Что именно ловит детектор гонок и почему чистый прогон не значит корректную программу?",
+                  "a": "Детектор ловит одновременный доступ к одной памяти без синхронизации, если хотя бы один доступ — запись. Он видит только то, что реально выполнилось в этом прогоне, поэтому гонка на другом пути кода останется незамеченной. Логические гонки вроде «проверил и записал» он тоже не ловит."
+                },
+                {
+                  "id": "catalog.race.v3",
+                  "q": "Где здесь узкое место: диск, мьютекс или перебор?",
+                  "a": "Отвечай по своим замерам. Обычно запись упирается в диск, и мьютекс заставляет все запросы ждать этого диска, а поиск упирается в перебор всего слайса. Без цифр это догадка, поэтому замер входит в задачу."
+                }
+              ]
+            }
+          ],
+          "n": 4
+        },
+        {
+          "id": "catalog.postgres",
+          "kind": "lesson",
+          "title": "Postgres вместо файла",
+          "time": "2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Файл не умеет ни фильтров, ни индексов, ни транзакций, а ты уже упёрся во всё сразу. Переводим каталог на Postgres. На этом шаге пиши SQL руками: на собеседовании спросят именно его.",
+              "build": [
+                "Postgres в Docker",
+                "Подключение через <code>pgx</code>, пул соединений",
+                "Таблица <code>products</code>",
+                "Репозиторий: вставка, выборка, фильтр по категории",
+                "<code>context</code> с таймаутом в каждом запросе"
+              ],
+              "files": [
+                "<code>postgres.go</code> — репозиторий на pgx",
+                "<code>store.go</code> и <code>products.json</code> уходят"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "sql"
+                },
+                {
+                  "course": "go",
+                  "id": "context"
+                },
+                {
+                  "course": "postgres",
+                  "id": "pg-btree"
+                }
+              ],
+              "search": [
+                "pgxpool golang example",
+                "go context timeout database query",
+                "pgx rows.Err rows.Close"
+              ],
+              "hints": [
+                {
+                  "title": "С чего начать",
+                  "text": "Подними базу и создай таблицу руками через <code>psql</code>: миграции будут на следующем шаге. Цену храни в <code>bigint</code>, id сделай <code>bigint generated always as identity</code>. Потом напиши одну вставку и убедись, что строка появилась."
+                },
+                {
+                  "title": "Пул соединений",
+                  "text": "Пул создаётся один раз при старте и передаётся в репозиторий. Строку подключения держи в переменной окружения.",
+                  "code": "cfg, err := pgxpool.ParseConfig(os.Getenv(\"DATABASE_URL\"))\nif err != nil {\n    return nil, err\n}\ncfg.MaxConns = 10\npool, err := pgxpool.NewWithConfig(ctx, cfg)\nif err != nil {\n    return nil, err\n}\nif err := pool.Ping(ctx); err != nil {\n    return nil, err\n}"
+                },
+                {
+                  "title": "Выборка строк",
+                  "text": "Последняя подсказка. Обрати внимание на три вещи: плейсхолдер <code>$1</code>, <code>defer rows.Close()</code> и <code>rows.Err()</code> после цикла.",
+                  "code": "ctx, cancel := context.WithTimeout(ctx, 2*time.Second)\ndefer cancel()\n\nrows, err := r.pool.Query(ctx,\n    `SELECT id, name, price, category FROM products WHERE category = $1`, category)\nif err != nil {\n    return nil, err\n}\ndefer rows.Close()\n\nproducts := []Product{}\nfor rows.Next() {\n    var p Product\n    if err := rows.Scan(&p.ID, &p.Name, &p.Price, &p.Category); err != nil {\n        return nil, err\n    }\n    products = append(products, p)\n}\nreturn products, rows.Err()"
+                }
+              ],
+              "done": [
+                "Файл удалён, данные в базе",
+                "Фильтр по категории работает SQL-запросом",
+                "Отменённый контекст обрывает запрос, а не висит",
+                "Повторный замер поиска: цифра против цифры из шага 1.4"
+              ],
+              "traps": [
+                "Забытый <code>rows.Close()</code> держит соединение занятым, и пул постепенно заканчивается",
+                "<code>rows.Err()</code> проверяют после цикла, иначе теряются ошибки чтения",
+                "Сборка SQL из строк — путь к инъекции. Только плейсхолдеры <code>$1</code>",
+                "Пулы всех реплик вместе не должны превышать <code>max_connections</code> у Postgres"
+              ],
+              "skip": [
+                "ORM: пиши SQL руками",
+                "Миграции: это следующий шаг"
+              ],
+              "viva": [
+                {
+                  "id": "catalog.postgres.v1",
+                  "q": "Что такое пул соединений и что будет, если его не ограничить?",
+                  "a": "Соединение с Postgres дорого открывать, поэтому пул держит несколько открытых и выдаёт их запросам. Каждое соединение — отдельный процесс на сервере БД. Без ограничения при всплеске нагрузки сервис упрётся в <code>max_connections</code>, и база начнёт отказывать всем."
+                },
+                {
+                  "id": "catalog.postgres.v2",
+                  "q": "Зачем <code>context</code> в запросе к базе, если клиент уже отвалился?",
+                  "a": "Как раз поэтому: контекст запроса отменяется, когда клиент ушёл, и запрос к базе обрывается, а не работает впустую, занимая соединение. Таймаут защищает и от запроса, который завис сам."
+                },
+                {
+                  "id": "catalog.postgres.v3",
+                  "q": "Чем <code>QueryRow</code> отличается от <code>Query</code> и где легко потерять ошибку?",
+                  "a": "<code>QueryRow</code> для одной строки: своей ошибки он не возвращает, она приходит из <code>Scan</code>, включая <code>pgx.ErrNoRows</code>. У <code>Query</code> ошибки могут появиться и во время чтения строк, поэтому их проверяют через <code>rows.Err()</code> после цикла."
+                }
+              ]
+            }
+          ],
+          "n": 5
+        },
+        {
+          "id": "catalog.migrations",
+          "kind": "lesson",
+          "title": "Миграции",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Схему ты создал руками в psql и уже не помнишь как. Новый разработчик проект не поднимет. Опиши схему миграциями, чтобы база собиралась с нуля одной командой.",
+              "build": [
+                "<code>goose</code> в проект",
+                "Миграция <code>00001_init.sql</code> с секциями up и down",
+                "Запуск миграций отдельной командой, не из кода сервиса"
+              ],
+              "files": [
+                "<code>migrations/00001_init.sql</code>"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "sql"
+                },
+                {
+                  "course": "go",
+                  "id": "deploy"
+                }
+              ],
+              "search": [
+                "goose migrations postgres",
+                "why down migrations",
+                "database migrations multiple replicas"
+              ],
+              "hints": [
+                {
+                  "title": "С чего начать",
+                  "text": "Поставь goose: <code>go install github.com/pressly/goose/v3/cmd/goose@latest</code>. Удали таблицу, которую создавал руками: проверять будешь на пустой базе."
+                },
+                {
+                  "title": "Как выглядит файл миграции",
+                  "text": "Обычный SQL с двумя отмеченными секциями.",
+                  "code": "-- +goose Up\nCREATE TABLE products (\n    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY\n    -- остальные колонки добавь сам\n);\n\n-- +goose Down\nDROP TABLE products;"
+                },
+                {
+                  "title": "Как запустить",
+                  "text": "Последняя подсказка. Строка подключения та же, что у сервиса. <code>status</code> показывает, какие миграции уже применены.",
+                  "code": "goose -dir migrations postgres \"$DATABASE_URL\" up\ngoose -dir migrations postgres \"$DATABASE_URL\" status\ngoose -dir migrations postgres \"$DATABASE_URL\" down"
+                }
+              ],
+              "done": [
+                "<code>goose up</code> на пустой базе поднимает схему с нуля",
+                "<code>goose down</code> откатывает",
+                "Проект поднимается на чистой машине без твоих подсказок"
+              ],
+              "traps": [
+                "Правка уже применённой миграции ломает историю у всех, кто её накатил. Новое изменение — новая миграция",
+                "Миграции из кода приложения при старте конфликтуют, когда реплик несколько"
+              ],
+              "skip": [
+                "Сидирование тестовых данных: это отдельная команда, не миграция"
+              ],
+              "viva": [
+                {
+                  "id": "catalog.migrations.v1",
+                  "q": "Зачем нужны down-миграции, если откат почти никогда не делают?",
+                  "a": "Они дают проверить миграцию туда и обратно при разработке и быстро откатить неудачный релиз, пока данных в новой схеме немного. Но откат на проде с данными часто опасен: удалённую колонку down не вернёт, поэтому многие команды чинят вперёд новой миграцией."
+                },
+                {
+                  "id": "catalog.migrations.v2",
+                  "q": "Почему схему не создают кодом приложения при старте?",
+                  "a": "Реплик несколько, и они стартуют одновременно: миграции начнут конфликтовать. Сервису для работы тоже не нужны права на изменение схемы. А отдельный шаг в деплое можно запустить один раз и увидеть его результат."
+                }
+              ]
+            }
+          ],
+          "n": 6
+        },
+        {
+          "id": "catalog.layers",
+          "kind": "lesson",
+          "title": "Слои",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "SQL лежит прямо в хендлере, и чтобы проверить логику, нужна живая база. Раздели код на слои, чтобы логику можно было проверить без базы, а смена хранилища не трогала HTTP.",
+              "build": [
+                "Три слоя: handler → service → repository",
+                "Интерфейс репозитория объявлен рядом с сервисом",
+                "Фейковая реализация репозитория на map",
+                "Хендлер не знает про SQL, репозиторий не знает про HTTP"
+              ],
+              "files": [
+                "<code>handler.go</code> — HTTP",
+                "<code>service.go</code> — логика и интерфейс репозитория",
+                "<code>postgres.go</code> — SQL",
+                "<code>fake_test.go</code> — фейк на map"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "iface-design",
+                  "why": "Вынесешь SQL из хендлера, объявишь интерфейс рядом с сервисом и проверишь логику без живой базы."
+                },
+                {
+                  "course": "go",
+                  "id": "interfaces"
+                },
+                {
+                  "course": "go",
+                  "id": "errors"
+                }
+              ],
+              "search": [
+                "go accept interfaces return structs",
+                "go interface defined by consumer",
+                "go sentinel errors errors.Is"
+              ],
+              "hints": [
+                {
+                  "title": "С чего начать",
+                  "text": "Не переписывай всё сразу. Возьми один маршрут, <code>GET /products/{id}</code>, и проведи его через три слоя. Когда он заработает, остальные пойдут по образцу."
+                },
+                {
+                  "title": "Интерфейс рядом с тем, кто им пользуется",
+                  "text": "В интерфейсе только методы, которые нужны сервису, а не копия всего репозитория.",
+                  "code": "// service.go\ntype ProductRepo interface {\n    ByID(ctx context.Context, id int64) (Product, error)\n    Add(ctx context.Context, p Product) (Product, error)\n}\n\ntype Service struct {\n    repo ProductRepo\n}"
+                },
+                {
+                  "title": "Как ошибка доходит до 404",
+                  "text": "Последняя подсказка. Каждый слой говорит на своём языке: репозиторий переводит ошибку базы в ошибку домена, хендлер переводит её в HTTP-статус.",
+                  "code": "var ErrNotFound = errors.New(\"product not found\")\n\n// postgres.go\nif errors.Is(err, pgx.ErrNoRows) {\n    return Product{}, ErrNotFound\n}\n\n// handler.go\nif errors.Is(err, ErrNotFound) {\n    writeError(w, http.StatusNotFound, \"product not found\")\n    return\n}"
+                }
+              ],
+              "done": [
+                "Логика сервиса проверяется без базы",
+                "Замена хранилища не трогает хендлеры",
+                "Ошибки базы не утекают в ответ клиенту как есть"
+              ],
+              "traps": [
+                "Интерфейс на двадцать методов — это не абстракция, а копия репозитория",
+                "Структуры базы, протекающие в ответ API, намертво связывают схему и контракт"
+              ],
+              "skip": [
+                "Чистую архитектуру во всей строгости: трёх слоёв достаточно",
+                "Генерацию моков: фейк руками нагляднее"
+              ],
+              "viva": [
+                {
+                  "id": "catalog.layers.v1",
+                  "q": "Где объявлять интерфейс: рядом с реализацией или рядом с тем, кто им пользуется?",
+                  "a": "В Go — рядом с тем, кто пользуется. Реализации не нужно о нём знать: интерфейсы выполняются неявно. Потребитель описывает ровно те методы, которые ему нужны, поэтому интерфейс получается маленьким."
+                },
+                {
+                  "id": "catalog.layers.v2",
+                  "q": "Зачем интерфейс, если реализация всего одна?",
+                  "a": "Реализаций уже две: настоящая и фейк в тестах. Интерфейс позволяет проверить логику без базы. Если бы тестов не было, и замены не предвиделось, интерфейс можно было бы не заводить."
+                },
+                {
+                  "id": "catalog.layers.v3",
+                  "q": "Как ошибка «товар не найден» доходит от репозитория до 404, не протаскивая SQL наверх?",
+                  "a": "Репозиторий переводит <code>pgx.ErrNoRows</code> в доменную <code>ErrNotFound</code>. Сервис её пропускает или оборачивает через <code>%w</code>. Хендлер проверяет <code>errors.Is</code> и отвечает 404. Ни сервис, ни хендлер про pgx не знают."
+                }
+              ]
+            }
+          ],
+          "n": 7
+        },
+        {
+          "id": "catalog.tests",
+          "kind": "lesson",
+          "title": "Тесты и одна команда",
+          "time": "2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Запуск — семь шагов в README, который ты сам забудешь. Сделай так, чтобы проект клонировался и запускался на чистой машине одной командой, а поведение проверялось тестами.",
+              "build": [
+                "Тесты хендлеров через <code>httptest</code>",
+                "Тесты сервиса на фейковом репозитории",
+                "<code>docker-compose.yml</code>: база и сервис",
+                "<code>Makefile</code>: run, test, migrate",
+                "README на десять строк"
+              ],
+              "files": [
+                "<code>handler_test.go</code>, <code>service_test.go</code>",
+                "<code>Dockerfile</code>, <code>docker-compose.yml</code>, <code>Makefile</code>",
+                "<code>README.md</code>"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "testing"
+                },
+                {
+                  "course": "go",
+                  "id": "docker"
+                }
+              ],
+              "search": [
+                "go table driven tests",
+                "go httptest NewRecorder",
+                "docker compose healthcheck depends_on"
+              ],
+              "hints": [
+                {
+                  "title": "С чего начать",
+                  "text": "Начни с одного теста на хендлер: создай запрос, вызови роутер и проверь статус. Чтобы его можно было вызвать из теста, вынеси сборку роутера из <code>main</code> в отдельную функцию."
+                },
+                {
+                  "title": "Табличный тест хендлера",
+                  "text": "Новый случай — новая строка в таблице. <code>newMux</code> и <code>fakeRepo</code> — твой код.",
+                  "code": "func TestGetProduct(t *testing.T) {\n    mux := newMux(NewService(fakeRepo{}))\n    tests := []struct {\n        name, path string\n        want       int\n    }{\n        {\"found\", \"/products/1\", http.StatusOK},\n        {\"missing\", \"/products/999\", http.StatusNotFound},\n    }\n    for _, tt := range tests {\n        t.Run(tt.name, func(t *testing.T) {\n            rec := httptest.NewRecorder()\n            mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.path, nil))\n            if rec.Code != tt.want {\n                t.Errorf(\"status = %d, want %d\", rec.Code, tt.want)\n            }\n        })\n    }\n}"
+                },
+                {
+                  "title": "Сервис ждёт базу",
+                  "text": "Последняя подсказка. Compose — как раз то, что можно сгенерировать нейронкой, но важный момент разбери сам: <code>depends_on</code> без условия ждёт только запуска контейнера, а не готовности базы.",
+                  "code": "services:\n  db:\n    image: postgres:18\n    environment:\n      POSTGRES_PASSWORD: dev\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U postgres\"]\n      interval: 2s\n      retries: 15\n  app:\n    build: .\n    depends_on:\n      db:\n        condition: service_healthy"
+                }
+              ],
+              "done": [
+                "<code>docker compose up</code> поднимает всё",
+                "<code>go test ./...</code> зелёный",
+                "Проект клонируется и запускается на чистой машине",
+                "<code>go vet ./...</code> молчит"
+              ],
+              "traps": [
+                "Тесты, которые ходят в живую базу, падают у всех по очереди",
+                "Табличные тесты в Go — стандарт, с них и начинай"
+              ],
+              "skip": [
+                "Покрытие ради процента",
+                "CI: он появится позже, когда будет что собирать"
+              ],
+              "viva": [
+                {
+                  "id": "catalog.tests.v1",
+                  "q": "Чем <code>httptest.NewRecorder</code> отличается от поднятия настоящего сервера в тесте?",
+                  "a": "Recorder вызывает хендлер прямо как функцию, без сети: это быстро и просто. <code>httptest.NewServer</code> открывает настоящий порт и проходит через весь HTTP-стек. Он нужен, чтобы проверить клиента, таймауты или поведение соединений."
+                },
+                {
+                  "id": "catalog.tests.v2",
+                  "q": "Что проверять юнит-тестом, а что только интеграционным?",
+                  "a": "Юнит-тестом — логику и обработку ошибок: их много, и они должны быть быстрыми. Интеграционным — то, что фейк не проверит: правильность SQL, ограничения базы, миграции. Их меньше, и запускаются они отдельно."
+                }
+              ]
+            }
+          ],
+          "n": 8
+        }
+      ]
+    },
+    {
+      "id": "auth",
+      "kind": "section",
+      "title": "Вход и права",
+      "tag": "guided",
+      "about": "Каталог может менять кто угодно, а у корзины нет хозяина.",
+      "lead": "Итог: понимаешь сессии и токены не по статьям, а по своему коду.",
+      "children": [
+        {
+          "id": "auth.register",
+          "kind": "lesson",
+          "title": "Регистрация и хэш пароля",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "У каталога появились продавцы, у корзины будут покупатели. Нужны пользователи, а пароли нельзя хранить как есть.",
+              "done": [
+                "Пользователь регистрируется, пароль лежит в базе только хэшем",
+                "Повторный email даёт понятную ошибку, а не 500"
+              ]
+            }
+          ],
+          "n": 1
+        },
+        {
+          "id": "auth.login",
+          "kind": "lesson",
+          "title": "Вход и токен",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Пользователь должен войти и дальше не присылать пароль в каждом запросе.",
+              "done": [
+                "Верный пароль даёт токен, неверный — 401",
+                "Ответ одинаков для неверного пароля и несуществующего email"
+              ]
+            }
+          ],
+          "n": 2
+        },
+        {
+          "id": "auth.middleware",
+          "kind": "lesson",
+          "title": "Middleware авторизации",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Проверка токена не должна копироваться в каждый хендлер.",
+              "done": [
+                "Защищённые маршруты без токена отвечают 401",
+                "Хендлер получает пользователя из контекста запроса"
+              ]
+            }
+          ],
+          "n": 3
+        },
+        {
+          "id": "auth.roles",
+          "kind": "lesson",
+          "title": "Роли: покупатель и продавец",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Менять каталог может только продавец.",
+              "done": [
+                "Покупатель получает 403 на изменение каталога",
+                "Продавец не может менять чужой товар"
+              ]
+            }
+          ],
+          "n": 4
+        },
+        {
+          "id": "auth.logout",
+          "kind": "lesson",
+          "title": "Выход и отзыв токена",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Украденный токен должен перестать работать раньше, чем истечёт сам.",
+              "done": [
+                "Токен после выхода больше не принимается",
+                "Записано, чем это решение плохо для нагрузки"
+              ]
+            }
+          ],
+          "n": 5
+        },
+        {
+          "id": "auth.bruteforce",
+          "kind": "lesson",
+          "title": "Защита от подбора пароля",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Форму входа перебирают ботами.",
+              "done": [
+                "После N неудачных попыток вход временно ограничен",
+                "Ограничение не блокирует всех пользователей с одного адреса"
+              ]
+            }
+          ],
+          "n": 6
+        },
+        {
+          "id": "auth.secrets",
+          "kind": "lesson",
+          "title": "Секреты и конфиг",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Ключ подписи токенов и пароль базы не должны лежать в репозитории.",
+              "done": [
+                "Секреты приходят из окружения",
+                "Сервис не стартует без обязательных настроек и говорит, чего не хватает"
+              ]
+            }
+          ],
+          "n": 7
+        },
+        {
+          "id": "auth.tests",
+          "kind": "lesson",
+          "title": "Тесты прав",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Права ломаются незаметно: чужой товар вдруг можно менять. Такое должен ловить тест.",
+              "done": [
+                "Таблица «роль, маршрут, ожидаемый статус» проверена тестом"
+              ]
+            }
+          ],
+          "n": 8
+        }
+      ]
+    },
+    {
+      "id": "cart",
+      "kind": "section",
+      "title": "Корзина",
+      "tag": "guided",
+      "about": "Postgres справляется, пока корзина не стала самой горячей таблицей в базе.",
+      "lead": "Итог: умеешь говорить про кэш с цифрами своего сервиса.",
+      "children": [
+        {
+          "id": "cart.postgres",
+          "kind": "lesson",
+          "title": "Корзина в Postgres",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Начинаем с того, что уже умеешь, чтобы было с чем сравнивать.",
+              "done": [
+                "Корзина наполняется и читается",
+                "Количество меньше единицы не проходит валидацию"
+              ],
+              "build": [
+                "Таблицы <code>carts</code> и <code>cart_items</code>",
+                "Добавить товар, изменить количество, удалить, получить корзину"
+              ]
+            }
+          ],
+          "n": 1
+        },
+        {
+          "id": "cart.load",
+          "kind": "lesson",
+          "title": "Замер под нагрузкой",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Нельзя чинить то, что не измерил.",
+              "done": [
+                "Есть цифры до оптимизации, записаны в README"
+              ],
+              "build": [
+                "Скрипт: 200 запросов в секунду на добавление в корзину",
+                "Снять p95 времени ответа и нагрузку на Postgres"
+              ]
+            }
+          ],
+          "n": 2
+        },
+        {
+          "id": "cart.redis",
+          "kind": "lesson",
+          "title": "Redis рядом",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Корзина — это частые мелкие записи, которым необязательно жить в основной базе.",
+              "done": [
+                "Корзина читается и пишется из Redis",
+                "Postgres больше не трогается на каждое добавление"
+              ],
+              "build": [
+                "Redis в Docker",
+                "Клиент <code>go-redis</code>",
+                "Корзина в хэше <code>cart:{id}</code>"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "redis"
+                }
+              ]
+            }
+          ],
+          "n": 3
+        },
+        {
+          "id": "cart.ttl",
+          "kind": "lesson",
+          "title": "TTL и брошенные корзины",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Корзины копятся вечно и занимают память.",
+              "done": [
+                "Брошенная корзина исчезает сама",
+                "Активная не исчезает посреди покупки"
+              ],
+              "build": [
+                "<code>EXPIRE</code> на корзину",
+                "Продление срока при активности"
+              ]
+            }
+          ],
+          "n": 4
+        },
+        {
+          "id": "cart.idempotency",
+          "kind": "lesson",
+          "title": "Идемпотентность",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Кнопку нажали дважды, сеть моргнула, запрос повторился.",
+              "done": [
+                "Десять одинаковых запросов дают один товар в корзине"
+              ],
+              "build": [
+                "Ключ идемпотентности в заголовке",
+                "Повтор возвращает тот же результат, не удваивая товар"
+              ]
+            }
+          ],
+          "n": 5
+        },
+        {
+          "id": "cart.tabs",
+          "kind": "lesson",
+          "title": "Две вкладки у одного человека",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Два параллельных изменения одной корзины затирают друг друга.",
+              "done": [
+                "Параллельные изменения не теряются"
+              ],
+              "build": [
+                "Воспроизвести потерянное обновление",
+                "Атомарные операции Redis (<code>HINCRBY</code>) или скрипт на Lua"
+              ]
+            }
+          ],
+          "n": 6
+        },
+        {
+          "id": "cart.down",
+          "kind": "lesson",
+          "title": "Redis упал",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Кэш не источник правды, и падать он будет.",
+              "done": [
+                "Падение Redis не роняет весь сервис",
+                "В логе видно, что произошло"
+              ],
+              "build": [
+                "Остановить Redis при работающем сервисе",
+                "Осознанное поведение: деградация на Postgres либо честный 503"
+              ]
+            }
+          ],
+          "n": 7
+        },
+        {
+          "id": "cart.numbers",
+          "kind": "lesson",
+          "title": "Цифры до и после",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Без замера ты не знаешь, помог ли Redis, и не расскажешь об этом на собесе.",
+              "done": [
+                "Есть разница в цифрах и объяснение, откуда она взялась"
+              ],
+              "build": [
+                "Повторить замер из шага 3.2",
+                "Таблица до и после в README"
+              ]
+            }
+          ],
+          "n": 8
+        }
+      ]
+    },
+    {
+      "id": "orders",
+      "kind": "section",
+      "title": "Заказы",
+      "tag": "junior",
+      "about": "Сервис упал посреди оформления и оставил половину заказа.",
+      "lead": "Итог: транзакции и блокировки на своих руках.",
+      "children": [
+        {
+          "id": "orders.create",
+          "kind": "lesson",
+          "title": "Корзина превращается в заказ",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Нужна операция, которая меняет сразу несколько таблиц.",
+              "done": [
+                "Заказ создаётся одной транзакцией",
+                "Корзина очищается только при успехе"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "tx"
+                },
+                {
+                  "course": "postgres",
+                  "id": "pg-acid"
+                }
+              ]
+            }
+          ],
+          "n": 1
+        },
+        {
+          "id": "orders.crash",
+          "kind": "lesson",
+          "title": "Падение посреди оформления",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "На проде нашли заказы без товаров: сервис падал между шагами оформления. Половина заказа хуже, чем его отсутствие.",
+              "done": [
+                "Искусственный сбой между шагами не оставляет мусора в базе"
+              ],
+              "kind": "incident"
+            }
+          ],
+          "n": 2
+        },
+        {
+          "id": "orders.isolation",
+          "kind": "lesson",
+          "title": "Уровни изоляции вживую",
+          "time": "2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Про них спрашивают всегда, а понимают их только на своих руках.",
+              "done": [
+                "Два окна psql: воспроизведены неповторяющееся чтение и фантом",
+                "Записано, какой уровень что лечит"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "tx"
+                },
+                {
+                  "course": "postgres",
+                  "id": "pg-mvcc"
+                }
+              ]
+            }
+          ],
+          "n": 3
+        },
+        {
+          "id": "orders.statuses",
+          "kind": "lesson",
+          "title": "Статусы заказа",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Заказ не меняется как попало: из «отменён» нельзя в «оплачен».",
+              "done": [
+                "Переходы описаны явно, недопустимые запрещены кодом"
+              ]
+            }
+          ],
+          "n": 4
+        },
+        {
+          "id": "orders.deadlock",
+          "kind": "lesson",
+          "title": "Deadlock своими руками",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "В логах Postgres появились сообщения о взаимной блокировке. Воспроизведи и почини: увидеть это в логе стоит дороже, чем прочитать определение.",
+              "done": [
+                "Взаимная блокировка воспроизведена и починена порядком захвата"
+              ],
+              "kind": "incident",
+              "lessons": [
+                {
+                  "course": "postgres",
+                  "id": "pg-locks"
+                }
+              ]
+            }
+          ],
+          "n": 5
+        },
+        {
+          "id": "orders.repeat",
+          "kind": "lesson",
+          "title": "Повторное оформление",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Клиент нажал «оформить» дважды.",
+              "done": [
+                "Второй запрос не создаёт второй заказ"
+              ]
+            }
+          ],
+          "n": 6
+        },
+        {
+          "id": "orders.cancel",
+          "kind": "lesson",
+          "title": "Отмена заказа",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Обратная операция обычно сложнее прямой.",
+              "done": [
+                "Отмена возвращает товары и не ломает статусы"
+              ]
+            }
+          ],
+          "n": 7
+        },
+        {
+          "id": "orders.longtx",
+          "kind": "lesson",
+          "title": "Длинные транзакции",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "База тормозит, и все запросы ждут. Похоже, что кто-то держит транзакцию открытой минуту.",
+              "done": [
+                "Нашёл долгую транзакцию через <code>pg_stat_activity</code> и объяснил, чем она опасна"
+              ],
+              "kind": "incident"
+            }
+          ],
+          "n": 8
+        }
+      ]
+    },
+    {
+      "id": "stock",
+      "kind": "section",
+      "title": "Резерв склада",
+      "tag": "junior",
+      "about": "Двое купили последний товар.",
+      "lead": "Итог: отвечаешь на вопрос «как вы боролись с гонками» своим примером.",
+      "children": [
+        {
+          "id": "stock.levels",
+          "kind": "lesson",
+          "title": "Остатки товара",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Нужна величина, за которую будут драться.",
+              "done": [
+                "Остаток уменьшается при заказе, пока наивно"
+              ]
+            }
+          ],
+          "n": 1
+        },
+        {
+          "id": "stock.race",
+          "kind": "lesson",
+          "title": "Воспроизвести гонку",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Поддержка жалуется: двое купили последний товар. Сначала воспроизведи, потом чини.",
+              "done": [
+                "100 параллельных заказов на 10 товаров уводят остаток в минус"
+              ],
+              "kind": "incident"
+            }
+          ],
+          "n": 2
+        },
+        {
+          "id": "stock.pessimistic",
+          "kind": "lesson",
+          "title": "Пессимистичная блокировка",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Самый прямой способ — запретить одновременность.",
+              "done": [
+                "<code>SELECT FOR UPDATE</code> убирает минус"
+              ]
+            }
+          ],
+          "n": 3
+        },
+        {
+          "id": "stock.optimistic",
+          "kind": "lesson",
+          "title": "Оптимистичная блокировка",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Блокировать дорого, если конфликты редки.",
+              "done": [
+                "Версия строки и повтор при конфликте работают"
+              ]
+            }
+          ],
+          "n": 4
+        },
+        {
+          "id": "stock.compare",
+          "kind": "lesson",
+          "title": "Сравнить под нагрузкой",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "У каждого подхода своя цена, и её надо знать в цифрах.",
+              "done": [
+                "Таблица: пропускная способность и доля конфликтов у обоих вариантов"
+              ]
+            }
+          ],
+          "n": 5
+        },
+        {
+          "id": "stock.reserve",
+          "kind": "lesson",
+          "title": "Резерв с таймаутом",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Товар держат 15 минут, потом отпускают.",
+              "done": [
+                "Истёкший резерв возвращает товар автоматически"
+              ]
+            }
+          ],
+          "n": 6
+        },
+        {
+          "id": "stock.loadtest",
+          "kind": "lesson",
+          "title": "Нагрузочный тест в проекте",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Он должен запускаться одной командой, а не жить в голове.",
+              "done": [
+                "Сценарий лежит в репозитории, результат в README"
+              ]
+            }
+          ],
+          "n": 7
+        },
+        {
+          "id": "stock.invariant",
+          "kind": "lesson",
+          "title": "Инвариант на уровне базы",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Последняя линия обороны: отрицательный остаток должен быть физически невозможен.",
+              "done": [
+                "<code>CHECK</code> не даёт уйти в минус даже при ошибке в коде"
+              ]
+            }
+          ],
+          "n": 8
+        }
+      ]
+    },
+    {
+      "id": "notify",
+      "kind": "section",
+      "title": "Уведомления",
+      "tag": "junior",
+      "about": "Письмо отправляется внутри транзакции и держит её открытой.",
+      "lead": "Итог: говоришь про очереди и гарантии доставки как практик.",
+      "children": [
+        {
+          "id": "notify.intx",
+          "kind": "lesson",
+          "title": "Отправка внутри транзакции",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Сначала надо увидеть проблему, которую решают очереди.",
+              "done": [
+                "Воспроизведены оба исхода: транзакция висит и письмо теряется"
+              ]
+            }
+          ],
+          "n": 1
+        },
+        {
+          "id": "notify.producer",
+          "kind": "lesson",
+          "title": "Kafka и продюсер",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Событие должно уезжать из сервиса, а не обрабатываться в нём.",
+              "done": [
+                "<code>order.created</code> публикуется и виден в топике"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "kafka"
+                }
+              ]
+            }
+          ],
+          "n": 2
+        },
+        {
+          "id": "notify.consumer",
+          "kind": "lesson",
+          "title": "Консьюмер",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Кто-то должен это читать.",
+              "done": [
+                "Отдельный процесс читает события и логирует «письмо отправлено»"
+              ]
+            }
+          ],
+          "n": 3
+        },
+        {
+          "id": "notify.outbox",
+          "kind": "lesson",
+          "title": "Outbox",
+          "time": "2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Между коммитом в базу и отправкой в Kafka сервис может упасть.",
+              "done": [
+                "Событие пишется в ту же транзакцию, воркер досылает его в Kafka"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "sd-saga"
+                }
+              ]
+            }
+          ],
+          "n": 4
+        },
+        {
+          "id": "notify.retries",
+          "kind": "lesson",
+          "title": "Повторы и идемпотентность",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Kafka гарантирует «хотя бы один раз», то есть дубли будут.",
+              "done": [
+                "Повторное событие не отправляет второе письмо"
+              ]
+            }
+          ],
+          "n": 5
+        },
+        {
+          "id": "notify.poison",
+          "kind": "lesson",
+          "title": "Ядовитое сообщение",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Уведомления встали: одно битое событие остановило всю очередь. Больше такого быть не должно.",
+              "done": [
+                "После N неудач сообщение уходит в DLQ, обработка продолжается"
+              ],
+              "kind": "incident"
+            }
+          ],
+          "n": 6
+        },
+        {
+          "id": "notify.partitions",
+          "kind": "lesson",
+          "title": "Партиции и порядок",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Порядок существует только внутри партиции, и на этом ломаются многие.",
+              "done": [
+                "Ключ партиционирования выбран осознанно и объяснён"
+              ]
+            }
+          ],
+          "n": 7
+        },
+        {
+          "id": "notify.broker",
+          "kind": "lesson",
+          "title": "Брокер полежал",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Kafka была недоступна две минуты. Надо знать, что при этом случилось с событиями и как догоняется отставание.",
+              "done": [
+                "Kafka остановлена на две минуты: ничего не потеряно, лаг виден и рассасывается"
+              ],
+              "kind": "incident"
+            }
+          ],
+          "n": 8
+        }
+      ]
+    },
+    {
+      "id": "listing",
+      "kind": "section",
+      "title": "Листинг и поиск",
+      "tag": "ticket",
+      "about": "100 тысяч товаров, и страница грузится четыре секунды.",
+      "lead": "Итог: индексы и планы запросов на уровне собеса в большую компанию.",
+      "children": [
+        {
+          "id": "listing.data",
+          "kind": "lesson",
+          "title": "Сто тысяч товаров",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "На сотне записей тормозов не бывает.",
+              "done": [
+                "База наполнена правдоподобными данными одной командой"
+              ]
+            }
+          ],
+          "n": 1
+        },
+        {
+          "id": "listing.explain",
+          "kind": "lesson",
+          "title": "EXPLAIN ANALYZE",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Пока не прочитал план, любые догадки — гадание.",
+              "done": [
+                "Найден seq scan и объяснено, сколько он стоит"
+              ],
+              "lessons": [
+                {
+                  "course": "postgres",
+                  "id": "pg-explain"
+                }
+              ]
+            }
+          ],
+          "n": 2
+        },
+        {
+          "id": "listing.index",
+          "kind": "lesson",
+          "title": "Первый индекс",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Основной инструмент, про который спрашивают всегда.",
+              "done": [
+                "Цифры до и после, план изменился на index scan"
+              ],
+              "lessons": [
+                {
+                  "course": "postgres",
+                  "id": "pg-btree"
+                }
+              ]
+            }
+          ],
+          "n": 3
+        },
+        {
+          "id": "listing.composite",
+          "kind": "lesson",
+          "title": "Составной индекс",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Порядок колонок меняет всё.",
+              "done": [
+                "Показано, когда индекс не применяется из-за порядка полей"
+              ],
+              "lessons": [
+                {
+                  "course": "postgres",
+                  "id": "pg-composite"
+                }
+              ]
+            }
+          ],
+          "n": 4
+        },
+        {
+          "id": "listing.offset",
+          "kind": "lesson",
+          "title": "Глубокая пагинация",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "<code>OFFSET 100000</code> читает сто тысяч строк и выбрасывает.",
+              "done": [
+                "Замерена деградация на дальних страницах"
+              ]
+            }
+          ],
+          "n": 5
+        },
+        {
+          "id": "listing.keyset",
+          "kind": "lesson",
+          "title": "Keyset-пагинация",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Правильный способ листать большие выборки.",
+              "done": [
+                "Время ответа не зависит от номера страницы"
+              ]
+            }
+          ],
+          "n": 6
+        },
+        {
+          "id": "listing.search",
+          "kind": "lesson",
+          "title": "Поиск по названию",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "<code>LIKE '%текст%'</code> не использует обычный индекс.",
+              "done": [
+                "Триграммный индекс ускорил поиск, цифры записаны"
+              ],
+              "lessons": [
+                {
+                  "course": "postgres",
+                  "id": "pg-index-types"
+                }
+              ]
+            }
+          ],
+          "n": 7
+        },
+        {
+          "id": "listing.cache",
+          "kind": "lesson",
+          "title": "Кэш листинга",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Самые частые запросы незачем считать каждый раз.",
+              "done": [
+                "Кэш работает, инвалидация при изменении товара продумана"
+              ]
+            }
+          ],
+          "n": 8
+        }
+      ]
+    },
+    {
+      "id": "payment",
+      "kind": "section",
+      "title": "Оплата",
+      "tag": "ticket",
+      "about": "Деньги списались, а заказ не создался.",
+      "lead": "Итог: распределённые транзакции на уровне разговора о системном дизайне.",
+      "children": [
+        {
+          "id": "payment.stub",
+          "kind": "lesson",
+          "title": "Платёжный сервис по gRPC",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Нужен второй процесс, который может упасть отдельно. Сервисы внутри компании часто общаются по gRPC, поэтому заглушка платёжки будет на нём.",
+              "done": [
+                "Заглушка отвечает успехом, отказом и таймаутом",
+                "Контракт описан в <code>.proto</code>"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "rest-grpc"
+                }
+              ]
+            }
+          ],
+          "n": 1
+        },
+        {
+          "id": "payment.sync",
+          "kind": "lesson",
+          "title": "Синхронный вызов и его цена",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Сначала сделай просто и посмотри, что ломается.",
+              "done": [
+                "Таймаут платежа оставляет систему в непонятном состоянии"
+              ]
+            }
+          ],
+          "n": 2
+        },
+        {
+          "id": "payment.paper",
+          "kind": "lesson",
+          "title": "Сага на бумаге",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Шаги и компенсации проще придумать до кода.",
+              "done": [
+                "Схема шагов и компенсаций описана в README"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "sd-saga"
+                }
+              ]
+            }
+          ],
+          "n": 3
+        },
+        {
+          "id": "payment.compensate",
+          "kind": "lesson",
+          "title": "Компенсации в коде",
+          "time": "2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Откатывать придётся вручную: транзакции между сервисами нет.",
+              "done": [
+                "Сбой на втором шаге корректно откатывает первый"
+              ]
+            }
+          ],
+          "n": 4
+        },
+        {
+          "id": "payment.callback",
+          "kind": "lesson",
+          "title": "Повторная доставка",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Платёжка пришлёт колбэк дважды.",
+              "done": [
+                "Повторный колбэк не списывает деньги второй раз"
+              ]
+            }
+          ],
+          "n": 5
+        },
+        {
+          "id": "payment.state",
+          "kind": "lesson",
+          "title": "Состояние саги в базе",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Сервис перезапустят посреди процесса.",
+              "done": [
+                "После рестарта сага продолжается с того же шага"
+              ]
+            }
+          ],
+          "n": 6
+        },
+        {
+          "id": "payment.stuck",
+          "kind": "lesson",
+          "title": "Зависшие саги",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Есть заказы, которые висят в «оплачивается» уже час. Что-то обязательно застрянет между шагами.",
+              "done": [
+                "Воркер находит застрявшие и дожимает или компенсирует"
+              ],
+              "kind": "incident"
+            }
+          ],
+          "n": 7
+        },
+        {
+          "id": "payment.trace",
+          "kind": "lesson",
+          "title": "Видимость процесса",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Невозможно поддерживать то, чего не видно.",
+              "done": [
+                "По логам виден весь путь заказа от создания до оплаты"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "observ"
+                }
+              ]
+            }
+          ],
+          "n": 8
+        }
+      ]
+    },
+    {
+      "id": "profiling",
+      "kind": "section",
+      "title": "Профилирование",
+      "tag": "ticket",
+      "about": "Работает, но медленно и ест память.",
+      "lead": "Итог: сервис, про который есть что рассказать в цифрах.",
+      "children": [
+        {
+          "id": "profiling.pprof",
+          "kind": "lesson",
+          "title": "pprof под нагрузкой",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Оптимизация без профиля — трата времени.",
+              "done": [
+                "Профиль снят с работающего сервиса под нагрузкой"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "pprof"
+                }
+              ]
+            }
+          ],
+          "n": 1
+        },
+        {
+          "id": "profiling.cpu",
+          "kind": "lesson",
+          "title": "CPU-профиль",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Горячая функция почти никогда не та, на которую думаешь.",
+              "done": [
+                "Найдена самая дорогая функция, объяснено почему"
+              ]
+            }
+          ],
+          "n": 2
+        },
+        {
+          "id": "profiling.memory",
+          "kind": "lesson",
+          "title": "Профиль памяти",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Аллокации — главный источник тормозов в Go.",
+              "done": [
+                "Найдено место, которое аллоцирует больше всех"
+              ]
+            }
+          ],
+          "n": 3
+        },
+        {
+          "id": "profiling.escape",
+          "kind": "lesson",
+          "title": "Escape-анализ своего кода",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Здесь пригодятся слайсы и устройство памяти.",
+              "done": [
+                "<code>-gcflags=-m</code> прочитан, часть аллокаций убрана с кучи"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "escape"
+                }
+              ]
+            }
+          ],
+          "n": 4
+        },
+        {
+          "id": "profiling.bench",
+          "kind": "lesson",
+          "title": "Бенчмарки",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "«Стало быстрее» без замера — не аргумент.",
+              "done": [
+                "<code>go test -bench</code> и benchstat показывают разницу до и после"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "bench"
+                }
+              ]
+            }
+          ],
+          "n": 5
+        },
+        {
+          "id": "profiling.metrics",
+          "kind": "lesson",
+          "title": "Метрики",
+          "time": "1–2 вечера",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Профиль снимают раз, метрики смотрят всегда.",
+              "done": [
+                "Prometheus отдаёт p99 по эндпоинтам"
+              ],
+              "lessons": [
+                {
+                  "course": "go",
+                  "id": "observ"
+                }
+              ]
+            }
+          ],
+          "n": 6
+        },
+        {
+          "id": "profiling.tracing",
+          "kind": "lesson",
+          "title": "Логи и трассировка",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Один запрос должен прослеживаться через все сервисы.",
+              "done": [
+                "По id запроса видна вся цепочка"
+              ]
+            }
+          ],
+          "n": 7
+        },
+        {
+          "id": "profiling.story",
+          "kind": "lesson",
+          "title": "Рассказ на три минуты",
+          "time": "1 вечер",
+          "blocks": [
+            {
+              "type": "spec",
+              "task": "Это то, что ты принесёшь на собес.",
+              "done": [
+                "Готов связный рассказ: что было, что сделал, какие цифры получились"
+              ]
+            }
+          ],
+          "n": 8
+        }
+      ]
+    }
+  ]
+}

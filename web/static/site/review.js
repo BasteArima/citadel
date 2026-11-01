@@ -41,9 +41,17 @@ async function collect(courses) {
 
 function indexLessons(course) {
   const out = {};
-  const walk = (ns) => ns.forEach((n) => { if (n.kind === 'lesson') out[n.id] = n; walk(n.children || []); });
+  const walk = (ns) => ns.forEach((n) => { if (n.kind === 'lesson') out[n.id] = n; walk(n.children || []); }); // тот же объект, что в course.root: placeOf ищет по нему
   walk(course.root || []);
   return out;
+}
+
+// Где лежит карточка: урок курса или шаг проекта (номер шага — уровень и место в нём).
+function placeOf(c) {
+  if (c.course.type !== 'project') return 'урок ' + c.lesson.n;
+  const levels = c.course.root.filter((n) => n.kind === 'section');
+  const l = levels.findIndex((s) => (s.children || []).includes(c.lesson));
+  return 'шаг ' + (l + 1) + '.' + (levels[l].children.indexOf(c.lesson) + 1);
 }
 
 function sayCard(les, course) {
@@ -57,10 +65,12 @@ function questionCard(les, qid, course) {
   const find = (blocks) => (blocks || []).forEach((b) => {
     if (b.type === 'question' && b.id === qid) q = b;
     if (b.type === 'hands') (b.check || []).forEach((c) => { if (c.id === qid) q = c; });
+    if (b.type === 'spec') (b.viva || []).forEach((c) => { if (c.id === qid) q = c; });
   });
   find(les.blocks);
   (les.children || []).forEach((p) => find(p.blocks));
   if (!q) return null;
+  if (!q.kind) return { kind: 'Вопрос с защиты', front: courseText(q.q, course), back: '<p>' + courseText(q.a, course) + '</p>' };
   const right = q.kind === 'choice' ? q.opts[q.a] : q.kind === 'text' ? q.a[0] : (q.items || []).map((t, i) => (i + 1) + '. ' + t).join('<br>');
   return {
     kind: 'Вопрос, где ошибся',
@@ -90,11 +100,11 @@ function cardHTML(c) {
   const R = c.course.review && c.course.review.length >= 3 ? c.course.review : [1, 3, 7];
   const remember = nextCard(c.value, 'good', R).i;
   return '<article class="card rv-card metal-' + esc(c.course.metal) + '" aria-live="polite">' +
-    '<div class="row"><span class="chip"><span class="dot"></span>' + esc(c.course.title) + ' · урок ' + c.lesson.n + '</span>' +
+    '<div class="row"><span class="chip"><span class="dot"></span>' + esc(c.course.title) + ' · ' + placeOf(c) + '</span>' +
     '<span class="chip acc">' + c.kind + '</span></div>' +
     '<h2 class="rv-q">' + c.front + '</h2>' +
     (shown ? '<div class="rv-a"><span class="lbl">Ответ</span>' + c.back +
-      '<a href="/c/' + encodeURIComponent(c.course.id) + '/#' + encodeURIComponent(c.lesson.id) + '">Открыть урок →</a></div>' : '') +
+      '<a href="/c/' + encodeURIComponent(c.course.id) + '/#' + encodeURIComponent(c.lesson.id) + '">' + (c.course.type === 'project' ? 'Открыть шаг' : 'Открыть урок') + ' →</a></div>' : '') +
     '<div class="rv-sp"></div>' +
     (shown ?
       '<div class="rv-grades" role="group" aria-label="Насколько легко вспомнил">' +
@@ -106,7 +116,7 @@ function cardHTML(c) {
 }
 
 function doneHTML(total) {
-  const next = overview.find((c) => c.next);
+  const next = overview.find((c) => c.next && c.type !== 'project');
   return '<div class="card rv-done"><h2>' + (total ? 'На сегодня всё' : 'Сегодня повторять нечего') + '</h2>' +
     '<p class="site-sub">' + (total ? 'Следующие карточки — по расписанию справа.' : 'Карточки появляются из ошибок первой попытки и из фраз «Скажи на собесе», которые отправлены кнопкой «+ В карточки».') + '</p>' +
     (next ? '<a class="btn pri btn-l" href="/c/' + encodeURIComponent(next.id) + '/#' + encodeURIComponent(next.next.id) + '">Продолжить: урок ' + next.next.n + '</a>' : '') + '</div>';

@@ -15,14 +15,16 @@ async function getJSON(url) {
 }
 
 try {
-  const [user, course, catalog, audio] = await Promise.all([
+  const [user, course, catalog, audio, applied] = await Promise.all([
     getJSON('/api/me'),
     getJSON('/api/courses/' + encodeURIComponent(id)),
     getJSON('/api/courses'),
     // озвучка не обязательна: без неё части читает голос браузера
-    getJSON('/api/courses/' + encodeURIComponent(id) + '/audio').then((a) => a.parts).catch(() => ({}))
+    getJSON('/api/courses/' + encodeURIComponent(id) + '/audio').then((a) => a.parts).catch(() => ({})),
+    // шаги проектов, где пригодятся уроки курса: без них просто нет врезки
+    getJSON('/api/courses/' + encodeURIComponent(id) + '/applied').catch(() => ({}))
   ]);
-  start(course, user, catalog, audio);
+  start(course, user, catalog, audio, applied);
 } catch (e) {
   page.textContent = 'Не удалось загрузить курс: ' + e.message;
   console.error(e);

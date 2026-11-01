@@ -40,7 +40,7 @@ function toLessons(items) {
   Object.keys(items).forEach((key) => {
     const p = key.split(':'), v = items[key].v;
     if (p[0] === 'q') st(p[1]).t[p.slice(2).join(':')] = v === 2 ? 2 : 1;
-    else if (p[0] === 'seen') st(p[1]).seen[p[2]] = 1;
+    else if (p[0] === 'seen') { if (v) st(p[1]).seen[p[2]] = 1; }
     else if (p[0] === 'done') st(p[1]).done = v;
   });
   return L;
@@ -75,7 +75,7 @@ export function loadState(courseId, hooks) {
 
   function persist() {
     try {
-      localStorage.setItem(UI_KEY, JSON.stringify({ theme: S.theme, rate: S.ui.rate, focus: S.ui.focus }));
+      if (!hooks.noUi) localStorage.setItem(UI_KEY, JSON.stringify({ theme: S.theme, rate: S.ui.rate, focus: S.ui.focus }));
       localStorage.setItem(KEY, JSON.stringify({ items, open: S.ui.open, runs: S.ui.runs, dirty, syncedAt: S.sync.at }));
     } catch (e) { /* приватный режим: работаем без сохранения */ }
   }
@@ -93,6 +93,15 @@ export function loadState(courseId, hooks) {
   S.save = function () {
     if (stamp()) { dirty = true; gen++; schedule(1000); }
     persist();
+  };
+
+  // отметка по ключу напрямую — для страницы проекта: снять отметку значит поставить 0 с новым временем
+  S.get = function (key) { return items[key] ? items[key].v : undefined; };
+  S.put = function (key, v) {
+    items[key] = { v, at: Date.now() };
+    dirty = true; gen++;
+    persist();
+    schedule(1000);
   };
 
   // карточка повторения: key = card:<урок>:<id вопроса | say>, val = { d, i, s }

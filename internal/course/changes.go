@@ -34,7 +34,7 @@ type Change struct {
 
 // PassportFields are the passport fields set_passport may change. id, schema, the tree
 // and the glossary have their own operations or never change.
-var PassportFields = []string{"title", "subtitle", "metal", "tool", "labels", "review", "pages", "about", "howto", "requires", "speech"}
+var PassportFields = []string{"type", "title", "subtitle", "metal", "tool", "labels", "review", "pages", "about", "howto", "requires", "speech"}
 
 // Apply applies changes to c in order. It stops at the first change that cannot be applied;
 // c is then partly changed, so callers apply to a fresh copy. Lessons are renumbered afterwards,

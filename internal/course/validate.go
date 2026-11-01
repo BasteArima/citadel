@@ -55,6 +55,9 @@ func Validate(c *Course) []Problem {
 		v.ids[n.ID] = true
 	})
 	c.Walk(v.node)
+	if c.IsProject() {
+		v.project()
+	}
 	for key, t := range c.Glossary {
 		v.text("словарь "+key, t.Text)
 	}
@@ -98,6 +101,9 @@ func (v *validator) passport() {
 	}
 	if len(c.Root) == 0 {
 		v.errf("паспорт", "в курсе нет ни одного узла")
+	}
+	if c.Type != "" && c.Type != TypeProject {
+		v.errf("паспорт", "неизвестный вид %q: бывает только %q", c.Type, TypeProject)
 	}
 	// Courses from requires may live elsewhere, so only the shape is checked here.
 	seen := map[string]bool{}
@@ -185,6 +191,8 @@ func (v *validator) block(path string, b Block) {
 		}
 	case "question":
 		v.question(path, b)
+	case "spec":
+		v.spec(path, b)
 	case "hands":
 		if check, ok := b["check"].([]any); ok {
 			for i, q := range check {
@@ -201,6 +209,73 @@ func (v *validator) block(path string, b Block) {
 		}
 	}
 	v.strings(path, map[string]any(b))
+}
+
+// project checks the shape of a project: levels of steps, every step is a task to build.
+func (v *validator) project() {
+	for _, s := range v.c.Root {
+		if s.Kind != KindSection {
+			v.errf("узел "+s.ID, "в проекте в корне лежат только уровни (section)")
+			continue
+		}
+		if s.Tag != "" && !slices.Contains(ProjectHelp, s.Tag) {
+			v.errf("узел "+s.ID, "неизвестная степень помощи %q: бывает %s", s.Tag, strings.Join(ProjectHelp, ", "))
+		}
+		for _, l := range s.Children {
+			if l.Kind != KindLesson || len(l.Children) > 0 {
+				v.errf("узел "+l.ID, "шаг проекта — узел lesson с блоками, без частей")
+				continue
+			}
+			specs := 0
+			for _, b := range l.Blocks {
+				if b.Type() == "spec" {
+					specs++
+				}
+			}
+			if !l.Planned && specs != 1 {
+				v.errf("узел "+l.ID, "у шага должен быть один блок spec, а их %d", specs)
+			}
+		}
+	}
+}
+
+// spec checks the task of a project step. Links to lessons of other courses are not checked here:
+// courses are validated one by one; a link to a missing lesson just does not show.
+func (v *validator) spec(path string, b Block) {
+	if k, _ := b["kind"].(string); k != "" && k != "incident" {
+		v.errf(path, "неизвестный вид шага %q", k)
+	}
+	need := func(field string, keys ...string) {
+		items, _ := b[field].([]any)
+		for i, it := range items {
+			m, ok := it.(map[string]any)
+			if !ok {
+				v.errf(path, "%s, пункт %d: ожидается объект", field, i+1)
+				continue
+			}
+			for _, k := range keys {
+				if isEmpty(m[k]) {
+					v.errf(path, "%s, пункт %d: нет поля %q", field, i+1, k)
+				}
+			}
+		}
+	}
+	need("api", "req", "res")
+	need("hints", "title", "text")
+	need("lessons", "course", "id")
+	need("viva", "id", "q", "a")
+	viva, _ := b["viva"].([]any)
+	for _, it := range viva {
+		m, _ := it.(map[string]any)
+		id, _ := m["id"].(string)
+		if id == "" {
+			continue
+		}
+		if v.qids[id] {
+			v.errf(path, "id вопроса %q повторяется", id)
+		}
+		v.qids[id] = true
+	}
 }
 
 func (v *validator) question(path string, q map[string]any) {

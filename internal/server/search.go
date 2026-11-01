@@ -68,7 +68,11 @@ func (s *server) search(w http.ResponseWriter, r *http.Request) {
 					if parent != nil {
 						sec = parent.Title + " · "
 					}
-					places = append(places, Hit{Kind: "lesson", Title: n.Title, Sub: sec + label + " " + strconv.Itoa(n.N), Href: base + "#" + n.ID, Course: c.Title})
+					num := strconv.Itoa(n.N)
+					if c.IsProject() {
+						num = c.StepNum()[n.ID]
+					}
+					places = append(places, Hit{Kind: "lesson", Title: n.Title, Sub: sec + label + " " + num, Href: base + "#" + n.ID, Course: c.Title})
 				}
 				for k, p := range n.Children {
 					if strings.Contains(normText(p.Title), q) {

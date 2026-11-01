@@ -20,11 +20,12 @@ type Overview struct {
 	// questions answered right on the first attempt (decision 0008); old marks without
 	// a first attempt count as right
 	FirstRight int        `json:"firstRight"`
-	Parts      int        `json:"parts"`   // parts closed; a one-page lesson counts as one part when passed
-	Cards      int        `json:"cards"`   // review cards in the course
-	Due        int        `json:"due"`     // review cards due today
-	Week       [7]int     `json:"week"`    // cards due on each of the next 7 days, today first (overdue counted today)
-	Started    bool       `json:"started"` // any progress at all
+	Parts      int        `json:"parts"`            // parts closed; a one-page lesson counts as one part when passed
+	Cards      int        `json:"cards"`            // review cards in the course
+	Due        int        `json:"due"`              // review cards due today
+	Week       [7]int     `json:"week"`             // cards due on each of the next 7 days, today first (overdue counted today)
+	Started    bool       `json:"started"`          // any progress at all
+	Levels     []Level    `json:"levels,omitempty"` // a project: its levels
 	Next       *LessonRef `json:"next,omitempty"`
 }
 
@@ -33,10 +34,18 @@ type card struct {
 	Due string `json:"d"`
 }
 
+// Level is a level of a project and how many of its steps are closed.
+type Level struct {
+	Title  string `json:"title"`
+	Closed int    `json:"closed"`
+	Total  int    `json:"total"`
+}
+
 // LessonRef points at a lesson.
 type LessonRef struct {
 	ID    string `json:"id"`
 	N     int    `json:"n"`
+	Num   string `json:"num,omitempty"` // a project step: «1.2»
 	Title string `json:"title"`
 }
 
@@ -79,6 +88,10 @@ func (s *server) overview(w http.ResponseWriter, r *http.Request) {
 func overviewOf(c *course.Course, items map[string]store.Item, today time.Time) Overview {
 	o := Overview{Summary: summarize(c), Started: len(items) > 0}
 	for key, it := range items {
+		if strings.HasPrefix(key, "done:") && string(it.V) == "0" {
+			delete(items, key) // a project step returned to work
+			continue
+		}
 		switch {
 		case strings.HasPrefix(key, "q:"):
 			o.Solved++
@@ -116,6 +129,20 @@ func overviewOf(c *course.Course, items map[string]store.Item, today time.Time) 
 			o.Next = &LessonRef{ID: n.ID, N: n.N, Title: n.Title}
 		}
 	})
+	if c.IsProject() {
+		for _, s := range c.Root {
+			lv := Level{Title: s.Title, Total: len(s.Children)}
+			for _, l := range s.Children {
+				if _, ok := items["done:"+l.ID]; ok {
+					lv.Closed++
+				}
+			}
+			o.Levels = append(o.Levels, lv)
+		}
+		if o.Next != nil {
+			o.Next.Num = c.StepNum()[o.Next.ID]
+		}
+	}
 	return o
 }
 

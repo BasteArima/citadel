@@ -13,7 +13,7 @@ import { createPlayer } from './player.js';
 
 // course — курс v1, user — кто вошёл, catalog — список курсов (для «Опирается на» и «Что дальше»),
 // audio — записанная озвучка частей (player.js).
-export function start(course, user, catalog, audio) {
+export function start(course, user, catalog, audio, applied) {
   const X = indexCourse(course);
   const C = course;
   const STAGES = X.review; // интервалы карточек: «Забыл», «С трудом», «Помню»
@@ -407,7 +407,17 @@ export function start(course, user, catalog, audio) {
     }
   }
 
+  // «Применишь в проекте» (решение 0016): шаги проектов, которые ссылаются на этот урок
+  function appendApplied(to, m) {
+    ((applied || {})[m.id] || []).forEach((a) => {
+      const box = to.appendChild(el('aside', 'applied', '<div><div class="lbl">Применишь в проекте</div><b>Шаг ' + esc(a.num) + '. ' + esc(a.title) + '</b>' +
+        (a.why ? '<p>' + esc(a.why) + '</p>' : '') + '</div><a class="btn">Открыть шаг</a>'));
+      box.querySelector('a').href = '/p/' + encodeURIComponent(a.project) + '/#' + encodeURIComponent(a.step);
+    });
+  }
+
   function appendNextLesson(to, m) {
+    appendApplied(to, m);
     const nx = nextReady(m.n);
     if (nx) to.appendChild(el('a', 'next', '<span><small>Следующий урок · ' + nx.n + '</small><b>' + esc(nx.t) + '</b></span>' + ic(IC.arrow, 20))).href = '#' + nx.id;
     else to.appendChild(el('div', 'next', '<span><small>Дальше</small><b>Следующие уроки скоро появятся</b></span>'));
