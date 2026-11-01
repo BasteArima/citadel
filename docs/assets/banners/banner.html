@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Citadel: баннеры</title>
+<!-- Исходник баннеров: banner.html?v=social-chain | social-steps | readme-chain | readme-steps.
+     PNG снимаются браузером в размере 1280×640 (social) и 1280×320 (readme). -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+.b { position: relative; width: 1280px; overflow: hidden; font-family: 'Golos Text', sans-serif; background: var(--bg); color: var(--txt); }
+.dark { --bg: #111418; --panel: #171b21; --line: #262c35; --txt: #e3e7ec; --mut: #9aa4b0; --acc: #8ab4f8; --good: #7fcf9c; --tick: #2c333d; --logo: #9aa4b0; }
+.light { --bg: #fbfbfa; --panel: #ffffff; --line: #e3e6ea; --txt: #1f2328; --mut: #58616c; --acc: #2563d6; --good: #1f7a3d; --tick: #dfe3e8; --logo: #636b75; }
+.social { height: 640px; padding: 72px 80px; display: flex; flex-direction: column; justify-content: space-between; }
+.readme { height: 320px; padding: 0 64px; display: flex; align-items: center; justify-content: space-between; gap: 48px; }
+.mark { display: flex; align-items: center; gap: 22px; font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+.social .mark { font-size: 104px; }
+.readme .mark { font-size: 76px; }
+.tag { text-wrap: balance; margin: 22px 0 0; font-weight: 500; letter-spacing: -.01em; line-height: 1.22; }
+.social .tag { font-size: 42px; max-width: 900px; }
+.readme .tag { font-size: 27px; margin-top: 16px; max-width: 640px; }
+.feat { margin: 0; color: var(--mut); line-height: 1.4; }
+.social .feat { font-size: 25px; }
+.readme .feat { font-size: 18px; margin-top: 14px; }
+.stack { font: 500 22px 'JetBrains Mono', monospace; color: var(--mut); }
+.foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; }
+.bars { display: grid; grid-template-columns: repeat(9, 1fr); }
+.bars div { display: flex; flex-direction: column-reverse; }
+.bars i { display: block; border-radius: 3px; background: var(--tick); }
+.bars i.ok { background: var(--good); }
+.bars i.cur { background: var(--acc); }
+.social .bars { position: absolute; right: 80px; top: 72px; width: 400px; gap: 10px; }
+.social .bars div { gap: 7px; }
+.social .bars i { height: 17px; }
+.readme .bars { flex: none; width: 400px; gap: 10px; }
+.readme .bars div { gap: 5px; }
+.readme .bars i { height: 13px; }
+.steps .tag { max-width: 660px; }
+.chain { display: block; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const v = new URLSearchParams(location.search).get('v') || 'social-chain';
+const [size, kind] = v.split('-');
+const logo = (h) => '<svg width="' + h * 1.5 + '" height="' + h + '" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--logo)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc)" stroke-width="2.5"/></svg>';
+
+// Цепь: звенья по очереди заходят друг на друга, сверху одно поверх другого, снизу наоборот.
+function chain(n, w, h, stroke, overlap, metals, bg) {
+  const step = w - overlap, total = step * (n - 1) + w + stroke, H = h + stroke;
+  const rect = (i, color, sw) => '<rect x="' + (stroke / 2 + i * step) + '" y="' + stroke / 2 + '" width="' + w + '" height="' + h + '" rx="' + h / 2 + '" fill="none" stroke="' + color + '" stroke-width="' + sw + '"/>';
+  let s = '<svg class="chain" width="' + total + '" height="' + H + '" viewBox="0 0 ' + total + ' ' + H + '" aria-hidden="true"><defs>';
+  for (let i = 0; i < n - 1; i++) s += '<clipPath id="c' + i + '"><rect x="' + (i * step + w - overlap - stroke) + '" y="0" width="' + (overlap + stroke * 2 + 4) + '" height="' + H / 2 + '"/></clipPath>';
+  s += '</defs>';
+  for (let i = 0; i < n; i++) s += rect(i, bg, stroke + 10) + rect(i, metals[i % metals.length], stroke);
+  for (let i = 0; i < n - 1; i++) s += '<g clip-path="url(#c' + i + ')">' + rect(i, bg, stroke + 10) + rect(i, metals[i % metals.length], stroke) + '</g>';
+  return s + '</svg>';
+}
+const METALS = ['#9aa4b0', '#d08a5e', '#8fb0d0', '#c9a45a', '#c3cad3', '#e0bd5a'];
+
+function bars() {
+  const fill = [8, 8, 7, 6, 5, 3, 2, 1, 0];
+  return '<div class="bars" aria-hidden="true">' + fill.map((f) => {
+    let s = '<div>';
+    for (let k = 0; k < 8; k++) s += '<i class="' + (k < f ? 'ok' : k === f && f > 0 && f < 8 ? 'cur' : '') + '"></i>';
+    return s + '</div>';
+  }).join('') + '</div>';
+}
+
+const TAG = 'Курсы с объяснением «почему» и проекты как на работе';
+const FEAT = 'Короткие уроки · анимации механики · выводы получены запуском · повторения · правки ИИ-агентов';
+let html;
+if (size === 'social' && kind === 'chain') {
+  html = '<div class="b dark social"><div><div class="mark">' + logo(70) + 'Citadel</div><p class="tag">' + TAG + '</p></div>' +
+    '<div>' + chain(7, 190, 92, 20, 44, METALS, '#111418') + '</div>' +
+    '<div class="foot"><p class="feat">Короткие уроки, анимации, повторения, правки ИИ-агентов</p><span class="stack">Go · SQLite</span></div></div>';
+} else if (size === 'social') {
+  html = '<div class="b light social steps">' + bars() + '<div><div class="mark">' + logo(70) + 'Citadel</div></div>' +
+    '<div><p class="tag">' + TAG + '</p><p class="feat" style="margin-top:22px;max-width:900px">Получаешь задачу, разбираешься сам, пишешь код сам. Уроки открываешь, когда они нужны для задачи.</p></div>' +
+    '<div class="foot"><span class="stack">Go · PostgreSQL · Redis · Kafka</span></div></div>';
+} else if (kind === 'chain') {
+  html = '<div class="b dark readme"><div><div class="mark">' + logo(54) + 'Citadel</div><p class="tag">' + TAG + '</p></div>' +
+    '<div>' + chain(4, 136, 68, 16, 32, METALS, '#111418') + '</div></div>';
+} else {
+  html = '<div class="b light readme"><div><div class="mark">' + logo(54) + 'Citadel</div><p class="tag">' + TAG + '</p></div>' + bars() + '</div>';
+}
+document.getElementById('root').innerHTML = html;
+</script>
+</body>
+</html>

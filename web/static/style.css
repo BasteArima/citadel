@@ -57,6 +57,8 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
+/* с body в высоту окна шапка уезжала бы на длинных страницах: она прилипает только в пределах родителя */
+body:has(> .top) { height: auto; min-height: 100%; }
 /* место под полосу прокрутки есть всегда: иначе на длинных страницах шапка сдвигается влево */
 html { scrollbar-gutter: stable; }
 body { margin: 0; background: var(--bg); color: var(--txt); font: 16px/1.7 var(--body); }

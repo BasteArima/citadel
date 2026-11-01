@@ -34,7 +34,7 @@ function render() {
         '<div><h1>' + esc(user.name) + '</h1><p class="site-sub">' + (user.role === 'admin' ? 'Ученик и админ' : 'Ученик') + '</p></div></div>' +
       chain(forged, forging) +
       '<div class="stats">' +
-        stat('Уроков пройдено', sum((c) => c.done)) +
+        stat('Уроков пройдено', sum((c) => (c.type === 'project' ? 0 : c.done))) +
         stat('Частей закрыто', sum((c) => c.parts)) +
         stat('Вопросов отвечено', answered) +
         stat('Первых ответов верно', answered ? Math.round(right / answered * 100) + '%' : '—') +
@@ -112,7 +112,7 @@ function chain(forged, forging) {
       const st = courseState(c);
       return '<a class="chain-card metal-' + esc(c.metal) + '" href="/c/' + encodeURIComponent(c.id) + '/">' +
         '<small>' + esc(metalName(c.metal)) + ' · ' + ({ done: 'выковано', active: 'куётся', new: 'не начато' }[st]) + '</small>' +
-        '<b>' + esc(c.title) + '</b><span>' + c.done + ' из ' + c.lessons + ' ' + plural(c.lessons, 'урока', 'уроков', 'уроков') + '</span></a>';
+        '<b>' + esc(c.title) + '</b><span>' + c.done + ' из ' + c.lessons + ' ' + (c.type === 'project' ? plural(c.lessons, 'шага', 'шагов', 'шагов') : plural(c.lessons, 'урока', 'уроков', 'уроков')) + '</span></a>';
     }).join('') +
     '<div class="chain-card slot">Следующие звенья появятся с новыми курсами</div></div>' +
   '</section>';

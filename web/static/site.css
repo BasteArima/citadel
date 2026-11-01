@@ -150,7 +150,7 @@
 .pj-rule b { display: block; margin-bottom: 4px; font-size: 15px; font-weight: 600; color: var(--txt); }
 
 .pj-layout { display: flex; align-items: stretch; min-height: calc(100vh - var(--top-h)); }
-.pj-side { flex: 0 0 290px; min-width: 0; padding: 20px 14px; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+.pj-side { position: sticky; top: var(--top-h); align-self: flex-start; height: calc(100vh - var(--top-h)); overflow-y: auto; flex: 0 0 290px; min-width: 0; padding: 20px 14px; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
 .pj-back { padding: 0 8px; font-size: 14px; text-decoration: none; }
 .pj-side-h { padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
 .pj-side-h b { font-size: 17px; font-weight: 600; line-height: 1.3; }
