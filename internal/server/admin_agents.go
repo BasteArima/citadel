@@ -17,6 +17,7 @@ func (s *server) adminAgentRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/admin/tokens", s.admin(s.adminTokens))
 	mux.Handle("POST /api/admin/tokens", s.admin(s.adminCreateToken))
 	mux.Handle("POST /api/admin/tokens/{id}/revoke", s.admin(s.adminRevokeToken))
+	mux.Handle("DELETE /api/admin/tokens/{id}", s.admin(s.adminDeleteToken))
 	mux.Handle("GET /api/admin/proposals", s.admin(s.adminProposals))
 	mux.Handle("GET /api/admin/proposals/{id}", s.admin(s.adminProposal))
 	mux.Handle("POST /api/admin/proposals/{id}/accept", s.admin(s.adminAccept))
@@ -75,6 +76,24 @@ func (s *server) adminRevokeToken(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Info("token revoked", "id", id, "by", userFrom(r.Context()).Name)
 	writeValue(w, map[string]any{"revoked": id})
+}
+
+func (s *server) adminDeleteToken(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "bad id")
+		return
+	}
+	err = s.cfg.Store.DeleteToken(r.Context(), id)
+	if errors.Is(err, store.ErrConflict) {
+		jsonError(w, http.StatusConflict, "сначала отзови токен и реши все его правки")
+		return
+	}
+	if s.notFound(w, err, "delete token") {
+		return
+	}
+	s.log.Info("token deleted", "id", id, "by", userFrom(r.Context()).Name)
+	writeValue(w, map[string]any{"deleted": id})
 }
 
 func (s *server) adminProposals(w http.ResponseWriter, r *http.Request) {

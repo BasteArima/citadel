@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -124,6 +125,40 @@ func (s *Store) RevokeToken(ctx context.Context, id int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// DeleteToken removes a revoked token and its decided proposals. A token that still works, or has
+// proposals waiting for a decision, is a conflict: nothing is lost silently.
+func (s *Store) DeleteToken(ctx context.Context, id int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var revoked sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT revoked_at FROM tokens WHERE id = ?`, id).Scan(&revoked); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if !revoked.Valid || revoked.String == "" {
+		return fmt.Errorf("token is not revoked: %w", ErrConflict)
+	}
+	var pending int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM proposals WHERE token_id = ? AND status = ?`, id, ProposalPending).Scan(&pending); err != nil {
+		return err
+	}
+	if pending > 0 {
+		return fmt.Errorf("token has proposals waiting for a decision: %w", ErrConflict)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM proposals WHERE token_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM tokens WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Proposal statuses.

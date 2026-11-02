@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 
@@ -46,6 +48,7 @@ func (s *server) adminRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /admin", s.page(s.adminPage))
 	mux.Handle("GET /api/admin/courses", s.admin(s.adminCourses))
 	mux.Handle("POST /api/admin/courses", s.admin(s.adminCreate))
+	mux.Handle("DELETE /api/admin/courses/{id}", s.admin(s.adminDeleteCourse))
 	mux.Handle("POST /api/admin/import", s.admin(s.adminImport))
 	mux.Handle("POST /api/admin/check", s.admin(s.adminCheck))
 	mux.Handle("GET /api/admin/courses/{id}/draft", s.admin(s.adminDraft))
@@ -158,6 +161,23 @@ func (s *server) adminCreate(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("course created", "id", c.ID, "by", userFrom(r.Context()).Name)
 	s.reloadOrLog(r.Context())
 	writeValue(w, map[string]any{"id": c.ID, "version": 1})
+}
+
+// adminDeleteCourse removes a course for everyone, with its history, progress and recordings.
+func (s *server) adminDeleteCourse(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	s.audio.stop(id)
+	if err := s.cfg.Store.DeleteCourse(r.Context(), id); s.notFound(w, err, "delete course") {
+		return
+	}
+	if s.cfg.AudioDir != "" && filepath.Base(id) == id {
+		if err := os.RemoveAll(filepath.Join(s.cfg.AudioDir, id)); err != nil {
+			s.log.Error("delete recordings", "course", id, "err", err)
+		}
+	}
+	s.reloadOrLog(r.Context())
+	s.log.Info("course deleted", "id", id, "by", userFrom(r.Context()).Name)
+	writeValue(w, map[string]any{"deleted": id})
 }
 
 // adminImport takes a whole course JSON: a new course, or a new draft version of an existing one.

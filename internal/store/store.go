@@ -134,6 +134,11 @@ var migrations = []string{
 		made_at   TEXT NOT NULL,
 		PRIMARY KEY (course_id, node)
 	);`,
+	// A deleted course must not come back from content/ at the next start.
+	`CREATE TABLE deleted_courses (
+		id         TEXT PRIMARY KEY,
+		deleted_at TEXT NOT NULL
+	);`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

@@ -109,6 +109,15 @@ type audioJobs struct {
 	jobs map[string]*audioJob
 }
 
+// stop cancels the running job of a course, if there is one.
+func (j *audioJobs) stop(id string) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if job := j.jobs[id]; job != nil && job.Running && job.cancel != nil {
+		job.cancel()
+	}
+}
+
 func (j *audioJobs) get(id string) audioJob {
 	j.mu.Lock()
 	defer j.mu.Unlock()

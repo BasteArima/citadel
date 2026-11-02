@@ -7,7 +7,7 @@
 //   #/c/<курс>/versions/<v>  версии и разница
 //   #/users                  пользователи
 //   #/agents                 правки агентов (этап 6)
-import { req, esc, h, when, plural, toast, dialog, linkIcon, checkPill, AREAS, areaOf, METALS } from './ui.js';
+import { req, esc, h, when, plural, toast, dialog, confirmDialog, linkIcon, checkPill, AREAS, areaOf, METALS } from './ui.js';
 import { draft, openDraft, onDraft, save, publishFlow } from './draft.js';
 import { renderEditor } from './editor.js';
 import { renderQuestions } from './questions.js';
@@ -122,7 +122,7 @@ async function loadCourses() {
       '<td class="ad-mut">' + esc(when(c.latest.createdAt)) + ' · ' + esc(authorName(c.latest.author)) + '</td>' +
       '<td>' + (c.agents ? '<a class="ad-pill acc" href="#/agents">' + c.agents + ' ' + plural(c.agents, 'ждёт', 'ждут', 'ждут') + '</a>' : '<span class="ad-mut">—</span>') + '</td>' +
       '<td><button type="button" class="ad-linkbtn ad-ck" aria-label="Проверка ' + esc(c.title) + '">' + checkPill(c.check) + '</button></td>' +
-      '<td class="ad-r"><a class="btn" href="#/c/' + esc(c.id) + '/edit">Открыть</a></td></tr>';
+      '<td class="ad-r"><a class="btn" href="#/c/' + esc(c.id) + '/edit">Открыть</a> <button type="button" class="btn ad-danger ad-del">Удалить</button></td></tr>';
   }).join('');
   rows.querySelectorAll('.ad-access').forEach((sel) => sel.addEventListener('change', async () => {
     const id = sel.closest('tr').dataset.id;
@@ -131,6 +131,17 @@ async function loadCourses() {
     const c = courses.find((x) => x.id === id);
     if (c) c.access = sel.value;
     toast(sel.value === 'private' ? 'Курс виден только админам и тем, кому выдан доступ — в «Пользователях»' : 'Курс виден всем, кто вошёл', 'good');
+  }));
+  rows.querySelectorAll('.ad-del').forEach((b) => b.addEventListener('click', async () => {
+    const id = b.closest('tr').dataset.id, c = courses.find((x) => x.id === id);
+    const text = 'Удалятся все версии курса, прогресс и карточки всех учеников, правки агентов и записи озвучки. Отменить это нельзя. Файл курса на диске не удаляется и обратно курс сам не вернётся: только через «Импорт JSON».';
+    if (!(await confirmDialog('Удалить курс «' + (c ? c.title : id) + '»?', text, 'Удалить навсегда', true))) return;
+    const r2 = await req('DELETE', '/api/admin/courses/' + encodeURIComponent(id));
+    if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); return; }
+    toast('Курс удалён', 'good');
+    try { localStorage.removeItem(LAST); } catch (e) { /* без хранилища */ }
+    location.hash = '#/';
+    location.reload();
   }));
   rows.querySelectorAll('.ad-ck').forEach((b) => b.addEventListener('click', () => {
     selectedCheck = b.closest('tr').dataset.id;

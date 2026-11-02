@@ -9,7 +9,7 @@ export function renderVersions(main, selected, courseBar) {
   const { off } = courseBar(main, '<a href="#/c/' + esc(draft.id) + '/edit">' + esc(c.title) + '</a> / <strong>Версии</strong>');
   const page = h('div', 'ad-page');
   main.appendChild(page);
-  page.innerHTML = '<div class="ad-head"><div><span class="ad-sub">' + esc(c.title) + '</span><h1>Версии</h1></div><div class="ad-acts" id="v-acts"></div></div>' +
+  page.innerHTML = '<div class="ad-head"><div><span class="ad-sub">' + esc(c.title) + '</span><h1>Версии</h1><p class="ad-sub">История курса: каждое сохранение и каждая принятая правка становятся новой версией. Здесь можно посмотреть, что менялось, и вернуться к старой версии. В обычной работе эта страница не нужна: это страховка, если что-то сломалось.</p></div><div class="ad-acts" id="v-acts"></div></div>' +
     '<div class="ad-split v-split"><section class="ad-card v-hist" aria-label="История"><div class="lbl v-hh">История</div><ul id="v-list"><li class="ad-pad">Загружаю…</li></ul></section>' +
     '<section class="v-diff" aria-label="Разница" id="v-diff"></section></div>';
   let list = [];

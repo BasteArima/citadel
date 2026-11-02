@@ -136,6 +136,27 @@ func TestProject(t *testing.T) {
 		t.Fatalf("after reopening: %+v", o)
 	}
 
+	// a deleted course is gone with its progress and does not come back from content/
+	if resp, body := do(t, student, "DELETE", ts.URL+"/api/admin/courses/shop", ""); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("student deletes a course: %d %s", resp.StatusCode, body)
+	}
+	defer func() {
+		if resp, body := do(t, admin, "DELETE", ts.URL+"/api/admin/courses/shop", ""); resp.StatusCode != http.StatusOK {
+			t.Fatalf("delete: %d %s", resp.StatusCode, body)
+		}
+		if resp, _ := do(t, admin, "GET", ts.URL+"/p/shop/", ""); resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("deleted project page: %d", resp.StatusCode)
+		}
+		left, err := st.Progress(ctx, 1, "shop")
+		if err != nil || len(left) != 0 {
+			t.Fatalf("progress left: %v %v", left, err)
+		}
+		imported, err := st.ImportContent(ctx, []*course.Course{project})
+		if err != nil || !imported[0].Deleted {
+			t.Fatalf("deleted course came back: %+v %v", imported, err)
+		}
+	}()
+
 	// search numbers steps by level
 	if _, body := do(t, admin, "GET", ts.URL+"/api/search?q=%D0%91&course=shop", ""); !strings.Contains(body, "Шаг 1.2") && !strings.Contains(body, "Урок 1.2") {
 		t.Fatalf("search: %s", body)

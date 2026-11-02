@@ -331,3 +331,28 @@ func TestCourseAccess(t *testing.T) {
 		t.Fatalf("unknown user: %v", err)
 	}
 }
+
+func TestDeleteToken(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "citadel.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	tok, _, err := s.CreateToken(ctx, Token{Name: "agent", CreatedBy: "Baste", CanPropose: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteToken(ctx, tok.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("delete a working token: %v", err)
+	}
+	if err := s.RevokeToken(ctx, tok.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteToken(ctx, tok.ID); err != nil {
+		t.Fatalf("delete a revoked token: %v", err)
+	}
+	if err := s.DeleteToken(ctx, tok.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("delete twice: %v", err)
+	}
+}

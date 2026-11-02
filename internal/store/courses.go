@@ -29,6 +29,7 @@ type Imported struct {
 	Version int  // the published version after import
 	New     bool // a new version was stored
 	Skipped bool // the course was edited in the editor, so content/ no longer overrides it
+	Deleted bool // an admin deleted the course, so content/ does not bring it back
 }
 
 // ImportContent stores each course from content/ as a new published version when its JSON
@@ -68,6 +69,10 @@ func (s *Store) importOne(ctx context.Context, c *course.Course, data []byte, ha
 	err = tx.QueryRowContext(ctx, `SELECT version, hash, author FROM course_versions WHERE course_id = ? ORDER BY version DESC LIMIT 1`, id).Scan(&last, &lastHash, &lastAuthor)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
+		var gone string
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM deleted_courses WHERE id = ?`, id).Scan(&gone); err == nil {
+			return Imported{ID: id, Deleted: true}, tx.Commit()
+		}
 		// a new project stays closed until an admin opens it: its tasks are still being tried out (decision 0016)
 		access := AccessPublic
 		if c.IsProject() {
@@ -232,7 +237,36 @@ func (s *Store) CreateCourse(ctx context.Context, id string, data []byte, author
 	if _, err := tx.ExecContext(ctx, `INSERT INTO courses (id, created_at) VALUES (?, ?)`, id, now()); err != nil {
 		return fmt.Errorf("course %s already exists: %w", id, ErrConflict)
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM deleted_courses WHERE id = ?`, id); err != nil {
+		return err
+	}
 	if err := insertVersion(ctx, tx, id, 1, data, author, "новый курс"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// DeleteCourse removes a course with everything that belongs to it: versions, access, progress of
+// all users, proposals and narration records. The files of the recordings are the caller's.
+func (s *Store) DeleteCourse(ctx context.Context, id string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, table := range []string{"course_versions", "course_access", "audio", "progress", "proposals"} {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE course_id = ?`, id); err != nil {
+			return err
+		}
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM courses WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO deleted_courses (id, deleted_at) VALUES (?, ?)`, id, now()); err != nil {
 		return err
 	}
 	return tx.Commit()

@@ -1,8 +1,11 @@
 // Агенты в админке: токены (выпустить, подключить одной командой, отозвать) и очередь правок.
 // Агент не публикует: принятая правка становится версией черновика, публикует админ (решение 0003).
-import { esc, h, req, toast, when, plural, dialog, confirmDialog, AREAS, areaOf } from './ui.js';
+import { esc, h, req, toast, when, plural, walk, dialog, confirmDialog, AREAS, areaOf } from './ui.js';
 import { diffCourses, renderDiff, words } from './versions.js';
 import { loadSpecs } from './blocks.js';
+import { renderBlock } from '../engine/blocks/index.js';
+import { indexCourse } from '../engine/course.js';
+import { initRich, rich } from '../engine/rich.js';
 
 const STATUS = { pending: ['acc', 'ждёт'], accepted: ['good', 'принята'], rejected: ['', 'отклонена'], invalid: ['bad', 'ошибка схемы'] };
 
@@ -63,7 +66,14 @@ export function renderTokens(box, courses) {
       '<td>' + (t.courses.length ? t.courses.map((c) => esc(title(c))).join(', ') : 'все') + '</td>' +
       '<td><code class="tk-mask">cit_••••' + esc(t.tail) + '</code></td>' +
       '<td class="ad-mut">' + esc(t.lastUsedAt ? when(t.lastUsedAt) : 'ещё не использован') + '</td>' +
-      '<td class="ad-r">' + (t.revokedAt ? '<span class="ad-pill">отозван</span>' : '<button type="button" class="btn ad-danger" data-revoke="' + t.id + '" data-name="' + esc(t.name) + '">Отозвать</button>') + '</td></tr>').join('');
+      '<td class="ad-r">' + (t.revokedAt ? '<span class="ad-pill">отозван</span> <button type="button" class="btn ad-danger" data-del="' + t.id + '" data-name="' + esc(t.name) + '">Удалить</button>' : '<button type="button" class="btn ad-danger" data-revoke="' + t.id + '" data-name="' + esc(t.name) + '">Отозвать</button>') + '</td></tr>').join('');
+    rows.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+      if (!(await confirmDialog('Удалить токен «' + b.dataset.name + '»?', 'Вместе с ним из списка исчезнут его решённые правки. Изменения, уже принятые в курс, останутся.', 'Удалить', true))) return;
+      const r2 = await req('DELETE', '/api/admin/tokens/' + b.dataset.del);
+      if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); return; }
+      toast('Токен удалён', 'good');
+      loadTokens();
+    }));
     rows.querySelectorAll('[data-revoke]').forEach((b) => b.addEventListener('click', async () => {
       if (!(await confirmDialog('Отозвать токен «' + b.dataset.name + '»?', 'Агент с этим токеном сразу потеряет доступ. Его правки останутся в очереди.', 'Отозвать', true))) return;
       const r2 = await req('POST', '/api/admin/tokens/' + b.dataset.revoke + '/revoke', {});
@@ -136,7 +146,8 @@ function facts(t) {
 export function renderAgents(main, selected, onDecided) {
   const page = h('div', 'ad-page');
   main.appendChild(page);
-  page.innerHTML = '<div><h1>Правки агентов</h1><p class="ad-sub">Агенты не публикуют. Принятая правка попадает в черновик курса, публикуешь ты.</p></div>' +
+  page.innerHTML = '<div><h1>Правки агентов</h1><p class="ad-sub">Здесь решаешь ты. ИИ-агент присылает изменение курса, но сам ничего менять не может.</p>' +
+    '<ol class="ag-steps"><li><b>Прочитай</b> правку так, как её увидит ученик.</li><li><b>Прими или отклони.</b> Принятая правка попадает в черновик, ученики её пока не видят.</li><li><b>Опубликуй</b> черновик, и правка появится у учеников.</li></ol></div>' +
     '<div class="ad-split ag-split"><section class="ad-card ag-queue" aria-label="Очередь"><div class="lbl v-hh ag-qh"><span>Очередь</span><span id="ag-n"></span></div><ul id="ag-list"><li class="ad-pad">Загружаю…</li></ul></section>' +
     '<section class="ag-detail" id="ag-detail" aria-label="Правка"></section></div>';
   let list = [];
@@ -201,8 +212,12 @@ export function renderAgents(main, selected, onDecided) {
     box.appendChild(checks);
     box.appendChild(runsCard(p));
 
+    box.appendChild(previewCard(after, p));
+    const techBox = h('details', 'ad-card ag-tech');
+    techBox.innerHTML = '<summary>Все изменения подробно: поля и блоки</summary>';
+    box.appendChild(techBox);
     const diffBox = h('div', 'ag-diff');
-    box.appendChild(diffBox);
+    techBox.appendChild(diffBox);
     if (p.newCourse) {
       diffBox.innerHTML = '<div class="ad-card v-sum"><strong>Новый курс «' + esc(after.title) + '»</strong><span class="ad-sp"></span><span class="ad-pill">' + esc(after.id) + '</span></div>';
       renderDiff(diffBox, diffCourses({ root: [], glossary: {} }, after), '');
@@ -217,7 +232,7 @@ export function renderAgents(main, selected, onDecided) {
 
     const act = h('div', 'ad-card ag-act');
     if (open) {
-      act.innerHTML = '<div class="ad-f"><label for="ag-cm">Комментарий агенту · если отклоняешь</label><textarea id="ag-cm" rows="2"></textarea></div>' +
+      act.innerHTML = '<div class="ad-f"><label for="ag-cm">Что исправить · нужно, только если отклоняешь</label><textarea id="ag-cm" rows="2"></textarea></div>' +
         '<div class="ad-row"><button type="button" class="btn pri" id="ag-ok"' + (p.status === 'invalid' ? ' disabled title="Правку с ошибкой схемы принять нельзя"' : '') + '>Принять в черновик</button>' +
         '<button type="button" class="btn" id="ag-no">Отклонить</button><span class="ad-sp"></span>' +
         (p.newCourse ? '' : '<a class="btn" href="#/c/' + esc(p.course) + '/versions">Сравнить с публикацией</a>') + '</div>' +
@@ -249,6 +264,47 @@ export function renderAgents(main, selected, onDecided) {
     }
     box.appendChild(act);
   }
+}
+
+// Правка глазами ученика: узлы, которые она добавила или изменила, нарисованные движком.
+function changedNodes(course, p) {
+  const ids = new Set();
+  const take = (node) => { ids.add(node.id); (node.children || []).forEach(take); };
+  (Array.isArray(p.changes) ? p.changes : []).forEach((c) => { if (c.op === 'put_node' && c.node) take(c.node); });
+  const out = [];
+  walk(course.root, (n) => { if (ids.has(n.id) && (n.blocks || []).length) out.push(n); });
+  return out;
+}
+
+function previewCard(course, p) {
+  const card = h('section', 'ad-card ag-preview');
+  const nodes = changedNodes(course, p);
+  if (!nodes.length) {
+    card.innerHTML = '<span class="lbl">Как увидит ученик</span><p class="ad-small ad-mut">В этой правке нет текста урока: смотри подробные изменения ниже.</p>';
+    return card;
+  }
+  card.innerHTML = '<span class="lbl">Как увидит ученик · ' + nodes.length + ' ' + plural(nodes.length, 'часть', 'части', 'частей') + '</span>';
+  const page = h('div', 'ed-page');
+  page.id = 'page';
+  card.appendChild(page);
+  initRich(indexCourse(course));
+  const ctx = { tool: course.tool || { name: '', version: '' }, csLabel: course.labels && course.labels.cs, label: 'Вопрос', store: { state: () => 0, answer() {} }, onSolve() {} };
+  nodes.forEach((n, k) => {
+    const part = h('details', 'ag-part');
+    part.open = k === 0;
+    part.innerHTML = '<summary>' + esc(n.title) + '</summary>';
+    if (n.lead) part.appendChild(h('p', 'lead', rich(n.lead)));
+    n.blocks.forEach((b, i) => {
+      try {
+        const bctx = b.type === 'hands' ? Object.assign({}, ctx, { store: () => ctx.store }) : Object.assign({}, ctx, { label: 'Вопрос ' + (i + 1) });
+        part.appendChild(renderBlock(b, bctx));
+      } catch (e) {
+        part.appendChild(h('div', 'callout warn', '<b>Блок ' + (i + 1) + ' не рисуется</b>' + esc(e.message)));
+      }
+    });
+    page.appendChild(part);
+  });
+  return card;
 }
 
 // Запуск «Предскажи» на сервере (решение 0013): сервер прогоняет блоки, которые правка добавила

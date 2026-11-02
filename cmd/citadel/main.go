@@ -112,6 +112,10 @@ func serve(args []string) error {
 		return err
 	}
 	for _, im := range imported {
+		if im.Deleted {
+			log.Info("course file skipped: the course was deleted in the admin panel, import it there to bring it back", "id", im.ID)
+			continue
+		}
 		if im.Skipped {
 			log.Info("course file skipped: edited in the admin panel, import it there to update", "id", im.ID, "version", im.Version)
 			continue
