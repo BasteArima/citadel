@@ -334,7 +334,8 @@ details.import p { margin: 0; padding: 0 16px 12px; font-size: 14px; color: var(
 /* анимация: сцена на SVG, элементы переходят между состояниями шагов */
 .anim .kind { color: var(--blue); }
 .sc-wrap { overflow-x: auto; margin: 4px -4px 0; padding: 4px; }
-.sc-wrap svg { display: block; width: 100%; min-width: 560px; height: auto; }
+/* текст в SVG масштабируется вместе со сценой: границы считаем от её ширины, чтобы он оставался читаемым */
+.sc-wrap svg { display: block; width: 100%; min-width: calc(var(--sc-w) * .875px); max-width: calc(var(--sc-w) * 1.25px); margin-inline: auto; height: auto; }
 /* лигатуры JetBrains Mono превращают != в ≠ и -> в стрелку — в учебном коде это вводит в заблуждение */
 code, pre, .sc-box .s, .sc-tok text { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
 .sc-el { transition: transform .75s cubic-bezier(.45,.05,.25,1), opacity .45s ease; }
@@ -347,6 +348,7 @@ code, pre, .sc-box .s, .sc-tok text { font-variant-ligatures: none; font-feature
 .sc-box.ok rect  { fill: var(--good-soft); stroke: var(--good); }
 .sc-box.bad .s { fill: var(--rose); }
 .sc-box.ok .s { fill: var(--good); }
+.sc-box.dim { opacity: .5; }
 .sc-tok rect { fill: var(--acc-fill); transition: fill .4s; }
 .sc-tok text { fill: var(--acc-ink); font: 600 14px var(--mono); }
 .sc-tok.bad rect { fill: var(--rose); }
@@ -524,7 +526,7 @@ details.callout.cs[open] .cs-more { display: none; }
 .cs-b p:first-child { margin-top: 0; }
 
 .sc-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
-.sc-row .sc-wrap { flex: 999 1 460px; min-width: 0; }
+.sc-row .sc-wrap { flex: 999 1 calc(var(--sc-w) * .875px + 8px); min-width: 0; }
 .sc-side { flex: 1 1 200px; padding: 12px 14px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-size: 13.5px; }
 .sc-side-t { font-weight: 600; }
 .sc-side dl { margin: 8px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; }
@@ -535,6 +537,7 @@ details.callout.cs[open] .cs-more { display: none; }
 .sc-bars i { width: 18px; height: 4px; border-radius: 4px; background: var(--line-2); }
 .sc-bars i.on { background: var(--acc-fill); }
 .sc-hint { margin-top: 8px; font-size: 12.5px; color: var(--mut); }
+@media (hover: none) { .sc-hint { display: none; } }
 .widget.anim:focus { outline: none; }
 .widget.anim:focus-visible, .widget.anim:focus-within { border-color: var(--line-2); }
 .sc-ctl .btn { display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; }

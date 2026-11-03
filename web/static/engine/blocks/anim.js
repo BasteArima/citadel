@@ -22,6 +22,7 @@ export const anim = {
     w.innerHTML = '<div class="w-head"><div class="kind">Анимация</div><div class="w-title">' + rich(a.title) + '</div></div>';
     const body = el('div', 'w-body'); w.appendChild(body);
     const wrap = el('div', 'sc-wrap');
+    wrap.style.setProperty('--sc-w', a.w || 640);
     // карточка состояния сбоку: a.side = { title, rows: [[имя, значение, класс]] }, шаг может заменить rows
     let sideBox = null;
     if (a.side) {
