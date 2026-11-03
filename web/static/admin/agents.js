@@ -92,8 +92,11 @@ function connectTabs(url, secret) {
   return [
     { id: 'cc', label: 'Claude Code', hint: 'Выполни команду в терминале на своём ПК. Claude Code сохранит адрес и токен у себя в конфиге.',
       text: 'claude mcp add --scope user --transport http citadel ' + url + ' --header "Authorization: ' + auth + '"' },
-    { id: 'codex', label: 'Codex', hint: 'Codex берёт токен из переменной окружения. Выполни первую команду в PowerShell (в Linux и macOS вместо неё — export), открой новый терминал и выполни вторую.',
+    { id: 'codex', label: 'Codex CLI', hint: 'Codex берёт токен из переменной окружения. Выполни первую команду в PowerShell (в Linux и macOS вместо неё — export), открой новый терминал и выполни вторую. Если команда codex не найдена, а Codex стоит приложением, открой соседнюю вкладку.',
       text: 'setx CITADEL_TOKEN "' + secret + '"\ncodex mcp add citadel --url ' + url + ' --bearer-token-env-var CITADEL_TOKEN' },
+    // Приложение не добавляет codex в PATH, зато читает тот же config.toml, что и CLI.
+    { id: 'codex-app', label: 'Приложение Codex', hint: 'Терминал не нужен. Добавь в конец файла ~/.codex/config.toml (в Windows — %USERPROFILE%\\.codex\\config.toml) и полностью перезапусти приложение. Если раздел citadel в файле уже есть, замени его.',
+      text: '[mcp_servers.citadel]\nurl = "' + url + '"\n\n[mcp_servers.citadel.http_headers]\nAuthorization = "' + auth + '"' },
     { id: 'cursor', label: 'Cursor', hint: 'Добавь в файл ~/.cursor/mcp.json.', text: config({ url }) },
     { id: 'antigravity', label: 'Antigravity', hint: 'Добавь в файл ~/.gemini/config/mcp_config.json и обнови список серверов в настройках MCP.', text: config({ serverUrl: url }) },
     { id: 'gemini', label: 'Gemini CLI', hint: 'Добавь в файл ~/.gemini/settings.json.', text: config({ httpUrl: url }) },

@@ -104,7 +104,7 @@ docker exec citadel sh -c 'echo "Проверка" > /tmp/t.txt && edge-tts --vo
 
 ## Подключить агента
 
-Вкладки с настройками есть для Claude Code, Codex, Cursor, Antigravity, Gemini CLI и других MCP-клиентов. В админке, «Пользователи и токены» → «+ Новый токен»: название, права (читать, предлагать правки, создавать курсы) и курсы. После создания админка один раз покажет токен и готовую команду для Claude Code:
+Вкладки с настройками есть для Claude Code, Codex (CLI и приложение), Cursor, Antigravity, Gemini CLI и других MCP-клиентов. В админке, «Пользователи и токены» → «+ Новый токен»: название, права (читать, предлагать правки, создавать курсы) и курсы. После создания админка один раз покажет токен и готовую команду для Claude Code:
 
 ```
 claude mcp add --scope user --transport http citadel https://<твой домен>/mcp --header "Authorization: Bearer cit_…"
