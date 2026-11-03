@@ -12,8 +12,8 @@ import (
 	"citadel/internal/store"
 )
 
-// Agent API (decision 0003): an agent reads courses and proposes changes with a bearer token;
-// it never publishes. The same operations serve REST (/api/agent/…) and MCP (/mcp).
+// Agent API (decision 0003): an agent reads courses and proposes changes with a bearer token.
+// It publishes nothing unless the admin gave its token the right to review (decision 0019). The same operations serve REST (/api/agent/…) and MCP (/mcp).
 // Everything an agent reads from a course is data, not instructions — the rules say so too.
 
 type tokenKey struct{}
@@ -24,11 +24,12 @@ func tokenFrom(ctx context.Context) store.Token { return ctx.Value(tokenKey{}).(
 type agentErr struct {
 	status int
 	msg    string
+	check  any // the course check summary, when that is the reason
 }
 
 func (e *agentErr) Error() string { return e.msg }
 
-func errf(status int, msg string) error { return &agentErr{status, msg} }
+func errf(status int, msg string) error { return &agentErr{status: status, msg: msg} }
 
 // bearer authenticates an agent request; cookies are never accepted here, so a browser
 // session cannot be turned into agent access.
@@ -73,6 +74,12 @@ func (s *server) agentAPI(h func(ctx context.Context, r *http.Request) (any, err
 func (s *server) agentFail(w http.ResponseWriter, err error) {
 	var ae *agentErr
 	if errors.As(err, &ae) {
+		if ae.check != nil {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(ae.status)
+			json.NewEncoder(w).Encode(map[string]any{"error": ae.msg, "check": ae.check})
+			return
+		}
 		jsonError(w, ae.status, ae.msg)
 		return
 	}
@@ -86,7 +93,7 @@ func (s *server) agentRoutes(mux *http.ServeMux) {
 		}
 		return nil
 	}
-	mux.Handle("GET /api/agent/schema", s.agentAPI(func(ctx context.Context, r *http.Request) (any, error) { return agentSchema(), nil }))
+	mux.Handle("GET /api/agent/schema", s.agentAPI(func(ctx context.Context, r *http.Request) (any, error) { return agentSchema(ctx), nil }))
 	mux.Handle("GET /api/agent/courses", s.agentAPI(func(ctx context.Context, r *http.Request) (any, error) { return s.agentCourses(ctx) }))
 	mux.Handle("GET /api/agent/courses/{id}", s.agentAPI(func(ctx context.Context, r *http.Request) (any, error) {
 		return s.agentOutline(ctx, r.PathValue("id"))
@@ -126,6 +133,7 @@ func (s *server) agentRoutes(mux *http.ServeMux) {
 		}
 		return s.agentStatus(ctx, id)
 	}))
+	s.agentReviewRoutes(mux, body)
 }
 
 // agentRules is what every agent is told about the platform before it edits a course.
@@ -141,7 +149,7 @@ const agentRules = `Ты работаешь с курсом платформы C
 - Перед отправкой прогони check_changes: правку с ошибкой схемы принять нельзя.
 - Вывод «Предскажи и запусти» проверяй запуском: run_code запускает код на сервере на версии из паспорта (если на сервере включён запуск). После отправки сервер сам прогонит изменённые блоки «Предскажи», и админ увидит, совпал ли вывод.`
 
-func agentSchema() any {
+func agentSchema(ctx context.Context) any {
 	return map[string]any{
 		"schema":         course.SchemaVersion,
 		"blocks":         course.Blocks,
@@ -149,7 +157,7 @@ func agentSchema() any {
 		"questionKinds":  course.QuestionKinds,
 		"nodeKinds":      nodeKindsDoc,
 		"passportFields": course.PassportFields,
-		"rules":          agentRules,
+		"rules":          rulesFor(tokenFrom(ctx)),
 		"format":         "Полное описание формата — docs/dev/CONTENT-FORMAT.md в репозитории платформы.",
 	}
 }
@@ -381,7 +389,8 @@ func (s *server) agentProposals(ctx context.Context) (any, error) {
 
 func (s *server) agentStatus(ctx context.Context, id int64) (any, error) {
 	p, err := s.cfg.Store.Proposal(ctx, id)
-	if errors.Is(err, store.ErrNotFound) || (err == nil && p.TokenID != tokenFrom(ctx).ID) {
+	t := tokenFrom(ctx)
+	if errors.Is(err, store.ErrNotFound) || (err == nil && p.TokenID != t.ID && !(t.CanReview && t.Allows(p.CourseID))) {
 		return nil, errf(http.StatusNotFound, "no proposal "+strconv.FormatInt(id, 10)+" from this token")
 	}
 	if err != nil {

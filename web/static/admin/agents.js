@@ -1,5 +1,5 @@
 // Агенты в админке: токены (выпустить, подключить одной командой, отозвать) и очередь правок.
-// Агент не публикует: принятая правка становится версией черновика, публикует админ (решение 0003).
+// Принятая правка становится версией черновика. Принимает и публикует админ или агент с правом проверяющего (решения 0003, 0019).
 import { esc, h, req, toast, when, plural, walk, dialog, confirmDialog, AREAS, areaOf } from './ui.js';
 import { diffCourses, renderDiff, words } from './versions.js';
 import { loadSpecs } from './blocks.js';
@@ -17,7 +17,7 @@ export async function pendingCount() {
 // ── токены ──
 export function renderTokens(box, courses) {
   box.innerHTML = '<div class="ad-head"><div><h2 id="ad-tok-h">Токены агентов</h2>' +
-    '<p class="ad-sub">Для API и MCP. Агент может читать курсы и предлагать правки, публиковать — нет.</p></div>' +
+    '<p class="ad-sub">Для API и MCP. Агент может читать курсы и предлагать правки. Принимать чужие правки и публиковать может только токен, которому ты дал это право.</p></div>' +
     '<button type="button" class="btn pri" id="tk-new" aria-expanded="false">+ Новый токен</button></div>' +
     '<div id="tk-form"></div><div id="tk-made"></div>' +
     '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Название</th><th>Права</th><th>Курсы</th><th>Токен</th><th>Использован</th><th></th></tr></thead><tbody id="tk-rows"><tr><td colspan="6">Загружаю…</td></tr></tbody></table></div>';
@@ -32,11 +32,12 @@ export function renderTokens(box, courses) {
       '<fieldset class="tk-rights"><legend>Права</legend>' +
       '<label class="ad-check-l"><input type="checkbox" checked disabled> Читать</label>' +
       '<label class="ad-check-l"><input type="checkbox" id="tk-propose" checked> Предлагать правки</label>' +
-      '<label class="ad-check-l"><input type="checkbox" id="tk-create"> Создавать курсы</label></fieldset>' +
+      '<label class="ad-check-l"><input type="checkbox" id="tk-create"> Создавать курсы</label>' +
+      '<label class="ad-check-l"><input type="checkbox" id="tk-review"> Принимать чужие правки и публиковать</label></fieldset>' +
       '<div class="ad-f"><label for="tk-courses">Курсы</label><select id="tk-courses"><option value="">Все курсы</option>' +
       courses.map((c) => '<option value="' + esc(c.id) + '">' + esc(c.title || c.id) + '</option>').join('') + '</select></div>' +
       '<button type="submit" class="btn pri">Создать</button>' +
-      '<p class="ad-small ad-mut tk-note">Новый курс от агента тоже появляется черновиком: публикуешь его ты. В базе хранится только хеш токена.</p>';
+      '<p class="ad-small ad-mut tk-note">Новый курс от агента принимаешь только ты. Свою правку агент принять не может. В базе хранится только хеш токена.</p>';
     formBox.appendChild(f);
     const create = f.querySelector('#tk-create'), propose = f.querySelector('#tk-propose');
     create.addEventListener('change', () => { if (create.checked) propose.checked = true; });
@@ -45,7 +46,7 @@ export function renderTokens(box, courses) {
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       const sel = f.querySelector('#tk-courses').value;
-      const r = await req('POST', '/api/admin/tokens', { name: f.querySelector('#tk-name').value, propose: propose.checked, create: create.checked, courses: sel ? [sel] : [] });
+      const r = await req('POST', '/api/admin/tokens', { name: f.querySelector('#tk-name').value, propose: propose.checked, create: create.checked, review: f.querySelector('#tk-review').checked, courses: sel ? [sel] : [] });
       if (!r.ok) { toast(r.data.error || 'Ошибка ' + r.status, 'bad'); return; }
       formBox.innerHTML = '';
       btn.setAttribute('aria-expanded', 'false');
@@ -62,11 +63,19 @@ export function renderTokens(box, courses) {
     if (!r.data.length) { rows.innerHTML = '<tr><td colspan="6">Токенов пока нет. Выпусти первый — и подключи агента одной командой.</td></tr>'; return; }
     const title = (id) => { const c = courses.find((x) => x.id === id); return c ? c.title : id; };
     rows.innerHTML = r.data.map((t) => '<tr' + (t.revokedAt ? ' class="tk-off"' : '') + '><td><strong>' + esc(t.name) + '</strong><br><span class="ad-small ad-mut">выпустил ' + esc(t.createdBy) + ', ' + esc(when(t.createdAt)) + '</span></td>' +
-      '<td><span class="tk-pills"><span class="ad-pill">читать</span>' + (t.canPropose ? '<span class="ad-pill acc">предлагать</span>' : '') + (t.canCreate ? '<span class="ad-pill agent">создавать курсы</span>' : '') + '</span></td>' +
+      '<td><span class="tk-pills"><span class="ad-pill">читать</span>' + (t.canPropose ? '<span class="ad-pill acc">предлагать</span>' : '') + (t.canCreate ? '<span class="ad-pill agent">создавать курсы</span>' : '') + (t.canReview ? '<span class="ad-pill agent">принимать и публиковать</span>' : '') + '</span></td>' +
       '<td>' + (t.courses.length ? t.courses.map((c) => esc(title(c))).join(', ') : 'все') + '</td>' +
       '<td><code class="tk-mask">cit_••••' + esc(t.tail) + '</code></td>' +
       '<td class="ad-mut">' + esc(t.lastUsedAt ? when(t.lastUsedAt) : 'ещё не использован') + '</td>' +
-      '<td class="ad-r">' + (t.revokedAt ? '<span class="ad-pill">отозван</span> <button type="button" class="btn ad-danger" data-del="' + t.id + '" data-name="' + esc(t.name) + '">Удалить</button>' : '<button type="button" class="btn ad-danger" data-revoke="' + t.id + '" data-name="' + esc(t.name) + '">Отозвать</button>') + '</td></tr>').join('');
+      '<td class="ad-r">' + (t.revokedAt ? '<span class="ad-pill">отозван</span> <button type="button" class="btn ad-danger" data-del="' + t.id + '" data-name="' + esc(t.name) + '">Удалить</button>' : '<button type="button" class="btn" data-review="' + t.id + '" data-on="' + (t.canReview ? '1' : '') + '" data-name="' + esc(t.name) + '">' + (t.canReview ? 'Снять право принимать' : 'Дать право принимать') + '</button> <button type="button" class="btn ad-danger" data-revoke="' + t.id + '" data-name="' + esc(t.name) + '">Отозвать</button>') + '</td></tr>').join('');
+    rows.querySelectorAll('[data-review]').forEach((b) => b.addEventListener('click', async () => {
+      const on = !b.dataset.on;
+      if (on && !(await confirmDialog('Дать токену «' + b.dataset.name + '» право принимать?', 'Агент сможет принимать и отклонять чужие правки и публиковать версии курсов: ученики увидят их сразу. Свою правку и новый курс он принять не сможет. Право можно снять в любой момент.', 'Дать право'))) return;
+      const r2 = await req('POST', '/api/admin/tokens/' + b.dataset.review + '/review', { review: on });
+      if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); return; }
+      toast(on ? 'Право выдано' : 'Право снято', 'good');
+      loadTokens();
+    }));
     rows.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
       if (!(await confirmDialog('Удалить токен «' + b.dataset.name + '»?', 'Вместе с ним из списка исчезнут его решённые правки. Изменения, уже принятые в курс, останутся.', 'Удалить', true))) return;
       const r2 = await req('DELETE', '/api/admin/tokens/' + b.dataset.del);
@@ -117,7 +126,7 @@ function showConnect(box, token, secret) {
     '<div class="tk-tabs" role="tablist" aria-label="Агент">' + tabs.map((t) => '<button type="button" role="tab" aria-selected="false" data-t="' + t.id + '">' + esc(t.label) + '</button>').join('') + '</div>' +
     '<p class="ad-sub tk-hint"></p><div class="tk-cmd"><pre></pre><button type="button" class="btn" id="tk-copy">Скопировать</button></div>' +
     '<ul class="tk-facts"><li><strong>Что агент сможет</strong><br><span>' + facts(token) + '</span></li>' +
-    '<li><strong>Чего не сможет</strong><br><span>публиковать, видеть прогресс учеников, управлять токенами</span></li>' +
+    '<li><strong>Чего не сможет</strong><br><span>' + (token.canReview ? 'принимать свои правки и новые курсы' : 'публиковать') + ', видеть прогресс учеников, управлять токенами</span></li>' +
     '<li><strong>Токен виден один раз</strong><br><span>потерял — отзови и выпусти новый</span></li></ul>';
   box.appendChild(s);
   const pre = s.querySelector('pre');
@@ -142,14 +151,15 @@ function facts(t) {
   const can = ['читать курсы и схему блоков'];
   if (t.canPropose) can.push('предлагать правки');
   if (t.canCreate) can.push('создавать курсы');
-  return can.join(', ') + (t.canPropose ? ' — всё черновиками' : '') + (t.courses.length ? '; только ' + t.courses.join(', ') : '');
+  const own = can.join(', ') + (t.canPropose ? ' — всё черновиками' : '');
+  return own + (t.canReview ? ', принимать чужие правки и публиковать' : '') + (t.courses.length ? '; только ' + t.courses.join(', ') : '');
 }
 
 // ── очередь правок ──
 export function renderAgents(main, selected, onDecided) {
   const page = h('div', 'ad-page');
   main.appendChild(page);
-  page.innerHTML = '<div><h1>Правки агентов</h1><p class="ad-sub">Здесь решаешь ты. ИИ-агент присылает изменение курса, но сам ничего менять не может.</p>' +
+  page.innerHTML = '<div><h1>Правки агентов</h1><p class="ad-sub">Здесь решаешь ты или агент, которому ты дал право принимать. Автор не может принять свою правку.</p>' +
     '<ol class="ag-steps"><li><b>Прочитай</b> правку так, как её увидит ученик.</li><li><b>Прими или отклони.</b> Принятая правка попадает в черновик, ученики её пока не видят.</li><li><b>Опубликуй</b> черновик, и правка появится у учеников.</li></ol></div>' +
     '<div class="ad-split ag-split"><section class="ad-card ag-queue" aria-label="Очередь"><div class="lbl v-hh ag-qh"><span>Очередь</span><span id="ag-n"></span></div><ul id="ag-list"><li class="ad-pad">Загружаю…</li></ul></section>' +
     '<section class="ag-detail" id="ag-detail" aria-label="Правка"></section></div>';

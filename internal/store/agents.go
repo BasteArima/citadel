@@ -29,7 +29,8 @@ type Token struct {
 	Tail       string   `json:"tail"` // last characters, to tell tokens apart
 	CanPropose bool     `json:"canPropose"`
 	CanCreate  bool     `json:"canCreate"`
-	Courses    []string `json:"courses"` // empty — all courses
+	CanReview  bool     `json:"canReview"` // may decide other agents' proposals and publish (decision 0019)
+	Courses    []string `json:"courses"`   // empty — all courses
 	CreatedBy  string   `json:"createdBy"`
 	CreatedAt  string   `json:"createdAt"`
 	LastUsedAt string   `json:"lastUsedAt"`
@@ -50,8 +51,8 @@ func (s *Store) CreateToken(ctx context.Context, t Token) (Token, string, error)
 	secret := TokenPrefix + base64.RawURLEncoding.EncodeToString(b)
 	t.Tail = secret[len(secret)-4:]
 	t.CreatedAt = now()
-	res, err := s.db.ExecContext(ctx, `INSERT INTO tokens (name, hash, tail, can_propose, can_create, courses, created_by, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, t.Name, tokenHash(secret), t.Tail, t.CanPropose, t.CanCreate, strings.Join(t.Courses, ","), t.CreatedBy, t.CreatedAt)
+	res, err := s.db.ExecContext(ctx, `INSERT INTO tokens (name, hash, tail, can_propose, can_create, can_review, courses, created_by, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, t.Name, tokenHash(secret), t.Tail, t.CanPropose, t.CanCreate, t.CanReview, strings.Join(t.Courses, ","), t.CreatedBy, t.CreatedAt)
 	if err != nil {
 		return Token{}, "", err
 	}
@@ -62,12 +63,12 @@ func (s *Store) CreateToken(ctx context.Context, t Token) (Token, string, error)
 	return t, secret, nil
 }
 
-const tokenCols = `id, name, tail, can_propose, can_create, courses, created_by, created_at, COALESCE(last_used_at, ''), COALESCE(revoked_at, '')`
+const tokenCols = `id, name, tail, can_propose, can_create, can_review, courses, created_by, created_at, COALESCE(last_used_at, ''), COALESCE(revoked_at, '')`
 
 func scanToken(sc interface{ Scan(...any) error }) (Token, error) {
 	var t Token
 	var courses string
-	err := sc.Scan(&t.ID, &t.Name, &t.Tail, &t.CanPropose, &t.CanCreate, &courses, &t.CreatedBy, &t.CreatedAt, &t.LastUsedAt, &t.RevokedAt)
+	err := sc.Scan(&t.ID, &t.Name, &t.Tail, &t.CanPropose, &t.CanCreate, &t.CanReview, &courses, &t.CreatedBy, &t.CreatedAt, &t.LastUsedAt, &t.RevokedAt)
 	t.Courses = []string{}
 	if courses != "" {
 		t.Courses = strings.Split(courses, ",")
@@ -118,6 +119,18 @@ func (s *Store) Tokens(ctx context.Context) ([]Token, error) {
 // RevokeToken makes a token unusable at once. Its proposals stay in the queue.
 func (s *Store) RevokeToken(ctx context.Context, id int64) error {
 	res, err := s.db.ExecContext(ctx, `UPDATE tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`, now(), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetTokenReview gives a live token the right to decide proposals and publish, or takes it away.
+func (s *Store) SetTokenReview(ctx context.Context, id int64, review bool) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE tokens SET can_review = ? WHERE id = ? AND revoked_at IS NULL`, review, id)
 	if err != nil {
 		return err
 	}

@@ -139,6 +139,8 @@ var migrations = []string{
 		id         TEXT PRIMARY KEY,
 		deleted_at TEXT NOT NULL
 	);`,
+	// a token that may decide other agents' proposals and publish (decision 0019)
+	`ALTER TABLE tokens ADD COLUMN can_review INTEGER NOT NULL DEFAULT 0;`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

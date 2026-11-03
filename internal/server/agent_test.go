@@ -164,6 +164,141 @@ func TestProposalFlow(t *testing.T) {
 	}
 }
 
+// TestAgentReview: the review right is off by default, only the admin gives it, and the author
+// never approves its own proposal.
+func TestAgentReview(t *testing.T) {
+	ts := newTestServer(t)
+	admin := signIn(t, ts, "Baste")
+	author := agentToken(t, ts.URL, admin, `{"name":"codex","propose":true}`)
+	reviewer := agentToken(t, ts.URL, admin, `{"name":"claude","propose":true,"review":true}`)
+	foreign := agentToken(t, ts.URL, admin, `{"name":"pg-review","review":true,"courses":["pg"]}`)
+	propose := func(secret, title string) string {
+		t.Helper()
+		changes := `[{"op":"put_node","node":{"id":"b","kind":"lesson","title":"` + title + `","blocks":[{"type":"text","html":"текст"}]}}]`
+		resp, body := doAgent(t, "POST", ts.URL+"/api/agent/proposals", secret, `{"course":"go","title":"`+title+`","changes":`+changes+`}`)
+		if resp.StatusCode != 200 {
+			t.Fatalf("propose: %d %s", resp.StatusCode, body)
+		}
+		var v struct{ ID int }
+		json.Unmarshal([]byte(body), &v)
+		return strconv.Itoa(v.ID)
+	}
+	id := propose(author, "Б1")
+	accept := func(secret, id string) int {
+		t.Helper()
+		resp, _ := doAgent(t, "POST", ts.URL+"/api/agent/proposals/"+id+"/accept", secret, `{}`)
+		return resp.StatusCode
+	}
+
+	// without the right: no queue, no decisions, no publishing, no foreign proposals
+	for _, c := range []struct{ method, url, body string }{
+		{"GET", "/api/agent/queue", ""},
+		{"POST", "/api/agent/proposals/" + id + "/accept", `{}`},
+		{"POST", "/api/agent/proposals/" + id + "/reject", `{"comment":"нет"}`},
+		{"POST", "/api/agent/courses/go/publish", `{"version":1}`},
+	} {
+		if resp, _ := doAgent(t, c.method, ts.URL+c.url, author, c.body); resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("%s without the right: %d", c.url, resp.StatusCode)
+		}
+	}
+	// a token cannot give itself the right, and the right ends at the token's courses
+	if resp, _ := doAgent(t, "POST", ts.URL+"/api/admin/tokens/1/review", reviewer, `{"review":true}`); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("token on admin api: %d", resp.StatusCode)
+	}
+	if code := accept(foreign, id); code != http.StatusNotFound {
+		t.Fatalf("another course: %d", code)
+	}
+	if resp, _ := doAgent(t, "POST", ts.URL+"/api/agent/courses/go/publish", foreign, `{"version":1}`); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("publish another course: %d", resp.StatusCode)
+	}
+
+	// the queue is compact and marks the token's own proposals
+	own := propose(reviewer, "Б2")
+	resp, body := doAgent(t, "GET", ts.URL+"/api/agent/queue", reviewer, "")
+	if resp.StatusCode != 200 || strings.Contains(body, `"changes"`) || !strings.Contains(body, `"own":true`) || !strings.Contains(body, `"agent":"codex"`) {
+		t.Fatalf("queue: %d %s", resp.StatusCode, body)
+	}
+	if code := accept(reviewer, own); code != http.StatusForbidden {
+		t.Fatalf("accepted its own proposal: %d", code)
+	}
+	if resp, _ := doAgent(t, "GET", ts.URL+"/api/agent/proposals/"+id, reviewer, ""); resp.StatusCode != 200 {
+		t.Fatalf("read a foreign proposal: %d", resp.StatusCode)
+	}
+
+	// accept → draft, publish → students
+	resp, body = doAgent(t, "POST", ts.URL+"/api/agent/proposals/"+id+"/accept", reviewer, `{}`)
+	if resp.StatusCode != 200 {
+		t.Fatalf("accept: %d %s", resp.StatusCode, body)
+	}
+	var acc struct{ Version int }
+	json.Unmarshal([]byte(body), &acc)
+	if code := accept(reviewer, id); code != http.StatusConflict {
+		t.Fatalf("accepted twice: %d", code)
+	}
+	if _, st := doAgent(t, "GET", ts.URL+"/api/agent/proposals/"+id, author, ""); !strings.Contains(st, `"decidedBy":"агент claude"`) {
+		t.Fatalf("who decided: %s", st)
+	}
+	if resp, body := doAgent(t, "POST", ts.URL+"/api/agent/courses/go/publish", reviewer, `{"version":`+strconv.Itoa(acc.Version)+`}`); resp.StatusCode != 200 {
+		t.Fatalf("publish: %d %s", resp.StatusCode, body)
+	}
+	if resp, _ := doAgent(t, "POST", ts.URL+"/api/agent/courses/go/publish", reviewer, `{"version":99}`); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("publish a missing version: %d", resp.StatusCode)
+	}
+
+	// a rejection needs a comment
+	next := propose(author, "Б3")
+	if resp, _ := doAgent(t, "POST", ts.URL+"/api/agent/proposals/"+next+"/reject", reviewer, `{"comment":" "}`); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("reject without a comment: %d", resp.StatusCode)
+	}
+	if resp, _ := doAgent(t, "POST", ts.URL+"/api/agent/proposals/"+next+"/reject", reviewer, `{"comment":"исправь текст"}`); resp.StatusCode != 200 {
+		t.Fatalf("reject: %d", resp.StatusCode)
+	}
+
+	// the admin takes the right away
+	var toks []struct {
+		ID   int
+		Name string
+	}
+	_, list := do(t, admin, "GET", ts.URL+"/api/admin/tokens", "")
+	json.Unmarshal([]byte(list), &toks)
+	for _, tk := range toks {
+		if tk.Name == "claude" {
+			if resp, body := do(t, admin, "POST", ts.URL+"/api/admin/tokens/"+strconv.Itoa(tk.ID)+"/review", `{"review":false}`); resp.StatusCode != 200 {
+				t.Fatalf("take the right: %d %s", resp.StatusCode, body)
+			}
+		}
+	}
+	if resp, _ := doAgent(t, "GET", ts.URL+"/api/agent/queue", reviewer, ""); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("queue after the right is gone: %d", resp.StatusCode)
+	}
+}
+
+func TestMCPReviewTools(t *testing.T) {
+	ts := newTestServer(t)
+	admin := signIn(t, ts, "Baste")
+	plain := agentToken(t, ts.URL, admin, `{"name":"codex","propose":true}`)
+	reviewer := agentToken(t, ts.URL, admin, `{"name":"claude","review":true}`)
+	call := func(secret, method string) string {
+		t.Helper()
+		_, body := doAgent(t, "POST", ts.URL+"/mcp", secret, `{"jsonrpc":"2.0","id":1,"method":"`+method+`","params":{}}`)
+		return body
+	}
+	if body := call(plain, "tools/list"); strings.Contains(body, "publish_version") {
+		t.Fatalf("a plain token sees review tools: %s", body)
+	}
+	if body := call(reviewer, "tools/list"); !strings.Contains(body, "publish_version") || !strings.Contains(body, "accept_proposal") {
+		t.Fatalf("a reviewer has no review tools: %s", body)
+	}
+	if body := call(plain, "initialize"); strings.Contains(body, "право проверяющего") {
+		t.Fatalf("a plain token gets review rules: %s", body)
+	}
+	// hidden tools stay closed when called by name
+	_, body := doAgent(t, "POST", ts.URL+"/mcp", plain, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"publish_version","arguments":{"course":"go","version":1}}}`)
+	if !strings.Contains(body, "may not review") {
+		t.Fatalf("publish without the right: %s", body)
+	}
+}
+
 func TestAgentCreateCourse(t *testing.T) {
 	ts := newTestServer(t)
 	admin := signIn(t, ts, "Baste")

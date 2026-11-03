@@ -1,7 +1,7 @@
 package server
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -17,6 +17,7 @@ func (s *server) adminAgentRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/admin/tokens", s.admin(s.adminTokens))
 	mux.Handle("POST /api/admin/tokens", s.admin(s.adminCreateToken))
 	mux.Handle("POST /api/admin/tokens/{id}/revoke", s.admin(s.adminRevokeToken))
+	mux.Handle("POST /api/admin/tokens/{id}/review", s.admin(s.adminTokenReview))
 	mux.Handle("DELETE /api/admin/tokens/{id}", s.admin(s.adminDeleteToken))
 	mux.Handle("GET /api/admin/proposals", s.admin(s.adminProposals))
 	mux.Handle("GET /api/admin/proposals/{id}", s.admin(s.adminProposal))
@@ -39,6 +40,7 @@ func (s *server) adminCreateToken(w http.ResponseWriter, r *http.Request) {
 		Name    string   `json:"name"`
 		Propose bool     `json:"propose"`
 		Create  bool     `json:"create"`
+		Review  bool     `json:"review"`
 		Courses []string `json:"courses"`
 	}
 	if !readJSON(w, r, &req, 1<<14) {
@@ -55,7 +57,7 @@ func (s *server) adminCreateToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	t, secret, err := s.cfg.Store.CreateToken(r.Context(), store.Token{Name: req.Name, CanPropose: req.Propose || req.Create, CanCreate: req.Create,
+	t, secret, err := s.cfg.Store.CreateToken(r.Context(), store.Token{Name: req.Name, CanPropose: req.Propose || req.Create, CanCreate: req.Create, CanReview: req.Review,
 		Courses: req.Courses, CreatedBy: userFrom(r.Context()).Name})
 	if err != nil {
 		s.fail(w, "create token", err)
@@ -76,6 +78,27 @@ func (s *server) adminRevokeToken(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Info("token revoked", "id", id, "by", userFrom(r.Context()).Name)
 	writeValue(w, map[string]any{"revoked": id})
+}
+
+// adminTokenReview gives a token the right to decide proposals and publish, or takes it away.
+// Only the admin does this: a token cannot widen its own rights (decision 0019).
+func (s *server) adminTokenReview(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "bad id")
+		return
+	}
+	var req struct {
+		Review bool `json:"review"`
+	}
+	if !readJSON(w, r, &req, 1<<10) {
+		return
+	}
+	if err := s.cfg.Store.SetTokenReview(r.Context(), id, req.Review); s.notFound(w, err, "set token review") {
+		return
+	}
+	s.log.Info("token review right", "id", id, "review", req.Review, "by", userFrom(r.Context()).Name)
+	writeValue(w, map[string]any{"review": req.Review})
 }
 
 func (s *server) adminDeleteToken(w http.ResponseWriter, r *http.Request) {
@@ -133,23 +156,34 @@ func (s *server) adminProposal(w http.ResponseWriter, r *http.Request) {
 	writeValue(w, map[string]any{"proposal": p, "course": p.Data, "latest": latest.Version})
 }
 
-// adminAccept puts the proposal into the draft as a new version. If the draft moved on since
-// the agent read it, the changes are applied again on top of the newest version; if they no
-// longer fit, the admin is told and nothing changes.
 func (s *server) adminAccept(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.proposalFrom(w, r)
 	if !ok {
 		return
 	}
-	if p.Status != store.ProposalPending {
-		jsonError(w, http.StatusConflict, "правка уже не ждёт решения или не прошла проверку")
+	out, err := s.acceptProposal(r.Context(), p, userFrom(r.Context()).Name)
+	if err != nil {
+		s.agentFail(w, err)
 		return
+	}
+	writeValue(w, out)
+}
+
+// acceptProposal puts the proposal into the draft as a new version. If the draft moved on since
+// the agent read it, the changes are applied again on top of the newest version; if they no
+// longer fit, the one deciding is told and nothing changes.
+func (s *server) acceptProposal(ctx context.Context, p store.Proposal, by string) (any, error) {
+	if p.Status != store.ProposalPending {
+		return nil, errf(http.StatusConflict, "правка уже не ждёт решения или не прошла проверку")
 	}
 	data, base := []byte(p.Data), p.Base
 	if !p.NewCourse {
-		latest, vi, err := s.cfg.Store.Version(r.Context(), p.CourseID, 0)
-		if s.notFound(w, err, "read draft") {
-			return
+		latest, vi, err := s.cfg.Store.Version(ctx, p.CourseID, 0)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, errf(http.StatusNotFound, "not found")
+		}
+		if err != nil {
+			return nil, err
 		}
 		if vi.Version != p.Base {
 			changes, err := course.DecodeChanges(p.Changes)
@@ -161,34 +195,27 @@ func (s *server) adminAccept(w http.ResponseWriter, r *http.Request) {
 				err = course.Apply(c, changes)
 			}
 			if err != nil {
-				jsonError(w, http.StatusConflict, "черновик изменился с тех пор, как агент его читал (v"+strconv.Itoa(p.Base)+" → v"+strconv.Itoa(vi.Version)+"), и правка на него не ложится: "+err.Error())
-				return
+				return nil, errf(http.StatusConflict, "черновик изменился с тех пор, как агент его читал (v"+strconv.Itoa(p.Base)+" → v"+strconv.Itoa(vi.Version)+"), и правка на него не ложится: "+err.Error())
 			}
 			if sum := check(c); sum.Errors > 0 {
-				w.Header().Set("Content-Type", "application/json; charset=utf-8")
-				w.WriteHeader(http.StatusUnprocessableEntity)
-				json.NewEncoder(w).Encode(map[string]any{"error": "поверх нового черновика правка даёт ошибки проверки", "check": sum})
-				return
+				return nil, &agentErr{status: http.StatusUnprocessableEntity, msg: "поверх нового черновика правка даёт ошибки проверки", check: sum}
 			}
 			data, _ = course.Encode(c)
 			base = vi.Version
 		}
 	}
-	admin := userFrom(r.Context()).Name
-	v, err := s.cfg.Store.AcceptProposal(r.Context(), p.ID, p.CourseID, data, base, "agent:"+p.Agent, p.Title+" · принял "+admin, admin)
+	v, err := s.cfg.Store.AcceptProposal(ctx, p.ID, p.CourseID, data, base, "agent:"+p.Agent, p.Title+" · принял "+by, by)
 	if errors.Is(err, store.ErrConflict) {
-		jsonError(w, http.StatusConflict, "черновик или правка изменились одновременно — обнови страницу")
-		return
+		return nil, errf(http.StatusConflict, "черновик или правка изменились одновременно — обнови страницу")
 	}
 	if err != nil {
-		s.fail(w, "accept proposal", err)
-		return
+		return nil, err
 	}
 	if p.NewCourse {
-		s.reloadOrLog(r.Context()) // the new course appears in the catalog as «Скоро»
+		s.reloadOrLog(ctx) // the new course appears in the catalog as «Скоро»
 	}
-	s.log.Info("proposal accepted", "id", p.ID, "course", p.CourseID, "version", v, "by", admin)
-	writeValue(w, map[string]any{"version": v, "rebased": base != p.Base})
+	s.log.Info("proposal accepted", "id", p.ID, "course", p.CourseID, "version", v, "by", by)
+	return map[string]any{"version": v, "rebased": base != p.Base}, nil
 }
 
 func (s *server) adminReject(w http.ResponseWriter, r *http.Request) {

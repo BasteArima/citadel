@@ -265,38 +265,45 @@ type versionRequest struct {
 	Base    int `json:"base"`
 }
 
-// adminPublish refuses a version with errors: students never see a broken course.
 func (s *server) adminPublish(w http.ResponseWriter, r *http.Request) {
 	var req versionRequest
 	if !readJSON(w, r, &req, 1<<10) {
 		return
 	}
-	id := r.PathValue("id")
-	data, _, err := s.cfg.Store.Version(r.Context(), id, req.Version)
-	if s.notFound(w, err, "read version") {
+	if err := s.publishVersion(r.Context(), r.PathValue("id"), req.Version, userFrom(r.Context()).Name); err != nil {
+		s.agentFail(w, err)
 		return
+	}
+	writeValue(w, map[string]any{"published": req.Version})
+}
+
+// publishVersion refuses a version with errors: students never see a broken course.
+func (s *server) publishVersion(ctx context.Context, id string, version int, by string) error {
+	data, _, err := s.cfg.Store.Version(ctx, id, version)
+	if errors.Is(err, store.ErrNotFound) {
+		return errf(http.StatusNotFound, "not found")
+	}
+	if err != nil {
+		return err
 	}
 	c, err := course.Decode(data)
 	if err != nil {
-		jsonError(w, http.StatusUnprocessableEntity, "версия не читается: "+err.Error())
-		return
+		return errf(http.StatusUnprocessableEntity, "версия не читается: "+err.Error())
 	}
 	if sum := check(c); sum.Errors > 0 {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		json.NewEncoder(w).Encode(map[string]any{"error": "в версии есть ошибки — исправь их перед публикацией", "check": sum})
-		return
+		return &agentErr{status: http.StatusUnprocessableEntity, msg: "в версии есть ошибки — исправь их перед публикацией", check: sum}
 	}
-	if err := s.cfg.Store.Publish(r.Context(), id, req.Version); s.notFound(w, err, "publish") {
-		return
+	if err := s.cfg.Store.Publish(ctx, id, version); errors.Is(err, store.ErrNotFound) {
+		return errf(http.StatusNotFound, "not found")
+	} else if err != nil {
+		return err
 	}
-	if err := s.reload(r.Context()); err != nil {
-		s.fail(w, "reload courses", err)
-		return
+	if err := s.reload(ctx); err != nil {
+		return err
 	}
-	s.log.Info("course published", "id", id, "version", req.Version, "by", userFrom(r.Context()).Name)
+	s.log.Info("course published", "id", id, "version", version, "by", by)
 	s.recordMissing(id)
-	writeValue(w, map[string]any{"published": req.Version})
+	return nil
 }
 
 // adminRollback puts an old version on top as a new draft; history is never rewritten.
