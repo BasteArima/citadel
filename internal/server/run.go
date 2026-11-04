@@ -170,7 +170,7 @@ func (s *server) agentRun(ctx context.Context, req runArgs) (any, error) {
 type predictRun struct {
 	Node     string `json:"node"`
 	Block    int    `json:"block"`  // index in the node's blocks
-	Status   string `json:"status"` // match, differs, error
+	Status   string `json:"status"` // match, differs, error, skipped
 	Expected string `json:"expected"`
 	Got      string `json:"got,omitempty"`
 	Version  string `json:"version,omitempty"`
@@ -181,6 +181,7 @@ const maxProposalRuns = 8
 
 // verifyProposal runs the «predict» blocks a proposal adds or changes and stores the results.
 // It runs in the background after the proposal is queued; a busy runner is retried a few times.
+// Blocks over maxProposalRuns are recorded as skipped, so a reviewer sees they were not checked.
 func (s *server) verifyProposal(id int64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
@@ -202,13 +203,18 @@ func (s *server) verifyProposal(id int64) {
 	runs := []predictRun{}
 	after.Walk(func(n *course.Node, _ *course.Node) {
 		for i, b := range n.Blocks {
-			if b.Type() != "predict" || len(runs) >= maxProposalRuns || unchangedBlock(base, n.ID, b) {
+			if b.Type() != "predict" || unchangedBlock(base, n.ID, b) {
 				continue
 			}
 			code, _ := b["code"].(string)
 			file, _ := b["file"].(string)
 			out, _ := b["out"].(string)
 			pr := predictRun{Node: n.ID, Block: i, Expected: out}
+			if len(runs) >= maxProposalRuns {
+				pr.Status = "skipped"
+				runs = append(runs, pr)
+				continue
+			}
 			res, err := s.runRetry(ctx, after, file, code)
 			if err != nil {
 				pr.Status, pr.Error = "error", err.Error()

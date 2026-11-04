@@ -102,6 +102,49 @@ func TestAgentRunAndVerify(t *testing.T) {
 	}
 }
 
+func TestVerifyMarksBlocksOverLimit(t *testing.T) {
+	ts := runServer(t)
+	admin := signIn(t, ts, "Baste")
+	agent := agentToken(t, ts.URL, admin, `{"name":"claude","propose":true}`)
+	const total = maxProposalRuns + 2
+	blocks := make([]string, total)
+	for i := range blocks {
+		blocks[i] = `{"type":"predict","code":"package main\nfunc main() { fmt.Println(42) } // ` + strconv.Itoa(i) + `","out":"42"}`
+	}
+	node := `{"id":"b","kind":"lesson","title":"Б","blocks":[` + strings.Join(blocks, ",") + `]}`
+	resp, body := doAgent(t, "POST", ts.URL+"/api/agent/proposals", agent, `{"course":"go","title":"Много","changes":[{"op":"put_node","node":`+node+`}]}`)
+	if resp.StatusCode != 200 {
+		t.Fatalf("propose: %d %s", resp.StatusCode, body)
+	}
+	var p struct{ ID int64 }
+	json.Unmarshal([]byte(body), &p)
+	var runs []predictRun
+	for i := 0; i < 100 && len(runs) == 0; i++ {
+		time.Sleep(20 * time.Millisecond)
+		_, body = do(t, admin, "GET", ts.URL+"/api/admin/proposals/"+strconv.FormatInt(p.ID, 10), "")
+		var out struct{ Proposal struct{ Runs []predictRun } }
+		json.Unmarshal([]byte(body), &out)
+		runs = out.Proposal.Runs
+	}
+	if len(runs) != total {
+		t.Fatalf("runs: %d, want %d: every changed block is listed", len(runs), total)
+	}
+	for i, r := range runs {
+		want := "match"
+		if i >= maxProposalRuns {
+			want = "skipped"
+		}
+		if r.Status != want || r.Block != i {
+			t.Fatalf("run %d: %+v, want status %s", i, r, want)
+		}
+	}
+	// the queue a reviewer reads says so too
+	reviewer := agentToken(t, ts.URL, admin, `{"name":"reviewer","review":true}`)
+	if resp, body := doAgent(t, "GET", ts.URL+"/api/agent/queue", reviewer, ""); resp.StatusCode != 200 || !strings.Contains(body, `"skipped":2`) {
+		t.Fatalf("queue: %d %s", resp.StatusCode, body)
+	}
+}
+
 func TestSameOutput(t *testing.T) {
 	if !sameOutput("a  \nb\n\n", "a\nb") || sameOutput("a\nb", "a\nc") {
 		t.Fatal("sameOutput")

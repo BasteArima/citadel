@@ -334,7 +334,7 @@ function runsCard(p) {
     card.innerHTML = '<span class="lbl">Запуск на сервере</span><p class="ad-small ad-mut">Правка не добавляет и не меняет блоков «Предскажи и запусти».</p>';
     return card;
   }
-  const pill = { match: ['good', '✓ вывод совпал'], differs: ['warn', '! вывод другой'], error: ['bad', '✕ не запустилось'] };
+  const pill = { match: ['good', '✓ вывод совпал'], differs: ['warn', '! вывод другой'], error: ['bad', '✕ не запустилось'], skipped: ['warn', '! не запускался'] };
   card.innerHTML = '<span class="lbl">Запуск на сервере · ' + runs.length + ' ' + plural(runs.length, 'блок', 'блока', 'блоков') + ' «Предскажи»</span><div class="ag-runs"></div>';
   const list = card.querySelector('.ag-runs');
   runs.forEach((r) => {
@@ -342,6 +342,7 @@ function runsCard(p) {
     const row = h('div', 'ag-run');
     row.innerHTML = '<div class="ad-row"><span class="ad-pill ' + st[0] + '">' + st[1] + '</span><span class="ad-small ad-mut">узел ' + esc(r.node) + ', блок ' + (r.block + 1) + (r.version ? ' · ' + esc(r.version) : '') + '</span></div>' +
       (r.error ? '<p class="ad-err">' + esc(r.error) + '</p>' : '') +
+      (r.status === 'skipped' ? '<p class="ad-small ad-mut">Сервер запускает не все блоки большой правки. Вывод этого блока не проверен: запусти его отдельно.</p>' : '') +
       (r.status === 'differs' ? '<div class="v-body v-fields"></div><p class="ad-small ad-mut">Зачёркнуто — вывод агента, подсвечено — что получилось на сервере.</p>' : '');
     const d = row.querySelector('.v-body');
     if (d) d.innerHTML = words(String(r.expected || '').replace(/\n+$/, ''), String(r.got || '').replace(/\n+$/, ''));
