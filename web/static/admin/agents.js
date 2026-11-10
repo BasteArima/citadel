@@ -17,7 +17,7 @@ export async function pendingCount() {
 // ── токены ──
 export function renderTokens(box, courses) {
   box.innerHTML = '<div class="ad-head"><div><h2 id="ad-tok-h">Токены агентов</h2>' +
-    '<p class="ad-sub">Для API и MCP. Агент может читать курсы и предлагать правки. Принимать чужие правки и публиковать может только токен, которому ты дал это право.</p></div>' +
+    '<p class="ad-sub">Для API и MCP. Агент может читать курсы и предлагать правки. Токен с правом проверяющего может принимать свои и чужие правки, новые курсы и публиковать.</p></div>' +
     '<button type="button" class="btn pri" id="tk-new" aria-expanded="false">+ Новый токен</button></div>' +
     '<div id="tk-form"></div><div id="tk-made"></div>' +
     '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Название</th><th>Права</th><th>Курсы</th><th>Токен</th><th>Использован</th><th></th></tr></thead><tbody id="tk-rows"><tr><td colspan="6">Загружаю…</td></tr></tbody></table></div>';
@@ -33,11 +33,11 @@ export function renderTokens(box, courses) {
       '<label class="ad-check-l"><input type="checkbox" checked disabled> Читать</label>' +
       '<label class="ad-check-l"><input type="checkbox" id="tk-propose" checked> Предлагать правки</label>' +
       '<label class="ad-check-l"><input type="checkbox" id="tk-create"> Создавать курсы</label>' +
-      '<label class="ad-check-l"><input type="checkbox" id="tk-review"> Принимать чужие правки и публиковать</label></fieldset>' +
+      '<label class="ad-check-l"><input type="checkbox" id="tk-review"> Принимать правки, новые курсы и публиковать</label></fieldset>' +
       '<div class="ad-f"><label for="tk-courses">Курсы</label><select id="tk-courses"><option value="">Все курсы</option>' +
       courses.map((c) => '<option value="' + esc(c.id) + '">' + esc(c.title || c.id) + '</option>').join('') + '</select></div>' +
       '<button type="submit" class="btn pri">Создать</button>' +
-      '<p class="ad-small ad-mut tk-note">Новый курс от агента принимаешь только ты. Свою правку агент принять не может. В базе хранится только хеш токена.</p>';
+      '<p class="ad-small ad-mut tk-note">Право проверяющего включает приём своих правок и новых курсов в пределах доступа токена. Принятие создаёт черновик; публикация — отдельное действие. В базе хранится только хеш токена.</p>';
     formBox.appendChild(f);
     const create = f.querySelector('#tk-create'), propose = f.querySelector('#tk-propose');
     create.addEventListener('change', () => { if (create.checked) propose.checked = true; });
@@ -70,7 +70,7 @@ export function renderTokens(box, courses) {
       '<td class="ad-r">' + (t.revokedAt ? '<span class="ad-pill">отозван</span> <button type="button" class="btn ad-danger" data-del="' + t.id + '" data-name="' + esc(t.name) + '">Удалить</button>' : '<button type="button" class="btn" data-review="' + t.id + '" data-on="' + (t.canReview ? '1' : '') + '" data-name="' + esc(t.name) + '">' + (t.canReview ? 'Снять право принимать' : 'Дать право принимать') + '</button> <button type="button" class="btn ad-danger" data-revoke="' + t.id + '" data-name="' + esc(t.name) + '">Отозвать</button>') + '</td></tr>').join('');
     rows.querySelectorAll('[data-review]').forEach((b) => b.addEventListener('click', async () => {
       const on = !b.dataset.on;
-      if (on && !(await confirmDialog('Дать токену «' + b.dataset.name + '» право принимать?', 'Агент сможет принимать и отклонять чужие правки и публиковать версии курсов: ученики увидят их сразу. Свою правку и новый курс он принять не сможет. Право можно снять в любой момент.', 'Дать право'))) return;
+      if (on && !(await confirmDialog('Дать токену «' + b.dataset.name + '» право принимать?', 'Агент сможет принимать свои и чужие правки, новые курсы и публиковать версии в пределах доступа токена. Принятие создаёт черновик; после публикации ученики увидят его сразу. Право можно снять в любой момент.', 'Дать право'))) return;
       const r2 = await req('POST', '/api/admin/tokens/' + b.dataset.review + '/review', { review: on });
       if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); return; }
       toast(on ? 'Право выдано' : 'Право снято', 'good');
@@ -126,7 +126,7 @@ function showConnect(box, token, secret) {
     '<div class="tk-tabs" role="tablist" aria-label="Агент">' + tabs.map((t) => '<button type="button" role="tab" aria-selected="false" data-t="' + t.id + '">' + esc(t.label) + '</button>').join('') + '</div>' +
     '<p class="ad-sub tk-hint"></p><div class="tk-cmd"><pre></pre><button type="button" class="btn" id="tk-copy">Скопировать</button></div>' +
     '<ul class="tk-facts"><li><strong>Что агент сможет</strong><br><span>' + facts(token) + '</span></li>' +
-    '<li><strong>Чего не сможет</strong><br><span>' + (token.canReview ? 'принимать свои правки и новые курсы' : 'публиковать') + ', видеть прогресс учеников, управлять токенами</span></li>' +
+    '<li><strong>Чего не сможет</strong><br><span>' + (token.canReview ? '' : 'принимать правки и публиковать, ') + 'видеть прогресс учеников, управлять токенами</span></li>' +
     '<li><strong>Токен виден один раз</strong><br><span>потерял — отзови и выпусти новый</span></li></ul>';
   box.appendChild(s);
   const pre = s.querySelector('pre');
@@ -152,14 +152,14 @@ function facts(t) {
   if (t.canPropose) can.push('предлагать правки');
   if (t.canCreate) can.push('создавать курсы');
   const own = can.join(', ') + (t.canPropose ? ' — всё черновиками' : '');
-  return own + (t.canReview ? ', принимать чужие правки и публиковать' : '') + (t.courses.length ? '; только ' + t.courses.join(', ') : '');
+  return own + (t.canReview ? ', принимать свои и чужие правки, новые курсы и публиковать' : '') + (t.courses.length ? '; только ' + t.courses.join(', ') : '');
 }
 
 // ── очередь правок ──
 export function renderAgents(main, selected, onDecided) {
   const page = h('div', 'ad-page');
   main.appendChild(page);
-  page.innerHTML = '<div><h1>Правки агентов</h1><p class="ad-sub">Здесь решаешь ты или агент, которому ты дал право принимать. Автор не может принять свою правку.</p>' +
+  page.innerHTML = '<div><h1>Правки агентов</h1><p class="ad-sub">Здесь решаешь ты или агент с правом проверяющего. Он может принимать свои и чужие правки, включая новые курсы.</p>' +
     '<ol class="ag-steps"><li><b>Прочитай</b> правку так, как её увидит ученик.</li><li><b>Прими или отклони.</b> Принятая правка попадает в черновик, ученики её пока не видят.</li><li><b>Опубликуй</b> черновик, и правка появится у учеников.</li></ol></div>' +
     '<div class="ad-split ag-split"><section class="ad-card ag-queue" aria-label="Очередь"><div class="lbl v-hh ag-qh"><span>Очередь</span><span id="ag-n"></span></div><ul id="ag-list"><li class="ad-pad">Загружаю…</li></ul></section>' +
     '<section class="ag-detail" id="ag-detail" aria-label="Правка"></section></div>';

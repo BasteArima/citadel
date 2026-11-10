@@ -124,7 +124,7 @@ var mcpTools = []mcpTool{
 			}
 			return s.agentPropose(ctx, a)
 		}},
-	{Name: "create_course", Description: "Предложить новый курс целиком (формат v1). Нужно право «создавать курсы». Курс появится неопубликованным, только если админ примет предложение.",
+	{Name: "create_course", Description: "Предложить новый курс целиком (формат v1). Нужно право «создавать курсы». Курс появится неопубликованным после принятия админом или токеном с правом проверяющего.",
 		InputSchema: obj(map[string]any{"title": strProp("одна строка для очереди"), "description": strProp("что за курс и что проверено"),
 			"course": map[string]any{"type": "object", "description": "курс v1: schema, id, title, metal, tool{name,version}, review, glossary, root"}}, "course"),
 		call: func(s *server, ctx context.Context, raw json.RawMessage) (any, error) {
@@ -158,7 +158,7 @@ var mcpTools = []mcpTool{
 	{Name: "list_queue", review: true, Description: "Очередь: правки всех агентов, которые ждут решения, без содержимого. Саму правку читай через proposal_status.",
 		InputSchema: obj(map[string]any{}),
 		call:        func(s *server, ctx context.Context, _ json.RawMessage) (any, error) { return s.agentQueue(ctx) }},
-	{Name: "accept_proposal", review: true, Description: "Принять чужую правку в черновик. Ученики её ещё не видят. Нельзя принять свою правку, новый курс и правку с несовпавшим выводом программы.",
+	{Name: "accept_proposal", review: true, Description: "Принять свою или чужую правку, включая новый курс, в черновик в пределах доступа токена. Ученики её ещё не видят. Правку с несовпавшим выводом программы принимает только админ.",
 		InputSchema: obj(map[string]any{"id": map[string]any{"type": "integer", "description": "id предложения"}}, "id"),
 		call: func(s *server, ctx context.Context, raw json.RawMessage) (any, error) {
 			a, err := argsOf[struct{ ID int64 }](raw)

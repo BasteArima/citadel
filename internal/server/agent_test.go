@@ -164,8 +164,7 @@ func TestProposalFlow(t *testing.T) {
 	}
 }
 
-// TestAgentReview: the review right is off by default, only the admin gives it, and the author
-// never approves its own proposal.
+// TestAgentReview: only the admin gives the review right; it includes own proposals.
 func TestAgentReview(t *testing.T) {
 	ts := newTestServer(t)
 	admin := signIn(t, ts, "Baste")
@@ -218,8 +217,11 @@ func TestAgentReview(t *testing.T) {
 	if resp.StatusCode != 200 || strings.Contains(body, `"changes"`) || !strings.Contains(body, `"own":true`) || !strings.Contains(body, `"agent":"codex"`) {
 		t.Fatalf("queue: %d %s", resp.StatusCode, body)
 	}
-	if code := accept(reviewer, own); code != http.StatusForbidden {
-		t.Fatalf("accepted its own proposal: %d", code)
+	if code := accept(author, id); code != http.StatusForbidden {
+		t.Fatalf("author without review accepted its own proposal: %d", code)
+	}
+	if code := accept(reviewer, own); code != http.StatusOK {
+		t.Fatalf("reviewer could not accept its own proposal: %d", code)
 	}
 	if resp, _ := doAgent(t, "GET", ts.URL+"/api/agent/proposals/"+id, reviewer, ""); resp.StatusCode != 200 {
 		t.Fatalf("read a foreign proposal: %d", resp.StatusCode)

@@ -72,7 +72,7 @@ func TestAgentRunAndVerify(t *testing.T) {
 	ts := runServer(t)
 	admin := signIn(t, ts, "Baste")
 	reader := agentToken(t, ts.URL, admin, `{"name":"reader"}`)
-	agent := agentToken(t, ts.URL, admin, `{"name":"claude","propose":true}`)
+	agent := agentToken(t, ts.URL, admin, `{"name":"claude","propose":true,"review":true}`)
 	if resp, _ := doAgent(t, "POST", ts.URL+"/api/agent/run", reader, `{"course":"go","code":"package main"}`); resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("read-only token runs code: %d", resp.StatusCode)
 	}
@@ -99,6 +99,9 @@ func TestAgentRunAndVerify(t *testing.T) {
 	}
 	if len(runs) != 2 || runs[0].Status != "match" || runs[1].Status != "differs" || runs[1].Expected != "7" {
 		t.Fatalf("runs: %+v", runs)
+	}
+	if resp, body := doAgent(t, "POST", ts.URL+"/api/agent/proposals/"+strconv.FormatInt(p.ID, 10)+"/accept", agent, `{}`); resp.StatusCode != http.StatusConflict {
+		t.Fatalf("reviewer accepted own proposal with differing output: %d %s", resp.StatusCode, body)
 	}
 }
 
