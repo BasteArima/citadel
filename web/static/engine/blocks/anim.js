@@ -1,7 +1,7 @@
 // Анимация: сцена из элементов (box, tok, arrow, label, mark). Каждый шаг меняет состояние части
 // элементов: x, y, show, cls, t, s. Состояние шага N = начальное + все изменения шагов 0..N,
 // поэтому «Назад» работает честно.
-import { el, ic, IC, reduceMotion, onLeave } from '../util.js';
+import { el, esc, ic, IC, reduceMotion, onLeave } from '../util.js';
 import { rich } from '../rich.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -122,7 +122,7 @@ export const anim = {
       cap.innerHTML = rich(a.steps[i].cap);
       if (sideBox) {
         sideBox.querySelector('dl').innerHTML = sideAt(i).map((r) =>
-          '<dt>' + rich(r[0]) + '</dt><dd' + (r[2] ? ' class="' + r[2] + '"' : '') + '>' + rich(r[1]) + '</dd>').join('');
+          '<dt>' + rich(r[0]) + '</dt><dd' + (r[2] ? ' class="' + esc(r[2]) + '"' : '') + '>' + rich(r[1]) + '</dd>').join('');
       }
       [].forEach.call(ctl.querySelectorAll('.sc-bars i'), (b, k) => { b.className = k <= i ? 'on' : ''; });
       ctl.querySelector('.n').textContent = (i + 1) + ' / ' + n;

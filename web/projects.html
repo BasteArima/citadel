@@ -8,12 +8,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/site.css">
-<script>
-  try {
-    var th = JSON.parse(localStorage.getItem('citadel-ui') || '{}').theme;
-    if (th === 'light' || th === 'dark') document.documentElement.setAttribute('data-theme', th);
-  } catch (e) {}
-</script>
+<script src="/static/theme.js"></script>
 <script type="module" src="/static/site/projects.js"></script>
 </head>
 <body>

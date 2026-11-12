@@ -204,6 +204,15 @@ func (s *server) acceptProposal(ctx context.Context, p store.Proposal, by string
 			base = vi.Version
 		}
 	}
+	// Pending proposals may have passed an older validator. Recheck even when
+	// the draft has not moved, including new-course proposals (decision 0021).
+	candidate, err := course.Decode(data)
+	if err != nil {
+		return nil, errf(http.StatusUnprocessableEntity, "правка не читается: "+err.Error())
+	}
+	if sum := check(candidate); sum.Errors > 0 {
+		return nil, &agentErr{status: http.StatusUnprocessableEntity, msg: "правка даёт ошибки проверки", check: sum}
+	}
 	v, err := s.cfg.Store.AcceptProposal(ctx, p.ID, p.CourseID, data, base, "agent:"+p.Agent, p.Title+" · принял "+by, by)
 	if errors.Is(err, store.ErrConflict) {
 		return nil, errf(http.StatusConflict, "черновик или правка изменились одновременно — обнови страницу")

@@ -7,12 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="/static/style.css">
-<script>
-  try {
-    var th = JSON.parse(localStorage.getItem('citadel-ui') || '{}').theme;
-    if (th === 'light' || th === 'dark') document.documentElement.setAttribute('data-theme', th);
-  } catch (e) {}
-</script>
+<script src="/static/theme.js"></script>
 <style>
   body { margin: 0; background: var(--bg); color: var(--txt); font-family: var(--body); }
   .lg { min-height: 100vh; display: flex; flex-wrap: wrap; }
@@ -72,33 +67,6 @@
     </form>
   </main>
 </div>
-<script>
-  (function () {
-    var form = document.getElementById('form'), err = document.getElementById('err'), go = document.getElementById('go');
-    var name = document.getElementById('name');
-    try { name.value = localStorage.getItem('citadel-name') || ''; } catch (e) {}
-    (name.value ? document.getElementById('code') : name).focus();
-    // куда вернуться после входа: только свой адрес
-    var next = new URLSearchParams(location.search).get('next') || '/';
-    if (next.charAt(0) !== '/' || next.charAt(1) === '/') next = '/';
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      err.hidden = true; go.disabled = true;
-      fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.value, code: document.getElementById('code').value, remember: document.getElementById('remember').checked })
-      }).then(function (r) {
-        return r.json().then(function (body) {
-          if (!r.ok) throw new Error(body.error || ('сервер ответил ' + r.status));
-          try { localStorage.setItem('citadel-name', body.name); } catch (e) {}
-          location.replace(next);
-        });
-      }).catch(function (e) {
-        err.textContent = e.message; err.hidden = false; go.disabled = false;
-      });
-    });
-  })();
-</script>
+<script src="/static/login.js"></script>
 </body>
 </html>

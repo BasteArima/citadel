@@ -74,6 +74,7 @@ export const AREAS = [
 
 export function areaOf(p) {
   const m = p.msg;
+  if (/тег <|атрибут |ссылка .*не разрешена|HTML/.test(m)) return 'schema';
   if (/термин/.test(m)) return 'terms';
   if (/несуществующ/.test(m)) return 'links';
   if (/вывода|запуском/.test(m) && !/паспорт/.test(p.path)) return 'outputs';

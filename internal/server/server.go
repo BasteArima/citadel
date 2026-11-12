@@ -129,7 +129,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	// narration recordings: students play, admins record
 	s.audioRoutes(mux)
 	go s.keepRecorded()
-	return s.logRequests(mux), nil
+	return s.logRequests(securityHeaders(mux)), nil
 }
 
 // noCache makes the browser re-check static files: embedded files carry no modification

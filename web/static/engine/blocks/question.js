@@ -1,7 +1,7 @@
 // Вопрос: выбор варианта, ввод ответа или порядок карточек.
 // Засчитывается первая попытка (решение 0008): после первого ответа вопрос закрыт — видно,
 // верно ли, верный ответ и объяснение. Ошибка первой попытки уходит в повторения.
-import { el, hash, seeded, shuffle } from '../util.js';
+import { el, esc, hash, seeded, shuffle } from '../util.js';
 import { rich } from '../rich.js';
 
 function normalize(s) { return String(s).toLowerCase().replace(/ё/g, 'е').replace(/[.,!?;:«»"'`]/g, '').replace(/\s+/g, ' ').trim(); }
@@ -18,7 +18,7 @@ export function rightAnswer(q) {
 //          answer(correct): записать первую попытку }. onAnswer — после первой попытки.
 export function renderQuestion(q, label, store, onAnswer) {
   const box = el('div', 'q');
-  const head = el('div', 'q-n', '<span>' + label + '</span>');
+  const head = el('div', 'q-n', '<span>' + esc(label) + '</span>');
   box.appendChild(head);
   box.appendChild(el('div', 'q-t', rich(q.q)));
   let whyBox = null;

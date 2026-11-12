@@ -7,13 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="/static/style.css">
-<script>
-  // тему ставим до отрисовки, чтобы не мигало
-  try {
-    var th = JSON.parse(localStorage.getItem('citadel-ui') || '{}').theme;
-    if (th === 'light' || th === 'dark') document.documentElement.setAttribute('data-theme', th);
-  } catch (e) {}
-</script>
+<script src="/static/theme.js"></script>
 <script type="module" src="/static/engine/main.js"></script>
 </head>
 <body>

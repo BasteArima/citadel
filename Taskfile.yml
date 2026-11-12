@@ -14,7 +14,7 @@ tasks:
   vet:
     desc: go vet
     cmds:
-      - go vet ./...
+      - go vet ./cmd/... ./internal/... ./web/...
 
   test:
     desc: Тесты

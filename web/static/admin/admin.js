@@ -42,7 +42,7 @@ function shell(current) {
     '<nav class="ad-side" aria-label="Админка">' +
     '<a class="ad-brand" href="#/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="#9aa4b0" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="#8ab4f8" stroke-width="2.5"/></svg>Citadel <span>админ</span></a>' +
     '<a class="ad-back" href="/">← На сайт</a>' +
-    items.map((it) => '<a href="' + it[1] + '"' + (it[0] === current ? ' class="on" aria-current="page"' : '') + '>' + esc(it[2]) + '</a>').join('') +
+    items.map((it) => '<a href="' + esc(it[1]) + '"' + (it[0] === current ? ' class="on" aria-current="page"' : '') + '>' + esc(it[2]) + '</a>').join('') +
     '<span class="ad-sp"></span>' + themeSwitch() + '</nav>' +
     '<div class="ad-main" id="ad-main"></div></div>';
   refreshBadge();

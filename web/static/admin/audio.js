@@ -22,12 +22,17 @@ export function renderAudio(main, courseBar) {
     '<section class="ad-card ad-pad ad-side-form au-lex" aria-labelledby="au-lex-h"></section></div>';
   const rows = page.querySelector('#au-rows'), acts = page.querySelector('#au-acts'), stats = page.querySelector('#au-stats'), jobBox = page.querySelector('#au-job');
   const audio = new Audio();
+  let previewContext = null, previewSource = null, previewSeq = 0;
+  function stopPreview() {
+    previewSeq++;
+    if (previewSource) { previewSource.stop(); previewSource.disconnect(); previewSource = null; }
+  }
   let playing = null, data = null, timer = 0, alive = true;
   audio.addEventListener('ended', () => { playing = null; drawRows(); });
 
   load();
   drawLexicon(page.querySelector('.au-lex'));
-  return () => { alive = false; clearTimeout(timer); audio.pause(); off(); };
+  return () => { alive = false; clearTimeout(timer); audio.pause(); stopPreview(); if (previewContext) previewContext.close(); off(); };
 
   async function load() {
     const r = await req('GET', '/api/admin/courses/' + encodeURIComponent(draft.id) + '/audio');
@@ -78,6 +83,7 @@ export function renderAudio(main, courseBar) {
         '<td class="ad-r au-btns">' + listen + rec + '</td></tr>';
     }).join('');
     rows.querySelectorAll('.au-play').forEach((b) => b.addEventListener('click', () => {
+      stopPreview();
       const url = b.dataset.url;
       if (playing === url) { audio.pause(); playing = null; }
       else { audio.src = url; audio.play(); playing = url; }
@@ -146,14 +152,26 @@ export function renderAudio(main, courseBar) {
 
   async function say(text, btn) {
     btn.disabled = true;
+    stopPreview();
+    const seq = previewSeq;
     try {
+      // Resume on the user gesture. Decode the same-origin response directly:
+      // blob: media URLs are intentionally excluded by the CSP in decision 0021.
+      previewContext = previewContext || new AudioContext();
+      await previewContext.resume();
       const r = await fetch('/api/admin/speech/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, voice: (c.speech && c.speech.voice) || '', lexicon: (c.speech && c.speech.lexicon) || {} }) });
       if (!r.ok) { const j = await r.json().catch(() => ({})); toast(j.error || 'Синтез не ответил: ' + r.status, 'bad'); return; }
+      const buffer = await previewContext.decodeAudioData(await r.arrayBuffer());
+      if (!alive || seq !== previewSeq) return;
       audio.pause(); playing = null;
-      audio.src = URL.createObjectURL(await r.blob());
-      audio.play();
+      previewSource = previewContext.createBufferSource();
+      previewSource.buffer = buffer;
+      previewSource.connect(previewContext.destination);
+      previewSource.start();
       if (data) drawRows();
+    } catch (e) {
+      if (alive && seq === previewSeq) toast('Не удалось воспроизвести: ' + e.message, 'bad');
     } finally { btn.disabled = false; }
   }
 }

@@ -52,7 +52,7 @@ export function blockForm(b, ctx) {
   const card = h('section', 'ed-blk');
   card.setAttribute('aria-label', 'Блок: ' + spec.title);
   const asJSON = JSON_ONLY.includes(b.type) || !FORMS[b.type];
-  card.innerHTML = '<div class="ed-bh"><span class="ed-grip" aria-hidden="true" title="Потяни, чтобы переставить">⋮⋮</span><strong>' + esc(spec.title) + '</strong><code>' + esc(b.type) + sizeNote(b) + '</code><span class="ad-sp"></span>' +
+  card.innerHTML = '<div class="ed-bh"><span class="ed-grip" aria-hidden="true" title="Потяни, чтобы переставить">⋮⋮</span><strong>' + esc(spec.title) + '</strong><code>' + esc(b.type) + esc(sizeNote(b)) + '</code><span class="ad-sp"></span>' +
     (asJSON ? '<span class="ad-pill" title="Сложный блок — правится как JSON">JSON</span>' : '<button type="button" class="ad-ib ed-js" aria-label="Править как JSON" title="Править как JSON" aria-pressed="false">{ }</button>') + '</div>' +
     '<div class="ed-bb"></div>';
   const box = card.querySelector('.ed-bb');

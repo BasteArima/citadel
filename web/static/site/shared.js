@@ -1,5 +1,7 @@
 // Общее для страниц вокруг курсов (каталог, профиль): запросы к API, шапка, металлы и звенья цепи.
 
+import { sanitize } from '../engine/sanitize.js';
+
 export function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
@@ -39,8 +41,8 @@ export function inDays(n) {
 
 // Текст курса вне движка: ссылки на уроки и термины становятся просто словами.
 export function courseText(html, course) {
-  return String(html || '').replace(/\{\{>([a-z0-9-]+)(?:\|([^}]+))?\}\}/g, (m, id, txt) => txt || id)
-    .replace(/\{\{([a-z0-9-]+)(?:\|([^}]+))?\}\}/g, (m, k, txt) => txt || (course.glossary[k] ? course.glossary[k].t : k));
+  return sanitize(String(html || '').replace(/\{\{>([a-z0-9-]+)(?:\|([^}]+))?\}\}/g, (m, id, txt) => txt || id)
+    .replace(/\{\{([a-z0-9-]+)(?:\|([^}]+))?\}\}/g, (m, k, txt) => txt || (course.glossary[k] ? course.glossary[k].t : k)));
 }
 
 // Запрос к API; без сессии — на страницу входа и обратно.

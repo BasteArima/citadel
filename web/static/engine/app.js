@@ -10,6 +10,7 @@ import { linkIcon, metalName } from '../site/shared.js';
 import { openSearch as openSiteSearch, allCourses, bindSearchKeys } from '../site/search.js';
 import { markTheme, setDue } from '../site/topbar.js';
 import { createPlayer } from './player.js';
+import { safeHref } from './sanitize.js';
 
 // course — курс v1, user — кто вошёл, catalog — список курсов (для «Опирается на» и «Что дальше»),
 // audio — записанная озвучка частей (player.js).
@@ -65,7 +66,7 @@ export function start(course, user, catalog, audio, applied) {
     if (isLesson) {
       const m = meta(current), les = X.lesson(current), ps = les.parts;
       const k = ps ? Math.min(Math.max(currentPart, 1), ps.length) - 1 : 0;
-      lessonHead = '<div class="tb-lesson"><small>' + lessonLabel + ' ' + m.n + (ps ? ' · часть ' + (k + 1) + ' из ' + ps.length : '') + '</small><b>' + esc(m.t) + '</b></div>' +
+      lessonHead = '<div class="tb-lesson"><small>' + esc(lessonLabel) + ' ' + m.n + (ps ? ' · часть ' + (k + 1) + ' из ' + ps.length : '') + '</small><b>' + esc(m.t) + '</b></div>' +
         (ps && ps[k].kind === 'theory' && player.has(ps[k].node.id) ? listenTop(player.state(ps[k].node.id) === 'playing') : '');
       if (ps) strip = '<div class="tb-strip" aria-hidden="true">' + ps.map((p, i) => '<i class="' + (partDone(les, i) ? 'ok' : '') + (i === k ? ' cur' : '') + '"></i>').join('') + '</div>';
     }
@@ -127,21 +128,21 @@ export function start(course, user, catalog, audio, applied) {
     return '<li><a class="sd-a" href="#' + first + '"' + (here ? ' aria-current="page"' : '') + '>' + ic(IC.book) + '<span class="sd-t">Справочник</span></a></li>';
   }
   function sideLink(id, d, t, extra) {
-    return '<li><a class="sd-a" href="#' + id + '"' + (current === id ? ' aria-current="page"' : '') + '>' + ic(d) +
+    return '<li><a class="sd-a" href="#' + esc(id) + '"' + (current === id ? ' aria-current="page"' : '') + '>' + ic(d) +
       '<span class="sd-t">' + t + '</span>' + (extra ? '<span class="sd-cnt">' + extra + '</span>' : '') + '</a></li>';
   }
   function lessonItem(l) {
     const cur = current === l.id, ok = isDone(l.id);
-    let h = '<li><a class="sd-l' + (ok ? ' ok' : '') + (cur ? ' cur' : '') + '" href="#' + l.id + '"' + (cur ? ' aria-current="page"' : '') + '>' +
+    let h = '<li><a class="sd-l' + (ok ? ' ok' : '') + (cur ? ' cur' : '') + '" href="#' + esc(l.id) + '"' + (cur ? ' aria-current="page"' : '') + '>' +
       '<span class="sd-st">' + (ok ? ic(IC.check, 12) : cur ? '<i></i>' : '') + '</span><span class="sd-t">' + l.n + ' · ' + esc(l.t) + '</span></a></li>';
     const les = X.lesson(l.id), ps = cur ? les.parts : null;
     if (ps) {
       h += '<li><ol class="sd-parts">' + ps.map((p, k) => {
         const done = partDone(les, k), here = currentPart === k + 1;
         return (p.kind === 'practice' && ps[k - 1].kind === 'theory' ? '<li class="sd-pl">Практика</li>' : '') +
-          '<li><a class="sd-p ' + p.kind + (done ? ' ok' : '') + '" href="#' + l.id + '/' + (k + 1) + '"' + (here ? ' aria-current="step"' : '') + '>' +
+          '<li><a class="sd-p ' + p.kind + (done ? ' ok' : '') + '" href="#' + esc(l.id) + '/' + (k + 1) + '"' + (here ? ' aria-current="step"' : '') + '>' +
           '<span class="sd-dot">' + (done ? ic(IC.check, 12) : '') + '</span><span class="sd-t">' + esc(p.title) + '</span>' +
-          '<span class="sd-min">' + partMin(les, k) + ' мин</span></a></li>';
+          '<span class="sd-min">' + esc(partMin(les, k)) + ' мин</span></a></li>';
       }).join('') + '</ol></li>';
     }
     return h;
@@ -164,7 +165,7 @@ export function start(course, user, catalog, audio, applied) {
           (run.length > 1 ? range + ' · готовятся' : l.n + ' · ' + esc(l.t) + ' · скоро') + '</span></div></li>';
       } else if (run.length > 1) {
         const key = sec.id + ':' + run[0].n, open = !!S.ui.runs[key];
-        out += '<li><button type="button" class="sd-run" data-run="' + key + '" aria-expanded="' + open + '"><span class="sd-t">Уроки ' + range + ' пройдены</span>' + ic(open ? IC.down : IC.chev, 14) + '</button></li>';
+        out += '<li><button type="button" class="sd-run" data-run="' + esc(key) + '" aria-expanded="' + open + '"><span class="sd-t">Уроки ' + range + ' пройдены</span>' + ic(open ? IC.down : IC.chev, 14) + '</button></li>';
         if (open) run.forEach((x) => { out += lessonItem(x); });
       } else {
         out += lessonItem(l);
@@ -184,7 +185,7 @@ export function start(course, user, catalog, audio, applied) {
       refLink() + '</ul>';
     X.sections.forEach((sec) => {
       const open = secOpen(sec);
-      h += '<div class="sd-sec"><button type="button" class="sd-sec-h" data-sec="' + sec.id + '" aria-expanded="' + open + '">' +
+      h += '<div class="sd-sec"><button type="button" class="sd-sec-h" data-sec="' + esc(sec.id) + '" aria-expanded="' + open + '">' +
         ic(open ? IC.down : IC.chev, 14) + '<span class="sd-t">' + esc(sec.name) + '</span><span class="sd-cnt">' + doneCount(sec.lessons) + ' / ' + sec.lessons.length + '</span></button>' +
         (open ? '<ul class="sd-list">' + sectionItems(sec) + '</ul>' : '') + '</div>';
     });
@@ -345,7 +346,7 @@ export function start(course, user, catalog, audio, applied) {
     const deps = (les.node.deps || []).map(meta).filter(Boolean);
     if (deps.length) {
       rail.appendChild(el('section', 'card rail-card', '<h2 class="lbl">Опирается на</h2>' +
-        deps.map((d) => ready(d.id) ? '<a href="#' + d.id + '">' + lessonLabel + ' ' + d.n + ' · ' + esc(d.t) + '</a>' : '<span>' + lessonLabel + ' ' + d.n + ' · ' + esc(d.t) + ' (скоро)</span>').join('') + '</section>'));
+        deps.map((d) => ready(d.id) ? '<a href="#' + esc(d.id) + '">' + esc(lessonLabel) + ' ' + d.n + ' · ' + esc(d.t) + '</a>' : '<span>' + esc(lessonLabel) + ' ' + d.n + ' · ' + esc(d.t) + ' (скоро)</span>').join('') + '</section>'));
     }
     const keys = takeTerms();
     if (keys.length) {
@@ -423,10 +424,9 @@ export function start(course, user, catalog, audio, applied) {
     const sec = el('section', 'vids');
     sec.innerHTML = '<h3>Видео по теме</h3><p class="vids-sub">Если удобнее посмотреть. Открывается на YouTube в новой вкладке.</p>' +
       '<div class="vid-list">' + vs.map((v) => {
-        const id = (String(v.url).match(/[?&]v=([\w-]{6,})|youtu\.be\/([\w-]{6,})/) || []);
-        const yt = id[1] || id[2];
-        return '<a class="vid" href="' + esc(v.url) + '" target="_blank" rel="noopener">' +
-          '<span class="vid-img">' + (yt ? '<img src="https://i.ytimg.com/vi/' + yt + '/mqdefault.jpg" alt="" loading="lazy" width="320" height="180">' : '') +
+        // External thumbnails are excluded by img-src 'self' data: (0021).
+        return '<a class="vid" href="' + esc(safeHref(String(v.url)) ? v.url : '#') + '" target="_blank" rel="noopener noreferrer">' +
+          '<span class="vid-img">' + ic(IC.play, 40) +
           (v.dur ? '<span class="vid-dur">' + esc(v.dur) + '</span>' : '') + '</span>' +
           '<span class="vid-t">' + esc(v.title) + '</span>' +
           '<span class="vid-c">' + esc(v.channel || '') + (v.why ? ' · ' + esc(v.why) : '') + '</span></a>';
@@ -438,7 +438,7 @@ export function start(course, user, catalog, audio, applied) {
   function partBar(les, k) {
     const nav = el('nav', 'pills', '<ol>' + les.parts.map((p, i) => {
       const ok = partDone(les, i);
-      return '<li><a class="pill' + (ok ? ' ok' : '') + (i === k ? ' cur' : '') + '" href="#' + les.id + '/' + (i + 1) + '"' + (i === k ? ' aria-current="step"' : '') +
+      return '<li><a class="pill' + (ok ? ' ok' : '') + (i === k ? ' cur' : '') + '" href="#' + esc(les.id) + '/' + (i + 1) + '"' + (i === k ? ' aria-current="step"' : '') +
         ' title="' + (p.kind === 'theory' ? 'Теория' : 'Практика') + (ok ? ', засчитана' : '') + '">' +
         (ok ? ic(IC.check, 13) : '') + '<span>' + (i + 1) + ' ' + esc(p.title) + '</span></a></li>';
     }).join('') + '</ol>');
@@ -471,7 +471,7 @@ export function start(course, user, catalog, audio, applied) {
     trackTerms();
     page.innerHTML = '';
     const { main, rail } = lessonFrame();
-    main.appendChild(el('div', 'crumb', '<span>' + esc(m.sec.name) + ' · ' + lessonLabel + ' ' + m.n + '</span>' + (les.time ? '<span>' + esc(les.time) + '</span>' : '')));
+    main.appendChild(el('div', 'crumb', '<span>' + esc(m.sec.name) + ' · ' + esc(lessonLabel) + ' ' + m.n + '</span>' + (les.time ? '<span>' + esc(les.time) + '</span>' : '')));
     main.appendChild(el('h1', 'title', esc(m.t)));
 
     if (!parts) {
@@ -498,7 +498,7 @@ export function start(course, user, catalog, audio, applied) {
     let bar = partBar(les, k);
     main.appendChild(bar);
     const body = el('div', 'part-body'); main.appendChild(body);
-    body.appendChild(el('div', 'pt-meta', 'Часть ' + (k + 1) + ' из ' + parts.length + ' · ' + (part.kind === 'theory' ? 'теория' : 'практика') + ' · ≈ ' + min + ' мин'));
+    body.appendChild(el('div', 'pt-meta', 'Часть ' + (k + 1) + ' из ' + parts.length + ' · ' + (part.kind === 'theory' ? 'теория' : 'практика') + ' · ≈ ' + esc(min) + ' мин'));
     body.appendChild(el('h2', 'pt-title', esc(part.title)));
     if (part.kind === 'theory') {
       const about = { course: C.title, lesson: lessonLabel + ' ' + m.n, part: k + 1, title: part.title };
@@ -627,15 +627,15 @@ export function start(course, user, catalog, audio, applied) {
     const todo = firstTodo(), last = lastPlace(), due = cardsDue();
     const prog = el('section', 'card cp-prog');
     let go = '';
-    if (last) go = '<a class="btn pri" href="' + esc(last.hash) + '">Продолжить: ' + esc(last.label) + '</a>';
-    else if (todo) go = '<a class="btn pri" href="#' + todo.id + '">' + (done ? 'Продолжить' : 'Начать') + ': ' + lessonLabel.toLowerCase() + ' ' + todo.n + '</a>';
+    if (last) go = '<a class="btn pri" href="' + esc(safeHref(last.hash) ? last.hash : '#') + '">Продолжить: ' + esc(last.label) + '</a>';
+    else if (todo) go = '<a class="btn pri" href="#' + esc(todo.id) + '">' + (done ? 'Продолжить' : 'Начать') + ': ' + esc(lessonLabel.toLowerCase()) + ' ' + todo.n + '</a>';
     prog.innerHTML = '<div class="prog"><div class="prog-t"><span>Пройдено ' + done + ' из ' + TOTAL + ' ' + plural(TOTAL, 'урока', 'уроков', 'уроков') + '</span><span>' + pct + '%</span></div>' +
       '<div class="bar" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" aria-label="Прогресс курса"><i style="width:' + pct + '%"></i></div></div>' +
       '<div class="cp-go">' + go + (due ? '<a class="btn" href="/review">Повторить сегодня · ' + due + '</a>' : '') +
       (X.hasNotes ? '<a class="btn" href="#notes">' + ic(IC.book) + ' Конспект</a>' : '') +
       (X.hasGlossary ? '<a class="btn" href="#glossary">' + ic(IC.book) + ' Словарь</a>' : '') +
       (X.hasExam ? '<a class="btn" href="#exam">' + ic(IC.check) + ' Контрольная</a>' : '') +
-      X.pages.map((p) => '<a class="btn" href="#' + p.id + '">' + ic(IC[p.icon] || IC.book) + ' ' + esc(p.title) + '</a>').join('') + '</div>';
+      X.pages.map((p) => '<a class="btn" href="#' + esc(p.id) + '">' + ic(IC[p.icon] || IC.book) + ' ' + esc(p.title) + '</a>').join('') + '</div>';
     page.appendChild(prog);
 
     const grid = el('div', 'cp-grid');
@@ -694,7 +694,7 @@ export function start(course, user, catalog, audio, applied) {
     }
     const st = S.lessons[l.id], ok = isDone(l.id);
     const started = !ok && st && (Object.keys(st.t || {}).length || Object.keys(st.seen || {}).length);
-    return '<li><a class="cp-l' + (ok ? ' ok' : started ? ' cur' : '') + '" href="#' + l.id + '">' +
+    return '<li><a class="cp-l' + (ok ? ' ok' : started ? ' cur' : '') + '" href="#' + esc(l.id) + '">' +
       '<span class="cp-st">' + (ok ? ic(IC.check, 12) : started ? '<i></i>' : '') + '</span>' +
       '<span class="cp-n">' + l.n + '</span><span class="cp-t">' + esc(l.t) + '</span>' +
       '<span class="cp-s">' + (ok ? 'пройден' : started ? 'начат' : esc(l.node.time || '')) + '</span></a></li>';
@@ -791,7 +791,7 @@ export function start(course, user, catalog, audio, applied) {
     const dl = el('dl', 'gloss');
     keys.forEach((k) => {
       const g = C.glossary[k];
-      const r = refs[k] ? Object.keys(refs[k]).map((id) => '<a href="#' + id + '">урок ' + meta(id).n + '</a>').join(', ') : '';
+      const r = refs[k] ? Object.keys(refs[k]).map((id) => '<a href="#' + esc(id) + '">урок ' + meta(id).n + '</a>').join(', ') : '';
       const dt = el('dt', null, esc(g.t) + (g.en ? '<small>' + esc(g.en) + '</small>' : ''));
       const dd = el('dd', null, esc(g.d) + (r ? '<span class="ref">Встречается: ' + r + '</span>' : ''));
       dt.dataset.k = dd.dataset.k = (g.t + ' ' + (g.en || '') + ' ' + k).toLowerCase().replace(/ё/g, 'е');
@@ -836,7 +836,7 @@ export function start(course, user, catalog, audio, applied) {
         if (l.sec !== sec) { sec = l.sec; list.appendChild(el('h2', 'nt-sec', esc(sec.name))); }
         const les = X.lesson(l.id), say = sayOf(les);
         const art = el('article', 'card nt-l');
-        art.innerHTML = '<div class="nt-h"><h3><span>' + l.n + '</span><a href="#' + l.id + '">' + esc(l.t) + '</a></h3>' +
+        art.innerHTML = '<div class="nt-h"><h3><span>' + l.n + '</span><a href="#' + esc(l.id) + '">' + esc(l.t) + '</a></h3>' +
           '<span class="nt-st' + (isDone(l.id) ? ' ok' : '') + '">' + (isDone(l.id) ? 'пройден' : 'не пройден') + '</span></div>' +
           (les.summary && les.summary.length ? '<ul class="list">' + les.summary.map((s) => '<li>' + rich(s) + '</li>').join('') + '</ul>' : '') +
           (say ? '<div class="nt-say"><span class="lbl">Скажи на собесе</span><p>' + rich(say) + '</p></div>' : '');
@@ -903,7 +903,7 @@ export function start(course, user, catalog, audio, applied) {
         const r = res.filter(Boolean).length, m = qs.filter((x, i) => res[i] === false);
         side.innerHTML = '<section class="card rail-card"><h2 class="lbl">Счёт</h2><p class="ex-score"><b>' + r + '</b> из ' + res.length + '</p></section>' +
           '<section class="card rail-card"><h2 class="lbl">Что повторить</h2>' + (m.length ?
-            '<ul class="ex-miss">' + m.map((x) => '<li><a href="#' + x.lesson.id + '">' + lessonLabel + ' ' + x.lesson.n + ' · ' + esc(x.lesson.t) + '</a></li>').join('') + '</ul><p>Эти вопросы уже в повторениях.</p>' :
+            '<ul class="ex-miss">' + m.map((x) => '<li><a href="#' + esc(x.lesson.id) + '">' + esc(lessonLabel) + ' ' + x.lesson.n + ' · ' + esc(x.lesson.t) + '</a></li>').join('') + '</ul><p>Эти вопросы уже в повторениях.</p>' :
             '<p>' + (res.length ? 'Пока без ошибок.' : 'Здесь появятся уроки, где ошибся.') + '</p>') + '</section>';
         run.querySelectorAll('.ex-bar li').forEach((li, i) => { li.className = i < res.length ? (res[i] ? 'ok' : 'no') : i === k ? 'cur' : ''; });
       };

@@ -59,10 +59,16 @@ func Validate(c *Course) []Problem {
 		v.project()
 	}
 	for key, t := range c.Glossary {
-		v.text("словарь "+key, t.Text)
+		v.text("словарь "+key+".d", t.Text)
+		v.html("словарь "+key+".d", t.Text)
+		v.html("словарь "+key+".t", t.Title)
 	}
-	for _, s := range append([]string{c.About}, c.Howto...) {
-		v.text("паспорт", s)
+	v.text("паспорт.about", c.About)
+	v.html("паспорт.about", c.About)
+	for i, s := range c.Howto {
+		path := fmt.Sprintf("паспорт.howto[%d]", i)
+		v.text(path, s)
+		v.html(path, s)
 	}
 	return v.out
 }
@@ -161,8 +167,16 @@ func (v *validator) node(n *Node, parent *Node) {
 			v.errf(path, "опирается на несуществующий узел %q", d)
 		}
 	}
-	for _, s := range append([]string{n.Lead, n.About, n.Say}, append(n.Simple, n.Summary...)...) {
-		v.text(path, s)
+	for field, s := range map[string]string{"lead": n.Lead, "about": n.About, "say": n.Say} {
+		v.text(path+"."+field, s)
+		v.html(path+"."+field, s)
+	}
+	for field, items := range map[string][]string{"simple": n.Simple, "summary": n.Summary} {
+		for i, s := range items {
+			p := fmt.Sprintf("%s.%s[%d]", path, field, i)
+			v.text(p, s)
+			v.html(p, s)
+		}
 	}
 	for i, b := range n.Blocks {
 		v.block(fmt.Sprintf("%s, блок %d (%s)", path, i+1, b.Type()), b)
@@ -209,6 +223,9 @@ func (v *validator) block(path string, b Block) {
 		}
 	}
 	v.strings(path, map[string]any(b))
+	for _, field := range blockHTMLFields[b.Type()] {
+		v.htmlField(path, map[string]any(b), strings.Split(field, "."))
+	}
 }
 
 // project checks the shape of a project: levels of steps, every step is a task to build.
