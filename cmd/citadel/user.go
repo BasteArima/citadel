@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/big"
 	"os"
 	"strings"
@@ -92,6 +93,11 @@ func userCommand(args []string, out io.Writer) error {
 	}
 	defer s.Close()
 	ctx := context.Background()
+	audit := func(action, target string, details any) {
+		if err := s.Audit(ctx, "console", action, target, details); err != nil {
+			slog.Error("write console audit", "action", action, "err", err)
+		}
+	}
 	if command == "list" {
 		users, err := s.Users(ctx)
 		if err != nil {
@@ -112,9 +118,11 @@ func userCommand(args []string, out io.Writer) error {
 		if name == "" {
 			name = positional[0]
 		}
-		if _, err := s.CreateUser(ctx, positional[0], name, password, role); err != nil {
+		u, err := s.CreateUser(ctx, positional[0], name, password, role)
+		if err != nil {
 			return err
 		}
+		audit(store.AuditUserCreated, store.UserTarget(u.ID, u.Name), map[string]string{"login": u.Login, "role": u.Role})
 		_, err = fmt.Fprintln(out, password)
 		return err
 	}
@@ -125,11 +133,25 @@ func userCommand(args []string, out io.Writer) error {
 		}
 		id = u.ID
 	}
+
+	before, err := s.UserInfoByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	target := store.UserTarget(id, before.Name)
 	switch command {
 	case "set-role":
-		return s.SetRole(ctx, id, positional[1])
+		if err := s.SetRole(ctx, id, positional[1]); err != nil {
+			return err
+		}
+		audit(store.AuditUserRole, target, map[string]string{"before": before.Role, "after": positional[1]})
+		return nil
 	case "unblock":
-		return s.SetDisabled(ctx, id, false)
+		if err := s.SetDisabled(ctx, id, false); err != nil {
+			return err
+		}
+		audit(store.AuditUserEnabled, target, nil)
+		return nil
 	case "reset-password":
 		password, err := randomPassword()
 		if err != nil {
@@ -139,10 +161,13 @@ func userCommand(args []string, out io.Writer) error {
 			if err := s.SetLogin(ctx, id, login); err != nil {
 				return err
 			}
+			login, _ = store.CleanLogin(login) // Match the normalized value stored by SetLogin.
+			audit(store.AuditUserLogin, target, map[string]string{"before": before.Login, "after": login})
 		}
 		if err := s.SetPassword(ctx, id, password); err != nil {
 			return err
 		}
+		audit(store.AuditPasswordReset, target, map[string]string{"source": "console"})
 		_, err = fmt.Fprintln(out, password)
 		return err
 	}

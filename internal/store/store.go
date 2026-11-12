@@ -172,6 +172,16 @@ var migrations = []string{
 		used_at TEXT
 	);
 	CREATE INDEX password_resets_user ON password_resets(user_id);`,
+	// Administrative account and access history (0022). No foreign keys: history survives deletion.
+	`CREATE TABLE audit (
+		id INTEGER PRIMARY KEY,
+		at TEXT NOT NULL,
+		actor TEXT NOT NULL,
+		action TEXT NOT NULL,
+		target TEXT NOT NULL,
+		details TEXT NOT NULL
+	);
+	CREATE INDEX audit_at ON audit(at);`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

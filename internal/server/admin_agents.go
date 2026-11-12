@@ -63,6 +63,7 @@ func (s *server) adminCreateToken(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "create token", err)
 		return
 	}
+	s.adminAudit(r, store.AuditTokenCreated, "Токен #"+strconv.FormatInt(t.ID, 10), map[string]any{"name": t.Name, "propose": t.CanPropose, "create": t.CanCreate, "review": t.CanReview, "courses": t.Courses})
 	s.log.Info("token created", "id", t.ID, "name", t.Name, "by", t.CreatedBy)
 	writeValue(w, map[string]any{"token": t, "secret": secret})
 }
@@ -76,6 +77,7 @@ func (s *server) adminRevokeToken(w http.ResponseWriter, r *http.Request) {
 	if err := s.cfg.Store.RevokeToken(r.Context(), id); s.notFound(w, err, "revoke token") {
 		return
 	}
+	s.adminAudit(r, store.AuditTokenRevoked, "Токен #"+strconv.FormatInt(id, 10), nil)
 	s.log.Info("token revoked", "id", id, "by", userFrom(r.Context()).Name)
 	writeValue(w, map[string]any{"revoked": id})
 }
@@ -97,6 +99,7 @@ func (s *server) adminTokenReview(w http.ResponseWriter, r *http.Request) {
 	if err := s.cfg.Store.SetTokenReview(r.Context(), id, req.Review); s.notFound(w, err, "set token review") {
 		return
 	}
+	s.adminAudit(r, store.AuditTokenReview, "Токен #"+strconv.FormatInt(id, 10), map[string]bool{"review": req.Review})
 	s.log.Info("token review right", "id", id, "review", req.Review, "by", userFrom(r.Context()).Name)
 	writeValue(w, map[string]any{"review": req.Review})
 }
@@ -115,6 +118,7 @@ func (s *server) adminDeleteToken(w http.ResponseWriter, r *http.Request) {
 	if s.notFound(w, err, "delete token") {
 		return
 	}
+	s.adminAudit(r, store.AuditTokenDeleted, "Токен #"+strconv.FormatInt(id, 10), nil)
 	s.log.Info("token deleted", "id", id, "by", userFrom(r.Context()).Name)
 	writeValue(w, map[string]any{"deleted": id})
 }

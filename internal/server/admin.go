@@ -57,6 +57,9 @@ func (s *server) adminRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/admin/courses/{id}/rollback", s.admin(s.adminRollback))
 	mux.Handle("GET /api/admin/courses/{id}/versions", s.admin(s.adminVersions))
 	mux.Handle("GET /api/admin/courses/{id}/versions/{v}", s.admin(s.adminVersion))
+	mux.Handle("GET /api/admin/audit", s.admin(s.adminAuditList))
+	mux.Handle("GET /api/admin/courses/{id}/users", s.admin(s.adminCourseUsers))
+	mux.Handle("PUT /api/admin/courses/{id}/users", s.admin(s.adminSetCourseUsers))
 	mux.Handle("GET /api/admin/users", s.admin(s.adminUsers))
 	mux.Handle("PUT /api/admin/users/{id}", s.admin(s.adminSetRole))
 	mux.Handle("PUT /api/admin/users/{id}/disabled", s.admin(s.adminSetDisabled))
@@ -97,16 +100,35 @@ func (s *server) adminCourses(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "course access", err)
 		return
 	}
+	grants, err := s.cfg.Store.Grants(r.Context())
+	if err != nil {
+		s.fail(w, "course grants", err)
+		return
+	}
+	users, err := s.cfg.Store.Users(r.Context())
+	if err != nil {
+		s.fail(w, "course users", err)
+		return
+	}
+	counts := map[string]int{}
+	for _, u := range users {
+		if u.Role != store.RoleAdmin {
+			for _, id := range grants[u.ID] {
+				counts[id]++
+			}
+		}
+	}
 	type row struct {
 		store.CourseInfo
-		Access string       `json:"access"` // public or private
-		Tool   string       `json:"tool"`
-		Agents int          `json:"agents"` // proposals waiting for the admin
-		Check  checkSummary `json:"check"`
+		GrantedUsers int          `json:"grantedUsers"`
+		Access       string       `json:"access"` // public or private
+		Tool         string       `json:"tool"`
+		Agents       int          `json:"agents"` // proposals waiting for the admin
+		Check        checkSummary `json:"check"`
 	}
 	out := make([]row, 0, len(list))
 	for _, ci := range list {
-		rw := row{CourseInfo: ci, Agents: pending[ci.ID], Access: access[ci.ID]}
+		rw := row{CourseInfo: ci, Agents: pending[ci.ID], Access: access[ci.ID], GrantedUsers: counts[ci.ID]}
 		if data, _, err := s.cfg.Store.Version(r.Context(), ci.ID, 0); err == nil {
 			if c, err := course.Decode(data); err == nil {
 				rw.Check = check(c)
@@ -373,7 +395,7 @@ func (s *server) adminUsers(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, row{u, c})
 	}
-	writeValue(w, map[string]any{"users": out})
+	writeValue(w, map[string]any{"users": out, "currentUserId": userFrom(r.Context()).ID})
 }
 
 // adminSetAccess makes a course public or private (decision 0012).
@@ -385,6 +407,11 @@ func (s *server) adminSetAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
+	before, err := s.cfg.Store.CourseAccess(r.Context())
+	if err != nil {
+		s.fail(w, "course access", err)
+		return
+	}
 	if err := s.cfg.Store.SetCourseAccess(r.Context(), id, req.Access); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			jsonError(w, http.StatusNotFound, "no such course")
@@ -394,6 +421,7 @@ func (s *server) adminSetAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.reloadOrLog(r.Context())
+	s.adminAudit(r, store.AuditCourseAccess, id, map[string]any{"before": before[id], "after": req.Access})
 	s.log.Info("course access", "id", id, "access", req.Access, "by", userFrom(r.Context()).Name)
 	writeValue(w, map[string]any{"access": req.Access})
 }
@@ -411,10 +439,20 @@ func (s *server) adminSetUserCourses(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req, 1<<14) {
 		return
 	}
+	before, err := s.cfg.Store.UserCourses(r.Context(), id)
+	if err != nil {
+		s.fail(w, "user grants", err)
+		return
+	}
 	if err := s.cfg.Store.SetUserCourses(r.Context(), id, req.Courses); s.notFound(w, err, "grant courses") {
 		return
 	}
-	writeValue(w, map[string]any{"courses": req.Courses})
+	after, err := s.cfg.Store.UserCourses(r.Context(), id)
+	if err != nil {
+		s.log.Error("read user grants after update", "err", err)
+	}
+	s.adminAudit(r, store.AuditUserCourses, s.auditUserTarget(r.Context(), id), map[string]any{"before": before, "after": after})
+	writeValue(w, map[string]any{"courses": after})
 }
 
 // adminSetRole changes another user's role.
@@ -434,6 +472,10 @@ func (s *server) adminSetRole(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req, 1<<10) {
 		return
 	}
+	before, err := s.cfg.Store.UserInfoByID(r.Context(), id)
+	if s.notFound(w, err, "read user role") {
+		return
+	}
 	if err := s.cfg.Store.SetRole(r.Context(), id, req.Role); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			jsonError(w, http.StatusNotFound, "no such user")
@@ -446,6 +488,7 @@ func (s *server) adminSetRole(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	s.adminAudit(r, store.AuditUserRole, store.UserTarget(id, before.Name), map[string]any{"before": before.Role, "after": req.Role})
 	writeValue(w, map[string]any{"role": req.Role})
 }
 
@@ -473,6 +516,11 @@ func (s *server) adminSetDisabled(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, err, "disable user")
 		return
 	}
+	action := store.AuditUserEnabled
+	if req.Disabled {
+		action = store.AuditUserDisabled
+	}
+	s.adminAudit(r, action, s.auditUserTarget(r.Context(), id), nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 

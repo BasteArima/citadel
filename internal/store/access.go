@@ -103,7 +103,58 @@ func (s *Store) SetUserCourses(ctx context.Context, userID int64, courses []stri
 		return err
 	}
 	for _, id := range courses {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO course_access (course_id, user_id) SELECT id, ? FROM courses WHERE id = ?`, userID, id); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO course_access (course_id, user_id) SELECT id, ? FROM courses WHERE id = ?`, userID, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// CourseUsers is the same grant relation as UserCourses, viewed from a course.
+func (s *Store) CourseUsers(ctx context.Context, courseID string) ([]int64, error) {
+	var exists bool
+	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM courses WHERE id = ?)`, courseID).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, ErrNotFound
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT user_id FROM course_access WHERE course_id = ? ORDER BY user_id`, courseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// SetCourseUsers atomically replaces a course's grants. Unknown users are ignored,
+// like unknown courses in SetUserCourses. Duplicate ids are harmless.
+func (s *Store) SetCourseUsers(ctx context.Context, courseID string, users []int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var exists bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM courses WHERE id = ?)`, courseID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM course_access WHERE course_id = ?`, courseID); err != nil {
+		return err
+	}
+	for _, id := range users {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO course_access (course_id, user_id) SELECT ?, id FROM users WHERE id = ?`, courseID, id); err != nil {
 			return err
 		}
 	}

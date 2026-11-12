@@ -90,7 +90,7 @@ func TestUserConsoleWhileServing(t *testing.T) {
 	if request(b, "GET", "/api/me", nil) != 401 || login(b, reset) != 401 || login(b, "my new password 123") != 200 {
 		t.Fatal("profile password/session rules failed")
 	}
-	run("add", "--name", "Ученик", "student")
+	studentPassword := run("add", "--name", "Ученик", "student")
 	run("set-role", "student", "author")
 	u, err := st.UserByLogin(ctx, "student")
 	if err != nil || u.Role != store.RoleAuthor {
@@ -113,9 +113,46 @@ func TestUserConsoleWhileServing(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw.Close()
-	newPassword := run("reset-password", "--id", fmt.Sprint(legacyID), "--login", "renamed")
+	newPassword := run("reset-password", "--id", fmt.Sprint(legacyID), "--login", "Renamed")
 	if _, err := st.Authenticate(ctx, "renamed", newPassword); err != nil {
 		t.Fatal("id/login recovery failed")
+	}
+	entries, err := st.AuditEntries(ctx, "", 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string]int{}
+	for _, a := range entries {
+		if a.Actor == "console" {
+			counts[a.Action]++
+			if a.Target == "" {
+				t.Fatal("console audit missing target")
+			}
+			var details map[string]any
+			if err := json.Unmarshal(a.Details, &details); err != nil {
+				t.Fatal(err)
+			}
+			if a.Action == store.AuditUserLogin && (details["before"] != "" || details["after"] != "renamed") {
+				t.Fatalf("console login audit: %s", a.Details)
+			}
+			if a.Action == store.AuditUserRole && (details["before"] != "student" || details["after"] != "author") {
+				t.Fatalf("console role audit: %s", a.Details)
+			}
+			if a.Action == store.AuditPasswordReset && details["source"] != "console" {
+				t.Fatalf("console reset audit: %s", a.Details)
+			}
+		}
+	}
+	for action, want := range map[string]int{store.AuditUserCreated: 2, store.AuditPasswordReset: 2, store.AuditUserRole: 1, store.AuditUserEnabled: 1, store.AuditUserLogin: 1} {
+		if counts[action] != want {
+			t.Errorf("console audit %s: %d, want %d", action, counts[action], want)
+		}
+	}
+	serialized, _ := json.Marshal(entries)
+	for _, secret := range []string{password, studentPassword, reset, newPassword, "my new password 123", "$argon2id$", "password_hash"} {
+		if strings.Contains(string(serialized), secret) {
+			t.Fatal("secret in console audit")
+		}
 	}
 }
 

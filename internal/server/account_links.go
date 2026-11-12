@@ -57,6 +57,7 @@ func (s *server) adminCreateInvite(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, 400, "Не удалось создать приглашение: проверь роль, число использований и срок.")
 		return
 	}
+	s.adminAudit(r, store.AuditInviteCreated, "Приглашение #"+strconv.FormatInt(i.ID, 10), map[string]any{"note": i.Note, "role": i.Role, "courses": i.Courses, "maxUses": i.MaxUses, "expiresAt": i.ExpiresAt})
 	s.log.Info("invite created", "id", i.ID)
 	w.Header().Set("Cache-Control", "no-store")
 	writeValue(w, i)
@@ -75,6 +76,7 @@ func (s *server) adminRevokeInvite(w http.ResponseWriter, r *http.Request) {
 	if s.notFound(w, s.cfg.Store.RevokeInvite(r.Context(), id), "revoke invite") {
 		return
 	}
+	s.adminAudit(r, store.AuditInviteRevoked, "Приглашение #"+strconv.FormatInt(id, 10), nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -92,6 +94,7 @@ func (s *server) adminDeleteInvite(w http.ResponseWriter, r *http.Request) {
 	if s.notFound(w, err, "delete invite") {
 		return
 	}
+	s.adminAudit(r, store.AuditInviteDeleted, "Приглашение #"+strconv.FormatInt(id, 10), nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -167,6 +170,11 @@ func (s *server) join(w http.ResponseWriter, r *http.Request) {
 		s.linkError(w, err)
 		return
 	}
+	courses, err := s.cfg.Store.UserCourses(r.Context(), u.ID)
+	if err != nil {
+		s.log.Error("registration grants", "err", err)
+	}
+	s.audit(r.Context(), store.UserActor(u), store.AuditRegistered, store.UserTarget(u.ID, u.Name), map[string]any{"inviteId": u.InviteID, "role": u.Role, "courses": courses})
 	setLinkSession(w, r, token)
 	s.log.Info("user registered", "login", u.Login, "invite", u.InviteID)
 	writeValue(w, u)
@@ -206,6 +214,7 @@ func (s *server) adminResetLink(w http.ResponseWriter, r *http.Request) {
 	if isHTTPS(r) {
 		scheme = "https"
 	}
+	s.adminAudit(r, store.AuditResetLink, s.auditUserTarget(r.Context(), id), nil)
 	s.log.Info("password reset created", "user", id)
 	writeValue(w, map[string]string{"url": scheme + "://" + r.Host + "/reset/" + token})
 }
@@ -228,6 +237,7 @@ func (s *server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		s.linkError(w, err)
 		return
 	}
+	s.audit(r.Context(), store.UserActor(u), store.AuditPasswordReset, store.UserTarget(u.ID, u.Name), map[string]string{"source": "link"})
 	setLinkSession(w, r, session)
 	s.log.Info("password reset", "user", u.ID)
 	writeValue(w, u)

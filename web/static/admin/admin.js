@@ -12,7 +12,9 @@ import { draft, openDraft, onDraft, save, publishFlow } from './draft.js';
 import { renderEditor } from './editor.js';
 import { renderQuestions } from './questions.js';
 import { renderVersions, authorLabel } from './versions.js';
-import { renderInvites, resetLinkDialog } from './invites.js';
+import { renderInvites } from './invites.js';
+import { renderUsers, courseUsersDialog } from './users.js';
+import { renderAudit } from './audit.js';
 import { renderAudio } from './audio.js';
 import { renderTokens, renderAgents, pendingCount } from './agents.js';
 import { readTheme, saveTheme, applyTheme } from '../site/topbar.js';
@@ -37,7 +39,9 @@ function shell(current) {
     ['versions', c ? '#/c/' + c + '/versions' : '#/', 'Версии'],
     ['agents', '#/agents', 'Правки агентов'],
     ['invites', '#/invites', 'Приглашения'],
-    ['users', '#/users', 'Пользователи и токены']
+    ['users', '#/users', 'Пользователи'],
+    ['tokens', '#/tokens', 'Токены агентов'],
+    ['audit', '#/audit', 'Журнал']
   ];
   const app = document.getElementById('app');
   app.innerHTML = '<div class="ad">' +
@@ -118,7 +122,7 @@ async function loadCourses() {
       : '<span class="ad-pill acc">v' + c.latest.version + (c.published ? ' · ' + changes + ' ' + plural(changes, 'изменение', 'изменения', 'изменений') : '') + '</span>';
     return '<tr data-id="' + esc(c.id) + '"' + (c.id === selectedCheck ? ' class="is-sel"' : '') + '>' +
       '<td><div class="ad-course">' + linkIcon(c.metal, !c.published) + '<span><a href="#/c/' + esc(c.id) + '/edit" class="ad-ct">' + esc(c.title || c.id) + '</a><code>' + esc(c.id) + ' · ' + esc(METALS[c.metal] || c.metal) + (c.type === 'project' ? ' · проект' : '') + '</code></span></div></td>' +
-      '<td><select class="ad-access" aria-label="Доступ к курсу ' + esc(c.title) + '"><option value="public"' + (c.access !== 'private' ? ' selected' : '') + '>всем</option><option value="private"' + (c.access === 'private' ? ' selected' : '') + '>по доступу</option></select></td>' +
+      '<td><select class="ad-access" aria-label="Доступ к курсу ' + esc(c.title) + '"><option value="public"' + (c.access !== 'private' ? ' selected' : '') + '>всем</option><option value="private"' + (c.access === 'private' ? ' selected' : '') + '>по доступу</option></select>' + (c.access === 'private' ? '<div class="ad-small ad-course-grants">Видят: ' + c.grantedUsers + ' — <button type="button" class="ad-linkbtn ad-grant ad-course-users">изменить</button></div>' : c.grantedUsers ? '<div class="ad-small ad-mut ad-course-grants" title="Если сделать курс закрытым, его увидят ' + c.grantedUsers + ' человек">Сохранён доступ: ' + c.grantedUsers + '</div>' : '') + '</td>' +
       '<td>' + (c.published ? '<span class="ad-pill good">v' + c.published + '</span>' : '<span class="ad-mut">не опубликован</span>') + '</td>' +
       '<td>' + draftCell + '</td>' +
       '<td class="ad-mut">' + esc(when(c.latest.createdAt)) + ' · ' + esc(authorName(c.latest.author)) + '</td>' +
@@ -132,8 +136,10 @@ async function loadCourses() {
     if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); loadCourses(); return; }
     const c = courses.find((x) => x.id === id);
     if (c) c.access = sel.value;
-    toast(sel.value === 'private' ? 'Курс виден только админам и тем, кому выдан доступ — в «Пользователях»' : 'Курс виден всем, кто вошёл', 'good');
+    toast(sel.value === 'private' ? 'Курс виден админам и выбранным пользователям' : 'Курс виден всем, кто вошёл', 'good');
+    await loadCourses();
   }));
+  rows.querySelectorAll('.ad-course-users').forEach((b) => b.addEventListener('click', () => courseUsersDialog(courses.find((c) => c.id === b.closest('tr').dataset.id), loadCourses)));
   rows.querySelectorAll('.ad-del').forEach((b) => b.addEventListener('click', async () => {
     const id = b.closest('tr').dataset.id, c = courses.find((x) => x.id === id);
     const text = 'Удалятся все версии курса, прогресс и карточки всех учеников, правки агентов и записи озвучки. Отменить это нельзя. Файл курса на диске не удаляется и обратно курс сам не вернётся: только через «Импорт JSON».';
@@ -222,73 +228,6 @@ async function importFile(file) {
   loadCourses();
 }
 
-// ── пользователи ──
-async function pageUsers() {
-  const main = shell('users');
-  main.innerHTML = '<div class="ad-page"><h1>Пользователи и токены</h1>' +
-    '<section class="ad-sec" aria-labelledby="ad-users-h"><div class="ad-head"><div><h2 id="ad-users-h">Пользователи</h2>' +
-    '<p class="ad-sub">Вход по логину и паролю. Новые аккаунты — через «Приглашения». Для восстановления доступа создай ссылку сброса пароля.</p></div></div>' +
-    '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Курсы</th><th>Последний вход</th><th>Впервые</th><th></th></tr></thead><tbody id="ad-urows"><tr><td colspan="7">Загружаю…</td></tr></tbody></table></div></section>' +
-    '<section class="ad-sec" aria-labelledby="ad-tok-h" id="ad-tokens"></section></div>';
-  renderTokens(document.getElementById('ad-tokens'), courses);
-  await loadUsers();
-}
-
-async function loadUsers() {
-  const r = await req('GET', '/api/admin/users');
-  const rows = document.getElementById('ad-urows');
-  if (!r.ok || !rows) return;
-  const priv = courses.filter((c) => c.access === 'private');
-  const title = (id) => { const c = courses.find((x) => x.id === id); return c ? c.title : id; };
-  // Курсы пользователя: публичные видят все, админ — всё; приватные — только выданные
-  const coursesCell = (u) => {
-    if (u.role === 'admin') return '<span class="ad-mut">все</span>';
-    const mine = u.courses.filter((id) => priv.some((c) => c.id === id));
-    const text = !priv.length ? 'все' : 'публичные' + (mine.length ? ' + ' + mine.map(title).join(', ') : '');
-    return '<span>' + esc(text) + '</span>' + (priv.length ? ' <button type="button" class="ad-linkbtn ad-grant" data-id="' + u.id + '">изменить</button>' : '');
-  };
-  rows.innerHTML = r.data.users.map((u) => {
-    const self = u.name.toLowerCase() === me.name.toLowerCase();
-    const action = self ? '<span class="ad-mut">это ты</span>'
-      : '<button type="button" class="btn ad-role" data-id="' + u.id + '" data-role="' + (u.role === 'admin' ? 'student' : 'admin') + '">' + (u.role === 'admin' ? 'Сделать учеником' : 'Сделать админом') + '</button>';
-    return '<tr><td><span class="ad-user"><i class="ad-ava' + (u.role === 'admin' ? ' adm' : '') + '">' + esc(u.name.slice(0, 1).toUpperCase()) + '</i><strong>' + esc(u.name) + '</strong></span></td>' +
-      '<td>' + esc(u.login || '—') + (u.disabledAt ? ' · заблокирован' : '') + '</td>' +
-      '<td><span class="ad-pill ' + (u.role === 'admin' ? 'acc' : '') + '">' + (u.role === 'admin' ? 'админ' : u.role === 'author' ? 'автор' : 'ученик') + '</span>' + '</td>' +
-      '<td>' + coursesCell(u) + '</td>' +
-      '<td class="ad-mut">' + esc(u.lastSeenAt ? when(u.lastSeenAt) : 'ещё не входил') + '</td><td class="ad-mut">' + esc(when(u.createdAt)) + '</td><td class="ad-r">' + action + (!u.disabledAt ? ' <button type="button" class="btn ad-reset" data-id="' + u.id + '">Ссылка для сброса пароля</button>' : '') + (self ? '' : ' <button type="button" class="btn ad-disable" data-id="' + u.id + '" data-disabled="' + !u.disabledAt + '">' + (u.disabledAt ? 'Разблокировать' : 'Заблокировать') + '</button>') + '</td></tr>';
-  }).join('');
-  rows.querySelectorAll('.ad-reset').forEach((b) => b.addEventListener('click', () => resetLinkDialog(r.data.users.find((u) => String(u.id) === b.dataset.id), loadUsers)));
-  rows.querySelectorAll('.ad-grant').forEach((b) => b.addEventListener('click', () => {
-    const u = r.data.users.find((x) => String(x.id) === b.dataset.id);
-    const form = h('div', 'ad-form');
-    form.innerHTML = '<p class="ad-sub">Публичные курсы видны всем, кто вошёл. Здесь — приватные, которые увидит ' + esc(u.name) + '.</p>' +
-      priv.map((c) => '<label class="ad-check-l"><input type="checkbox" value="' + esc(c.id) + '"' + (u.courses.includes(c.id) ? ' checked' : '') + '> ' + esc(c.title) + '</label>').join('');
-    dialog('Доступ к курсам · ' + u.name, form, [
-      { label: 'Отмена' },
-      { label: 'Сохранить', primary: true, onClick: async (close) => {
-        const list = [...form.querySelectorAll('input:checked')].map((i) => i.value);
-        const r2 = await req('PUT', '/api/admin/users/' + u.id + '/courses', { courses: list });
-        if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); return; }
-        close();
-        toast('Доступ обновлён', 'good');
-        loadUsers();
-      } }
-    ]);
-  }));
-  rows.querySelectorAll('.ad-disable').forEach((b) => b.addEventListener('click', async () => {
-    const r2 = await req('PUT', '/api/admin/users/' + b.dataset.id + '/disabled', { disabled: b.dataset.disabled === 'true' });
-    if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); return; }
-    toast('Статус изменён', 'good');
-    loadUsers();
-  }));
-  rows.querySelectorAll('.ad-role').forEach((b) => b.addEventListener('click', async () => {
-    const r2 = await req('PUT', '/api/admin/users/' + b.dataset.id, { role: b.dataset.role });
-    if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); return; }
-    toast('Роль изменена', 'good');
-    loadUsers();
-  }));
-}
-
 function pageAgents(id) {
   const main = shell('agents');
   renderAgents(main, id, () => { draft.course = draft.dirty ? draft.course : null; refreshBadge(); });
@@ -310,7 +249,13 @@ async function route() {
   if (offBar) { offBar(); offBar = null; }
   const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   if (parts[0] === 'invites') return renderInvites(shell('invites'), courses);
-  if (parts[0] === 'users') return pageUsers();
+  if (parts[0] === 'users') return renderUsers(shell('users'));
+  if (parts[0] === 'tokens') {
+    const main = shell('tokens');
+    main.innerHTML = '<div class="ad-page"><h1>Токены агентов</h1><section class="ad-sec" id="ad-tokens"></section></div>';
+    return renderTokens(main.querySelector('#ad-tokens'), courses);
+  }
+  if (parts[0] === 'audit') return renderAudit(shell('audit'));
   if (parts[0] === 'agents') return pageAgents(+parts[1] || 0);
   if (parts[0] === 'c' && parts[1]) {
     const id = parts[1], view = parts[2] || 'edit';
