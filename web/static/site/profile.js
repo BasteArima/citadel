@@ -31,7 +31,7 @@ function render() {
   app.innerHTML =
     '<main class="site-main">' +
       '<div class="me-h"><span class="me-av" aria-hidden="true">' + esc(user.name.slice(0, 1).toUpperCase()) + '</span>' +
-        '<div><h1>' + esc(user.name) + '</h1><p class="site-sub">' + (user.role === 'admin' ? 'Ученик и админ' : 'Ученик') + '</p></div></div>' +
+        '<div><h1>' + esc(user.name) + '</h1><p class="site-sub">' + (user.role === 'admin' ? 'Ученик и админ' : user.role === 'author' ? 'Ученик и автор' : 'Ученик') + '</p></div></div>' +
       chain(forged, forging) +
       '<div class="stats">' +
         stat('Уроков пройдено', sum((c) => (c.type === 'project' ? 0 : c.done))) +

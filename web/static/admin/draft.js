@@ -71,7 +71,7 @@ export async function publishFlow(version) {
     const bad = check && check.errors > 0;
     dialog('Опубликовать v' + v + '?',
       (bad ? '<p>В версии есть ошибки — ученики не должны увидеть сломанный курс. Исправь их и сохрани.</p>'
-        : '<p>Ученики увидят эту версию сразу. Их прогресс сохранится: он хранится по id уроков и вопросов.</p>') + problemsHTML(check),
+        : '<p>В каталоге будет доступна эта версия. Доступ к курсу не изменится. Прогресс сохранится: он хранится по id уроков и вопросов.</p>') + problemsHTML(check),
       [
         { label: 'Отмена', onClick: (close) => { close(); resolve(false); } },
         { label: 'Опубликовать v' + v, primary: true, disabled: bad, onClick: async (close) => {
@@ -80,7 +80,7 @@ export async function publishFlow(version) {
           if (!r.ok) { toast(r.data.error || 'Не опубликовано: ' + r.status, 'bad'); resolve(false); return; }
           if (v === draft.version) draft.published = true;
           emit();
-          toast('Опубликована v' + v + ': ученики видят её', 'good');
+          toast('Опубликована v' + v, 'good');
           resolve(true);
         } }
       ]);

@@ -116,13 +116,16 @@ func (s *server) runFor(ctx context.Context, who string, c *course.Course, file,
 }
 
 func (s *server) runRoutes(mux *http.ServeMux) {
-	mux.Handle("GET /api/admin/runner", s.admin(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("GET /api/admin/runner", s.staff(func(w http.ResponseWriter, r *http.Request) {
 		tools := s.runnerTools(r.Context())
 		writeValue(w, map[string]any{"available": tools != nil, "tools": tools})
 	}))
-	mux.Handle("POST /api/admin/run", s.admin(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("POST /api/admin/run", s.staff(func(w http.ResponseWriter, r *http.Request) {
 		var req runArgs
 		if !readJSON(w, r, &req, 512<<10) {
+			return
+		}
+		if !s.editable(w, r, req.Course) {
 			return
 		}
 		data, _, err := s.cfg.Store.Version(r.Context(), req.Course, 0)

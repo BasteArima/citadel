@@ -37,15 +37,16 @@ type Config struct {
 
 // Summary is a course as listed in the catalog.
 type Summary struct {
-	ID       string      `json:"id"`
-	Type     string      `json:"type,omitempty"` // "project" — a project (decision 0016)
-	Title    string      `json:"title"`
-	Subtitle string      `json:"subtitle,omitempty"`
-	Metal    string      `json:"metal"`
-	Tool     course.Tool `json:"tool"`
-	Requires []string    `json:"requires,omitempty"`
-	Lessons  int         `json:"lessons"`
-	Ready    int         `json:"ready"`
+	ID        string      `json:"id"`
+	Type      string      `json:"type,omitempty"` // "project" — a project (decision 0016)
+	Title     string      `json:"title"`
+	Subtitle  string      `json:"subtitle,omitempty"`
+	Metal     string      `json:"metal"`
+	Tool      course.Tool `json:"tool"`
+	Requires  []string    `json:"requires,omitempty"`
+	Lessons   int         `json:"lessons"`
+	Ready     int         `json:"ready"`
+	OnlyYours bool        `json:"onlyYours,omitempty"`
 }
 
 type server struct {
@@ -67,6 +68,7 @@ type catalog struct {
 	courses map[string][]byte
 	list    map[string]Summary
 	soon    []Soon
+	owners  map[string]int64
 	access  map[string]string            // course id → public or private (decision 0012)
 	speech  map[string]map[string]string // course id → part id → hash of its narration text
 }
@@ -81,7 +83,7 @@ type Soon struct {
 
 // New returns the HTTP handler.
 func New(ctx context.Context, cfg Config) (http.Handler, error) {
-	s := &server{cfg: cfg, log: cfg.Log, limiter: newLimiter(10, 10*time.Minute), loginLimiter: newLimiter(10, 15*time.Minute), ctx: ctx, audio: audioJobs{jobs: map[string]*audioJob{}}}
+	s := &server{cfg: cfg, log: cfg.Log, limiter: newLimiter(10, 10*time.Minute), loginLimiter: newLimiter(10, 15*time.Minute), ctx: ctx, audio: audioJobs{jobs: map[string]*audioJob{}, recording: make(chan struct{}, 1)}}
 	if ok, err := cfg.Store.HasSignInAdmin(ctx); err != nil {
 		return nil, err
 	} else if !ok {
@@ -192,7 +194,11 @@ func (s *server) reload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c := &catalog{parsed: map[string]*course.Course{}, courses: map[string][]byte{}, list: map[string]Summary{}, soon: []Soon{}, access: access, speech: map[string]map[string]string{}}
+	owners, err := s.cfg.Store.CourseOwners(ctx)
+	if err != nil {
+		return err
+	}
+	c := &catalog{owners: owners, parsed: map[string]*course.Course{}, courses: map[string][]byte{}, list: map[string]Summary{}, soon: []Soon{}, access: access, speech: map[string]map[string]string{}}
 	for _, cr := range courses {
 		data, err := json.Marshal(cr)
 		if err != nil {
@@ -209,7 +215,7 @@ func (s *server) reload(ctx context.Context) error {
 		c.speech[cr.ID] = hashes
 	}
 	for _, ci := range all {
-		if ci.Published == 0 {
+		if ci.Published == 0 && ci.OwnerID == 0 {
 			c.soon = append(c.soon, Soon{ID: ci.ID, Type: ci.Type, Title: ci.Title, Metal: ci.Metal})
 		}
 	}
@@ -217,8 +223,8 @@ func (s *server) reload(ctx context.Context) error {
 	return nil
 }
 
-// visible tells which courses the user may open: admins — all, others — public courses and
-// the private ones granted to them. A course the user may not open looks the same as a missing one.
+// visible tells which courses the user may open: admin, owner, public or granted.
+// A course the user may not open looks the same as a missing one.
 func (s *server) visible(r *http.Request) (func(id string) bool, error) {
 	cat, u := s.cat.Load(), userFrom(r.Context())
 	if u.Role == store.RoleAdmin {
@@ -228,7 +234,9 @@ func (s *server) visible(r *http.Request) (func(id string) bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return func(id string) bool { return cat.access[id] != store.AccessPrivate || slices.Contains(grants, id) }, nil
+	return func(id string) bool {
+		return (u.ID != 0 && cat.owners[id] == u.ID) || cat.access[id] == store.AccessPublic || slices.Contains(grants, id)
+	}, nil
 }
 
 // published returns the published course the user may open, or false. If access cannot be
@@ -256,7 +264,9 @@ func (s *server) listCourses(w http.ResponseWriter, r *http.Request) {
 	out := []Summary{}
 	for _, id := range cat.order {
 		if see(id) {
-			out = append(out, cat.list[id])
+			sum := cat.list[id]
+			sum.OnlyYours = s.onlyYours(r, id)
+			out = append(out, sum)
 		}
 	}
 	writeValue(w, out)
@@ -331,4 +341,9 @@ func (s *server) logRequests(next http.Handler) http.Handler {
 		}
 		s.log.Info("request", "method", r.Method, "path", safeRequestPath(r.URL.Path), "status", sw.status, "dur", time.Since(start).Round(time.Microsecond).String())
 	})
+}
+
+func (s *server) onlyYours(r *http.Request, id string) bool {
+	cat, u := s.cat.Load(), userFrom(r.Context())
+	return cat.access[id] == store.AccessPrivate && cat.owners[id] == u.ID && u.Role == store.RoleAuthor
 }

@@ -244,20 +244,21 @@ func (s *Store) HasSignInAdmin(ctx context.Context) (bool, error) {
 
 // UserInfo is a user as the admin list sees it.
 type UserInfo struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	Role       string `json:"role"`
-	Created    string `json:"createdAt"`
-	LastSeen   string `json:"lastSeenAt"`
-	Login      string `json:"login"`
-	DisabledAt string `json:"disabledAt"`
-	InviteID   int64  `json:"inviteId"`
-	InviteNote string `json:"inviteNote"`
+	CourseLimit int    `json:"courseLimit"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Role        string `json:"role"`
+	Created     string `json:"createdAt"`
+	LastSeen    string `json:"lastSeenAt"`
+	Login       string `json:"login"`
+	DisabledAt  string `json:"disabledAt"`
+	InviteID    int64  `json:"inviteId"`
+	InviteNote  string `json:"inviteNote"`
 }
 
 // Users lists everyone who has signed in.
 func (s *Store) Users(ctx context.Context) ([]UserInfo, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT u.id, u.name, u.role, u.created_at, COALESCE(u.last_seen_at, ''), COALESCE(u.login, ''), COALESCE(u.disabled_at, ''), COALESCE(u.invite_id, 0), COALESCE(i.note, '') FROM users u LEFT JOIN invites i ON i.id = u.invite_id ORDER BY u.name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT u.id, u.name, u.role, u.created_at, COALESCE(u.last_seen_at, ''), COALESCE(u.login, ''), COALESCE(u.disabled_at, ''), COALESCE(u.invite_id, 0), COALESCE(i.note, ''), COALESCE(u.course_limit, 10) FROM users u LEFT JOIN invites i ON i.id = u.invite_id ORDER BY u.name`)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +266,7 @@ func (s *Store) Users(ctx context.Context) ([]UserInfo, error) {
 	var out []UserInfo
 	for rows.Next() {
 		var u UserInfo
-		if err := rows.Scan(&u.ID, &u.Name, &u.Role, &u.Created, &u.LastSeen, &u.Login, &u.DisabledAt, &u.InviteID, &u.InviteNote); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Role, &u.Created, &u.LastSeen, &u.Login, &u.DisabledAt, &u.InviteID, &u.InviteNote, &u.CourseLimit); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -276,7 +277,7 @@ func (s *Store) Users(ctx context.Context) ([]UserInfo, error) {
 // UserInfoByID returns account metadata without authentication secrets.
 func (s *Store) UserInfoByID(ctx context.Context, id int64) (UserInfo, error) {
 	var u UserInfo
-	err := s.db.QueryRowContext(ctx, `SELECT id, name, role, created_at, COALESCE(last_seen_at, ''), COALESCE(login, ''), COALESCE(disabled_at, '') FROM users WHERE id = ?`, id).Scan(&u.ID, &u.Name, &u.Role, &u.Created, &u.LastSeen, &u.Login, &u.DisabledAt)
+	err := s.db.QueryRowContext(ctx, `SELECT id, name, role, created_at, COALESCE(last_seen_at, ''), COALESCE(login, ''), COALESCE(disabled_at, ''), COALESCE(course_limit, 10) FROM users WHERE id = ?`, id).Scan(&u.ID, &u.Name, &u.Role, &u.Created, &u.LastSeen, &u.Login, &u.DisabledAt, &u.CourseLimit)
 	return u, accountError(err)
 }
 

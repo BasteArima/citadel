@@ -15,7 +15,7 @@ import (
 	"citadel/web"
 )
 
-// Admin panel: courses, the draft editor, versions and users. Every route needs the admin role.
+// Admin panel: staff edit courses; only admins manage accounts and course access.
 // A save is a new version; publishing makes a version visible to students (decision 0003:
 // agents will propose drafts too, only an admin publishes).
 
@@ -34,9 +34,9 @@ func (s *server) admin(h http.HandlerFunc) http.Handler {
 	})
 }
 
-// adminPage serves the admin panel to admins and sends everyone else to the catalog.
+// adminPage serves the shared panel to admins and authors.
 func (s *server) adminPage(w http.ResponseWriter, r *http.Request) {
-	if userFrom(r.Context()).Role != store.RoleAdmin {
+	if role := userFrom(r.Context()).Role; role != store.RoleAdmin && role != store.RoleAuthor {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
@@ -46,17 +46,17 @@ func (s *server) adminPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) adminRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /admin", s.page(s.adminPage))
-	mux.Handle("GET /api/admin/courses", s.admin(s.adminCourses))
-	mux.Handle("POST /api/admin/courses", s.admin(s.adminCreate))
-	mux.Handle("DELETE /api/admin/courses/{id}", s.admin(s.adminDeleteCourse))
-	mux.Handle("POST /api/admin/import", s.admin(s.adminImport))
-	mux.Handle("POST /api/admin/check", s.admin(s.adminCheck))
-	mux.Handle("GET /api/admin/courses/{id}/draft", s.admin(s.adminDraft))
-	mux.Handle("PUT /api/admin/courses/{id}/draft", s.admin(s.adminSave))
-	mux.Handle("POST /api/admin/courses/{id}/publish", s.admin(s.adminPublish))
-	mux.Handle("POST /api/admin/courses/{id}/rollback", s.admin(s.adminRollback))
-	mux.Handle("GET /api/admin/courses/{id}/versions", s.admin(s.adminVersions))
-	mux.Handle("GET /api/admin/courses/{id}/versions/{v}", s.admin(s.adminVersion))
+	mux.Handle("GET /api/admin/courses", s.staff(s.adminCourses))
+	mux.Handle("POST /api/admin/courses", s.staff(s.adminCreate))
+	mux.Handle("DELETE /api/admin/courses/{id}", s.staffCourse(s.adminDeleteCourse))
+	mux.Handle("POST /api/admin/import", s.staff(s.adminImport))
+	mux.Handle("POST /api/admin/check", s.staff(s.adminCheck))
+	mux.Handle("GET /api/admin/courses/{id}/draft", s.staffCourse(s.adminDraft))
+	mux.Handle("PUT /api/admin/courses/{id}/draft", s.staffCourse(s.adminSave))
+	mux.Handle("POST /api/admin/courses/{id}/publish", s.staffCourse(s.adminPublish))
+	mux.Handle("POST /api/admin/courses/{id}/rollback", s.staffCourse(s.adminRollback))
+	mux.Handle("GET /api/admin/courses/{id}/versions", s.staffCourse(s.adminVersions))
+	mux.Handle("GET /api/admin/courses/{id}/versions/{v}", s.staffCourse(s.adminVersion))
 	mux.Handle("GET /api/admin/audit", s.admin(s.adminAuditList))
 	mux.Handle("GET /api/admin/courses/{id}/users", s.admin(s.adminCourseUsers))
 	mux.Handle("PUT /api/admin/courses/{id}/users", s.admin(s.adminSetCourseUsers))
@@ -65,6 +65,8 @@ func (s *server) adminRoutes(mux *http.ServeMux) {
 	mux.Handle("PUT /api/admin/users/{id}/disabled", s.admin(s.adminSetDisabled))
 	mux.Handle("PUT /api/admin/users/{id}/courses", s.admin(s.adminSetUserCourses))
 	mux.Handle("PUT /api/admin/courses/{id}/access", s.admin(s.adminSetAccess))
+	mux.Handle("PUT /api/admin/courses/{id}/owner", s.admin(s.adminSetOwner))
+	mux.Handle("PUT /api/admin/users/{id}/course-limit", s.admin(s.adminSetCourseLimit))
 	s.adminAgentRoutes(mux)
 }
 
@@ -128,6 +130,9 @@ func (s *server) adminCourses(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]row, 0, len(list))
 	for _, ci := range list {
+		if !s.canEdit(r.Context(), userFrom(r.Context()), ci.ID) {
+			continue
+		}
 		rw := row{CourseInfo: ci, Agents: pending[ci.ID], Access: access[ci.ID], GrantedUsers: counts[ci.ID]}
 		if data, _, err := s.cfg.Store.Version(r.Context(), ci.ID, 0); err == nil {
 			if c, err := course.Decode(data); err == nil {
@@ -136,6 +141,11 @@ func (s *server) adminCourses(w http.ResponseWriter, r *http.Request) {
 			} else {
 				rw.Check = checkSummary{Errors: 1, Problems: []course.Problem{{Path: "курс", Msg: err.Error()}}}
 			}
+		}
+		if userFrom(r.Context()).Role != store.RoleAdmin {
+			rw.GrantedUsers = 0
+			rw.OwnerID = 0
+			rw.OwnerName = ""
 		}
 		out = append(out, rw)
 	}
@@ -173,9 +183,8 @@ func (s *server) adminCreate(w http.ResponseWriter, r *http.Request) {
 		}}},
 	}
 	data, _ := course.Encode(c)
-	if err := s.cfg.Store.CreateCourse(r.Context(), c.ID, data, userFrom(r.Context()).Name); err != nil {
-		if errors.Is(err, store.ErrConflict) {
-			jsonError(w, http.StatusConflict, "курс с таким id уже есть")
+	if err := s.cfg.Store.CreateOwnedCourse(r.Context(), c.ID, data, userFrom(r.Context()).Name, newOwner(userFrom(r.Context()))); err != nil {
+		if s.creationError(w, err) {
 			return
 		}
 		s.fail(w, "create course", err)
@@ -218,15 +227,22 @@ func (s *server) adminImport(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, http.StatusBadRequest, "id курса — латиница, цифры и дефис")
 			return
 		}
-		err = s.cfg.Store.CreateCourse(r.Context(), c.ID, data, author)
+		err = s.cfg.Store.CreateOwnedCourse(r.Context(), c.ID, data, author, newOwner(userFrom(r.Context())))
 		vi.Version = 1
 		if err == nil && c.IsProject() {
 			err = s.cfg.Store.SetCourseAccess(r.Context(), c.ID, store.AccessPrivate) // decision 0016
 		}
 	case err == nil:
+		if !s.canEdit(r.Context(), userFrom(r.Context()), c.ID) {
+			jsonError(w, http.StatusConflict, "id занят")
+			return
+		}
 		vi.Version, err = s.cfg.Store.SaveDraft(r.Context(), c.ID, data, vi.Version, author, "импорт JSON")
 	}
 	if err != nil {
+		if s.creationError(w, err) {
+			return
+		}
 		s.fail(w, "import course", err)
 		return
 	}

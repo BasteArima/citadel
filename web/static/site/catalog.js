@@ -113,7 +113,7 @@ function tile(c, byId) {
   return '<article class="card tile metal-' + esc(c.metal) + '">' +
     '<div class="tile-h">' + linkIcon(c.metal, st === 'done' ? 1 : c.lessons ? c.done / c.lessons : 0) +
       '<span class="chip ' + STATE[st][1] + '">' + STATE[st][0] + '</span></div>' +
-    '<div><h3><a href="' + href + '">' + esc(c.title) + '</a></h3>' + (c.subtitle ? '<p>' + esc(c.subtitle) + '</p>' : '') + '</div>' +
+    (c.onlyYours ? '<span class="chip">Только у тебя</span>' : '') + '<div><h3><a href="' + href + '">' + esc(c.title) + '</a></h3>' + (c.subtitle ? '<p>' + esc(c.subtitle) + '</p>' : '') + '</div>' +
     '<ul class="chips"><li class="chip">' + esc(c.tool.name + ' ' + c.tool.version) + '</li>' +
       '<li class="chip">' + c.lessons + ' ' + plural(c.lessons, 'урок', 'урока', 'уроков') + (c.ready < c.lessons ? ', готово ' + c.ready : '') + '</li>' +
       '<li class="chip"><span class="dot"></span>звено: ' + esc(metalName(c.metal)) + '</li></ul>' +

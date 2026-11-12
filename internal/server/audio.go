@@ -26,10 +26,10 @@ import (
 func (s *server) audioRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/courses/{id}/audio", s.api(s.courseAudio))
 	mux.Handle("GET /audio/{course}/{file}", s.api(s.audioFile))
-	mux.Handle("GET /api/admin/courses/{id}/audio", s.admin(s.adminAudio))
-	mux.Handle("POST /api/admin/courses/{id}/audio", s.admin(s.adminAudioMake))
-	mux.Handle("POST /api/admin/courses/{id}/audio/cancel", s.admin(s.adminAudioCancel))
-	mux.Handle("POST /api/admin/speech/preview", s.admin(s.adminSpeechPreview))
+	mux.Handle("GET /api/admin/courses/{id}/audio", s.staffCourse(s.adminAudio))
+	mux.Handle("POST /api/admin/courses/{id}/audio", s.staffCourse(s.adminAudioMake))
+	mux.Handle("POST /api/admin/courses/{id}/audio/cancel", s.staffCourse(s.adminAudioCancel))
+	mux.Handle("POST /api/admin/speech/preview", s.staff(s.adminSpeechPreview))
 }
 
 var audioName = regexp.MustCompile(`^[A-Za-z0-9._-]+\.mp3$`)
@@ -105,8 +105,9 @@ type audioJob struct {
 }
 
 type audioJobs struct {
-	mu   sync.Mutex
-	jobs map[string]*audioJob
+	recording chan struct{} // one shared recording job across all owners
+	mu        sync.Mutex
+	jobs      map[string]*audioJob
 }
 
 // stop cancels the running job of a course, if there is one.
@@ -287,6 +288,15 @@ func (s *server) recordParts(ctx context.Context, id, voice string, parts []spee
 		j.Running, j.Current, j.Node, j.Finished = false, "", "", time.Now().UTC().Format(time.RFC3339)
 		j.cancel()
 	})
+	select {
+	case s.audio.recording <- struct{}{}:
+		defer func() { <-s.audio.recording }()
+	case <-ctx.Done():
+		return
+	}
+	if ctx.Err() != nil {
+		return
+	}
 	if err := os.MkdirAll(filepath.Join(s.cfg.AudioDir, id), 0o755); err != nil {
 		s.audio.update(id, func(j *audioJob) { j.Errors = append(j.Errors, err.Error()) })
 		return

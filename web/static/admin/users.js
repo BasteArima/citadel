@@ -66,8 +66,8 @@ export async function renderUsers(main) {
     '<label class="ad-f">Роль<select id="u-role"><option value="">Все роли</option>' + Object.entries(roles).map(([value, label]) => '<option value="' + value + '">' + label + '</option>').join('') + '</select></label>' +
     '<label class="ad-f">Статус<select id="u-status"><option value="">Все статусы</option><option value="active">Активные</option><option value="disabled">Заблокированные</option></select></label></div>' +
     '<p class="ad-sub" id="u-count" role="status"></p><div class="ad-table-w"><table class="ad-table ad-responsive ad-users"><thead><tr>' +
-    ['Имя', 'Логин', 'Роль', 'Курсы', 'Откуда', 'Когда был', 'Статус', 'Действия'].map((x) => '<th scope="col">' + x + '</th>').join('') +
-    '</tr></thead><tbody><tr><td colspan="8">Загружаю…</td></tr></tbody></table></div>';
+    ['Имя', 'Логин', 'Роль', 'Лимит курсов', 'Курсы', 'Откуда', 'Когда был', 'Статус', 'Действия'].map((x) => '<th scope="col">' + x + '</th>').join('') +
+    '</tr></thead><tbody><tr><td colspan="9">Загружаю…</td></tr></tbody></table></div>';
   let users = [], courses = [], currentUserId = 0;
   const rows = page.querySelector('tbody');
   const filters = [...page.querySelectorAll('.ad-filters input, .ad-filters select')];
@@ -76,7 +76,7 @@ export async function renderUsers(main) {
 
   async function load() {
     const [u, c] = await Promise.all([request('GET', '/api/admin/users'), request('GET', '/api/admin/courses')]);
-    if (!u || !c) { rows.innerHTML = '<tr><td colspan="8">Не удалось загрузить пользователей. Обнови страницу.</td></tr>'; return; }
+    if (!u || !c) { rows.innerHTML = '<tr><td colspan="9">Не удалось загрузить пользователей. Обнови страницу.</td></tr>'; return; }
     users = u.users; currentUserId = u.currentUserId; courses = c;
     draw();
   }
@@ -97,12 +97,12 @@ export async function renderUsers(main) {
       const cell = (label, html) => '<td data-label="' + label + '">' + html + '</td>';
       return '<tr data-id="' + u.id + '">' + cell('Имя', '<strong>' + esc(u.name) + '</strong>' + (self ? ' <span class="ad-small ad-mut">это ты</span>' : '') + '<br><span class="ad-small ad-mut">Создан: ' + esc(when(u.createdAt)) + '</span>') +
         cell('Логин', esc(u.login || '—')) + cell('Роль', '<span title="' + esc(roleReason) + '"><select aria-label="Роль ' + esc(u.name) + '" data-role' + (roleReason ? ' disabled aria-description="' + esc(roleReason) + '"' : '') + '>' + Object.entries(roles).map(([value, label]) => '<option value="' + value + '"' + (u.role === value ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></span>') +
-        cell('Курсы', courseCell) + cell('Откуда', esc(u.inviteNote || (u.inviteId ? 'Приглашение #' + u.inviteId : '—'))) +
+        cell('Лимит курсов', u.role === 'author' ? '<input type="number" min="0" step="1" value="' + u.courseLimit + '" aria-label="Лимит курсов ' + esc(u.name) + '" data-limit>' : '—') + cell('Курсы', courseCell) + cell('Откуда', esc(u.inviteNote || (u.inviteId ? 'Приглашение #' + u.inviteId : '—'))) +
         cell('Когда был', esc(u.lastSeenAt ? when(u.lastSeenAt) : 'ещё не входил')) +
         cell('Статус', '<span class="ad-pill ' + (u.disabledAt ? 'bad' : 'good') + '">' + (u.disabledAt ? 'заблокирован' : 'активен') + '</span>') +
         cell('Действия', '<div class="ad-user-actions"><span title="' + (u.disabledAt ? 'Сначала разблокируй пользователя' : '') + '"><button type="button" class="btn" data-reset' + (u.disabledAt ? ' disabled' : '') + '>Ссылка для сброса пароля</button></span>' +
           '<span title="' + esc(blockReason) + '"><button type="button" class="btn' + (!u.disabledAt ? ' ad-danger' : '') + '" data-block' + (blockReason ? ' disabled aria-description="' + esc(blockReason) + '"' : '') + '>' + (u.disabledAt ? 'Разблокировать' : 'Заблокировать') + '</button></span></div>') + '</tr>';
-    }).join('') || '<tr><td colspan="8">Никого не найдено. Измени поиск или фильтры.</td></tr>';
+    }).join('') || '<tr><td colspan="9">Никого не найдено. Измени поиск или фильтры.</td></tr>';
     rows.querySelectorAll('tr[data-id]').forEach((tr) => {
       const u = users.find((u) => String(u.id) === tr.dataset.id);
       tr.querySelector('[data-reset]').addEventListener('click', () => resetLinkDialog(u, load));
@@ -119,6 +119,13 @@ export async function renderUsers(main) {
         if (role === u.role || !(await confirmDialog('Изменить роль · ' + u.name, roles[u.role] + ' → ' + roles[role] + (role === 'admin' ? '. Админ получает полный доступ к платформе.' : '. Права изменятся сразу.'), 'Изменить роль', true))) return;
         e.target.disabled = true;
         if (await request('PUT', '/api/admin/users/' + u.id, { role })) { toast('Роль изменена', 'good'); await load(); } else e.target.disabled = false;
+      });
+      const limit = tr.querySelector('[data-limit]');
+      if (limit) limit.addEventListener('change', async () => {
+        if (!limit.reportValidity()) return;
+        const courseLimit = limit.value === '' ? null : Number(limit.value);
+        limit.disabled = true;
+        if (await request('PUT', '/api/admin/users/' + u.id + '/course-limit', { courseLimit })) { toast('Лимит обновлён', 'good'); await load(); } else { limit.value = u.courseLimit; limit.disabled = false; }
       });
       const grant = tr.querySelector('[data-grant]');
       if (grant) grant.addEventListener('click', () => {

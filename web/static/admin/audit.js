@@ -9,7 +9,7 @@ const actions = {
   'invite.created': 'Создание приглашения', 'invite.revoked': 'Отзыв приглашения',
   'invite.deleted': 'Удаление приглашения', 'user.courses': 'Курсы пользователя',
   'course.users': 'Пользователи курса', 'course.access': 'Доступ курса',
-  'course.owner': 'Владелец курса', 'token.created': 'Выпуск токена',
+  'user.course_limit': 'Лимит курсов', 'course.owner': 'Владелец курса', 'token.created': 'Выпуск токена',
   'token.revoked': 'Отзыв токена', 'token.deleted': 'Удаление токена',
   'token.review': 'Право проверяющего'
 };
@@ -40,7 +40,8 @@ function describe(a, courseTitle, userName) {
       const access = { public: 'публичный', private: 'закрытый' };
       return 'Сменил доступ: ' + (access[d.before] || d.before) + ' → ' + (access[d.after] || d.after);
     }
-    case 'course.owner': return 'Сменил владельца: ' + d.before + ' → ' + d.after;
+    case 'user.course_limit': return 'Сменил лимит курсов: ' + d.before + ' → ' + d.after;
+    case 'course.owner': return 'Сменил владельца: ' + (d.before ? userName(d.before) : 'платформа') + ' → ' + (d.after ? userName(d.after) : 'платформа');
     case 'token.created': return 'Выпустил токен «' + d.name + '». Права: читать' + (d.propose ? ', предлагать правки' : '') + (d.create ? ', создавать курсы' : '') + (d.review ? ', проверять и публиковать' : '') + '. Курсы: ' + (d.courses?.length ? list(d.courses, courseTitle) : 'все');
     case 'token.revoked': return 'Отозвал токен агента';
     case 'token.deleted': return 'Удалил отозванный токен агента';

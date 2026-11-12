@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 )
@@ -24,6 +23,8 @@ var ErrNoToken = errors.New("no such token")
 
 // Token is an agent token without its secret.
 type Token struct {
+	UserID     int64    `json:"userId"`
+	UserRole   string   `json:"-"`
 	ID         int64    `json:"id"`
 	Name       string   `json:"name"`
 	Tail       string   `json:"tail"` // last characters, to tell tokens apart
@@ -37,11 +38,6 @@ type Token struct {
 	RevokedAt  string   `json:"revokedAt"`
 }
 
-// Allows reports whether the token may touch the course.
-func (t Token) Allows(courseID string) bool {
-	return len(t.Courses) == 0 || slices.Contains(t.Courses, courseID)
-}
-
 // CreateToken stores a new token and returns it with its secret, the only time the secret exists.
 func (s *Store) CreateToken(ctx context.Context, t Token) (Token, string, error) {
 	b := make([]byte, 32)
@@ -51,8 +47,8 @@ func (s *Store) CreateToken(ctx context.Context, t Token) (Token, string, error)
 	secret := TokenPrefix + base64.RawURLEncoding.EncodeToString(b)
 	t.Tail = secret[len(secret)-4:]
 	t.CreatedAt = now()
-	res, err := s.db.ExecContext(ctx, `INSERT INTO tokens (name, hash, tail, can_propose, can_create, can_review, courses, created_by, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, t.Name, tokenHash(secret), t.Tail, t.CanPropose, t.CanCreate, t.CanReview, strings.Join(t.Courses, ","), t.CreatedBy, t.CreatedAt)
+	res, err := s.db.ExecContext(ctx, `INSERT INTO tokens (name, hash, tail, can_propose, can_create, can_review, courses, created_by, created_at, user_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, t.Name, tokenHash(secret), t.Tail, t.CanPropose, t.CanCreate, t.CanReview, strings.Join(t.Courses, ","), t.CreatedBy, t.CreatedAt, nullableID(t.UserID))
 	if err != nil {
 		return Token{}, "", err
 	}
@@ -63,12 +59,12 @@ func (s *Store) CreateToken(ctx context.Context, t Token) (Token, string, error)
 	return t, secret, nil
 }
 
-const tokenCols = `id, name, tail, can_propose, can_create, can_review, courses, created_by, created_at, COALESCE(last_used_at, ''), COALESCE(revoked_at, '')`
+const tokenCols = `id, name, tail, can_propose, can_create, can_review, courses, created_by, created_at, COALESCE(last_used_at, ''), COALESCE(revoked_at, ''), COALESCE(user_id, 0)`
 
 func scanToken(sc interface{ Scan(...any) error }) (Token, error) {
 	var t Token
 	var courses string
-	err := sc.Scan(&t.ID, &t.Name, &t.Tail, &t.CanPropose, &t.CanCreate, &t.CanReview, &courses, &t.CreatedBy, &t.CreatedAt, &t.LastUsedAt, &t.RevokedAt)
+	err := sc.Scan(&t.ID, &t.Name, &t.Tail, &t.CanPropose, &t.CanCreate, &t.CanReview, &courses, &t.CreatedBy, &t.CreatedAt, &t.LastUsedAt, &t.RevokedAt, &t.UserID)
 	t.Courses = []string{}
 	if courses != "" {
 		t.Courses = strings.Split(courses, ",")
@@ -87,6 +83,13 @@ func (s *Store) TokenBySecret(ctx context.Context, secret string) (Token, error)
 	}
 	if err != nil {
 		return Token{}, err
+	}
+	if t.UserID != 0 {
+		u, err := s.UserInfoByID(ctx, t.UserID)
+		if err != nil || u.DisabledAt != "" || (u.Role != RoleAdmin && u.Role != RoleAuthor) {
+			return Token{}, ErrNoToken
+		}
+		t.UserRole = u.Role
 	}
 	n := time.Now().UTC()
 	if last, err := time.Parse(time.RFC3339, t.LastUsedAt); err != nil || n.Sub(last) > time.Minute {
@@ -184,6 +187,7 @@ const (
 
 // Proposal is an agent's edit waiting for the admin.
 type Proposal struct {
+	OwnerID     int64           `json:"ownerId"`
 	ID          int64           `json:"id"`
 	CourseID    string          `json:"course"`
 	TokenID     int64           `json:"tokenId"`
@@ -210,21 +214,21 @@ func (s *Store) AddProposal(ctx context.Context, p Proposal) (int64, error) {
 	if changes == "" {
 		changes = "null"
 	}
-	res, err := s.db.ExecContext(ctx, `INSERT INTO proposals (course_id, token_id, agent, title, description, new_course, base, changes, data, status, checks, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.CourseID, p.TokenID, p.Agent, p.Title, p.Description, p.NewCourse, p.Base, changes, string(p.Data), p.Status, string(p.Checks), now())
+	res, err := s.db.ExecContext(ctx, `INSERT INTO proposals (course_id, token_id, agent, title, description, new_course, base, changes, data, status, checks, created_at, owner_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.CourseID, p.TokenID, p.Agent, p.Title, p.Description, p.NewCourse, p.Base, changes, string(p.Data), p.Status, string(p.Checks), now(), nullableID(p.OwnerID))
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-const proposalCols = `id, course_id, token_id, agent, title, description, new_course, base, changes, status, checks, comment, decided_by, decided_at, version, created_at, runs`
+const proposalCols = `id, course_id, token_id, agent, title, description, new_course, base, changes, status, checks, comment, decided_by, decided_at, version, created_at, runs, COALESCE(owner_id, 0)`
 
 func scanProposal(sc interface{ Scan(...any) error }, withData bool) (Proposal, error) {
 	var p Proposal
 	var changes, checks, data, runs string
-	dest := []any{&p.ID, &p.CourseID, &p.TokenID, &p.Agent, &p.Title, &p.Description, &p.NewCourse, &p.Base, &changes, &p.Status, &checks, &p.Comment, &p.DecidedBy, &p.DecidedAt, &p.Version, &p.CreatedAt, &runs}
+	dest := []any{&p.ID, &p.CourseID, &p.TokenID, &p.Agent, &p.Title, &p.Description, &p.NewCourse, &p.Base, &changes, &p.Status, &checks, &p.Comment, &p.DecidedBy, &p.DecidedAt, &p.Version, &p.CreatedAt, &runs, &p.OwnerID}
 	if withData {
 		dest = append(dest, &data)
 	}
@@ -249,6 +253,7 @@ func (s *Store) Proposal(ctx context.Context, id int64) (Proposal, error) {
 
 // ProposalFilter narrows Proposals; zero values match everything.
 type ProposalFilter struct {
+	OwnerID int64 // apply ownership before the shared result limit
 	Status  string
 	TokenID int64
 }
@@ -257,7 +262,9 @@ type ProposalFilter struct {
 func (s *Store) Proposals(ctx context.Context, f ProposalFilter) ([]Proposal, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+proposalCols+` FROM proposals
 		WHERE (? = '' OR status = ?) AND (? = 0 OR token_id = ?)
-		ORDER BY status != 'pending', id DESC LIMIT 500`, f.Status, f.Status, f.TokenID, f.TokenID)
+ AND (? = 0 OR EXISTS (SELECT 1 FROM courses c WHERE c.id = proposals.course_id AND c.owner_id = ?)
+ OR (new_course = 1 AND owner_id = ? AND NOT EXISTS (SELECT 1 FROM courses c WHERE c.id = proposals.course_id)))
+		ORDER BY status != 'pending', id DESC LIMIT 500`, f.Status, f.Status, f.TokenID, f.TokenID, f.OwnerID, f.OwnerID, f.OwnerID)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +329,11 @@ func (s *Store) AcceptProposal(ctx context.Context, id int64, courseID string, d
 		return 0, ErrConflict
 	}
 	if base == 0 {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO courses (id, created_at) VALUES (?, ?)`, courseID, now()); err != nil {
+		var ownerID int64
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(owner_id, 0) FROM proposals WHERE id = ?`, id).Scan(&ownerID); err != nil {
+			return 0, err
+		}
+		if err := insertOwnedCourse(ctx, tx, courseID, ownerID); err != nil {
 			return 0, err
 		}
 	}

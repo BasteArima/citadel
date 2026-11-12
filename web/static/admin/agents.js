@@ -15,7 +15,7 @@ export async function pendingCount() {
 }
 
 // ── токены ──
-export function renderTokens(box, courses) {
+export function renderTokens(box, courses, role = 'admin') {
   box.innerHTML = '<div class="ad-head"><div><h2 id="ad-tok-h">Токены агентов</h2>' +
     '<p class="ad-sub">Для API и MCP. Агент может читать курсы и предлагать правки. Токен с правом проверяющего может принимать свои и чужие правки, новые курсы и публиковать.</p></div>' +
     '<button type="button" class="btn pri" id="tk-new" aria-expanded="false">+ Новый токен</button></div>' +
@@ -34,7 +34,7 @@ export function renderTokens(box, courses) {
       '<label class="ad-check-l"><input type="checkbox" id="tk-propose" checked> Предлагать правки</label>' +
       '<label class="ad-check-l"><input type="checkbox" id="tk-create"> Создавать курсы</label>' +
       '<label class="ad-check-l"><input type="checkbox" id="tk-review"> Принимать правки, новые курсы и публиковать</label></fieldset>' +
-      '<div class="ad-f"><label for="tk-courses">Курсы</label><select id="tk-courses"><option value="">Все курсы</option>' +
+      '<div class="ad-f"><label for="tk-courses">Курсы</label><select id="tk-courses"><option value="">' + (role === 'author' ? 'Все мои курсы' : 'Курсы платформы и мои') + '</option>' +
       courses.map((c) => '<option value="' + esc(c.id) + '">' + esc(c.title || c.id) + '</option>').join('') + '</select></div>' +
       '<button type="submit" class="btn pri">Создать</button>' +
       '<p class="ad-small ad-mut tk-note">Право проверяющего включает приём своих правок и новых курсов в пределах доступа токена. Принятие создаёт черновик; публикация — отдельное действие. В базе хранится только хеш токена.</p>';
@@ -64,7 +64,7 @@ export function renderTokens(box, courses) {
     const title = (id) => { const c = courses.find((x) => x.id === id); return c ? c.title : id; };
     rows.innerHTML = r.data.map((t) => '<tr' + (t.revokedAt ? ' class="tk-off"' : '') + '><td><strong>' + esc(t.name) + '</strong><br><span class="ad-small ad-mut">выпустил ' + esc(t.createdBy) + ', ' + esc(when(t.createdAt)) + '</span></td>' +
       '<td><span class="tk-pills"><span class="ad-pill">читать</span>' + (t.canPropose ? '<span class="ad-pill acc">предлагать</span>' : '') + (t.canCreate ? '<span class="ad-pill agent">создавать курсы</span>' : '') + (t.canReview ? '<span class="ad-pill agent">принимать и публиковать</span>' : '') + '</span></td>' +
-      '<td>' + (t.courses.length ? t.courses.map((c) => esc(title(c))).join(', ') : 'все') + '</td>' +
+      '<td>' + (t.courses.length ? t.courses.map((c) => esc(title(c))).join(', ') : role === 'author' ? 'все мои' : 'платформа и свои') + '</td>' +
       '<td><code class="tk-mask">cit_••••' + esc(t.tail) + '</code></td>' +
       '<td class="ad-mut">' + esc(t.lastUsedAt ? when(t.lastUsedAt) : 'ещё не использован') + '</td>' +
       '<td class="ad-r">' + (t.revokedAt ? '<span class="ad-pill">отозван</span> <button type="button" class="btn ad-danger" data-del="' + t.id + '" data-name="' + esc(t.name) + '">Удалить</button>' : '<button type="button" class="btn" data-review="' + t.id + '" data-on="' + (t.canReview ? '1' : '') + '" data-name="' + esc(t.name) + '">' + (t.canReview ? 'Снять право принимать' : 'Дать право принимать') + '</button> <button type="button" class="btn ad-danger" data-revoke="' + t.id + '" data-name="' + esc(t.name) + '">Отозвать</button>') + '</td></tr>').join('');
@@ -174,7 +174,7 @@ export function renderAgents(main, selected, onDecided) {
     const pending = list.filter((p) => p.status === 'pending').length;
     page.querySelector('#ag-n').textContent = pending ? pending + ' ' + plural(pending, 'ждёт', 'ждут', 'ждут') : '';
     if (!list.length) {
-      page.querySelector('#ag-list').innerHTML = '<li class="ad-pad ad-mut">Правок пока нет. Выпусти токен на странице «Пользователи и токены» и подключи агента.</li>';
+      page.querySelector('#ag-list').innerHTML = '<li class="ad-pad ad-mut">Правок пока нет. Выпусти токен в разделе «Токены агентов» и подключи агента.</li>';
       page.querySelector('#ag-detail').innerHTML = '';
       return;
     }

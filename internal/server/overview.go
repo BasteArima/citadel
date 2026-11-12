@@ -74,7 +74,9 @@ func (s *server) overview(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, http.StatusInternalServerError, "server error")
 			return
 		}
-		out = append(out, overviewOf(cat.parsed[id], items, today))
+		o := overviewOf(cat.parsed[id], items, today)
+		o.OnlyYours = s.onlyYours(r, id)
+		out = append(out, o)
 	}
 	soon := []Soon{}
 	for _, c := range cat.soon {

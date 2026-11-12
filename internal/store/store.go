@@ -182,6 +182,14 @@ var migrations = []string{
 		details TEXT NOT NULL
 	);
 	CREATE INDEX audit_at ON audit(at);`,
+	// Course ownership and account-bound tokens (0023). Proposal ownership is a
+	// snapshot: accepting a new course must not depend on a later token role change.
+	`ALTER TABLE courses ADD COLUMN owner_id INTEGER REFERENCES users(id);
+	ALTER TABLE users ADD COLUMN course_limit INTEGER CHECK (course_limit >= 0);
+	ALTER TABLE tokens ADD COLUMN user_id INTEGER REFERENCES users(id);
+	ALTER TABLE proposals ADD COLUMN owner_id INTEGER REFERENCES users(id);
+	CREATE INDEX courses_owner ON courses(owner_id);
+	CREATE INDEX tokens_user ON tokens(user_id);`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

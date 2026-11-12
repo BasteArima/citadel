@@ -41,7 +41,7 @@ export function projectTile(c) {
   const pct = c.lessons ? Math.round(c.done / c.lessons * 100) : 0;
   return '<article class="card tile metal-' + esc(c.metal) + '">' +
     '<div class="tile-h">' + allBars(levels) + '<span class="chip ' + STATE[st][1] + '">' + STATE[st][0] + '</span></div>' +
-    '<div><h3><a href="' + href + '">' + esc(c.title) + '</a></h3>' + (c.subtitle ? '<p>' + esc(c.subtitle) + '</p>' : '') + '</div>' +
+    (c.onlyYours ? '<span class="chip">Только у тебя</span>' : '') + '<div><h3><a href="' + href + '">' + esc(c.title) + '</a></h3>' + (c.subtitle ? '<p>' + esc(c.subtitle) + '</p>' : '') + '</div>' +
     '<ul class="chips"><li class="chip">' + esc(c.tool.name + ' ' + c.tool.version) + '</li>' +
       '<li class="chip">' + levels.length + ' ' + plural(levels.length, 'уровень', 'уровня', 'уровней') + ', ' + c.lessons + ' ' + plural(c.lessons, 'шаг', 'шага', 'шагов') + '</li>' +
       '<li class="chip"><span class="dot"></span>звено: ' + esc(metalName(c.metal)) + '</li></ul>' +

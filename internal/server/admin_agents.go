@@ -14,15 +14,15 @@ import (
 // Admin side of the agents: tokens and the proposal queue.
 
 func (s *server) adminAgentRoutes(mux *http.ServeMux) {
-	mux.Handle("GET /api/admin/tokens", s.admin(s.adminTokens))
-	mux.Handle("POST /api/admin/tokens", s.admin(s.adminCreateToken))
-	mux.Handle("POST /api/admin/tokens/{id}/revoke", s.admin(s.adminRevokeToken))
-	mux.Handle("POST /api/admin/tokens/{id}/review", s.admin(s.adminTokenReview))
-	mux.Handle("DELETE /api/admin/tokens/{id}", s.admin(s.adminDeleteToken))
-	mux.Handle("GET /api/admin/proposals", s.admin(s.adminProposals))
-	mux.Handle("GET /api/admin/proposals/{id}", s.admin(s.adminProposal))
-	mux.Handle("POST /api/admin/proposals/{id}/accept", s.admin(s.adminAccept))
-	mux.Handle("POST /api/admin/proposals/{id}/reject", s.admin(s.adminReject))
+	mux.Handle("GET /api/admin/tokens", s.staff(s.adminTokens))
+	mux.Handle("POST /api/admin/tokens", s.staff(s.adminCreateToken))
+	mux.Handle("POST /api/admin/tokens/{id}/revoke", s.staffToken(s.adminRevokeToken))
+	mux.Handle("POST /api/admin/tokens/{id}/review", s.staffToken(s.adminTokenReview))
+	mux.Handle("DELETE /api/admin/tokens/{id}", s.staffToken(s.adminDeleteToken))
+	mux.Handle("GET /api/admin/proposals", s.staff(s.adminProposals))
+	mux.Handle("GET /api/admin/proposals/{id}", s.staff(s.adminProposal))
+	mux.Handle("POST /api/admin/proposals/{id}/accept", s.staff(s.adminAccept))
+	mux.Handle("POST /api/admin/proposals/{id}/reject", s.staff(s.adminReject))
 }
 
 func (s *server) adminTokens(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +30,16 @@ func (s *server) adminTokens(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, "list tokens", err)
 		return
+	}
+	u := userFrom(r.Context())
+	if u.Role != store.RoleAdmin {
+		filtered := []store.Token{}
+		for _, t := range ts {
+			if t.UserID == u.ID {
+				filtered = append(filtered, t)
+			}
+		}
+		ts = filtered
 	}
 	writeValue(w, ts)
 }
@@ -57,8 +67,15 @@ func (s *server) adminCreateToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if userFrom(r.Context()).Role == store.RoleAuthor {
+		for _, id := range req.Courses {
+			if !s.editable(w, r, id) {
+				return
+			}
+		}
+	}
 	t, secret, err := s.cfg.Store.CreateToken(r.Context(), store.Token{Name: req.Name, CanPropose: req.Propose || req.Create, CanCreate: req.Create, CanReview: req.Review,
-		Courses: req.Courses, CreatedBy: userFrom(r.Context()).Name})
+		UserID: userFrom(r.Context()).ID, Courses: req.Courses, CreatedBy: userFrom(r.Context()).Name})
 	if err != nil {
 		s.fail(w, "create token", err)
 		return
@@ -83,7 +100,7 @@ func (s *server) adminRevokeToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // adminTokenReview gives a token the right to decide proposals and publish, or takes it away.
-// Only the admin does this: a token cannot widen its own rights (decision 0019).
+// An admin or the token owner does this; the bearer token cannot widen its own rights (0023).
 func (s *server) adminTokenReview(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -124,12 +141,18 @@ func (s *server) adminDeleteToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) adminProposals(w http.ResponseWriter, r *http.Request) {
-	ps, err := s.cfg.Store.Proposals(r.Context(), store.ProposalFilter{Status: r.URL.Query().Get("status")})
+	ps, err := s.cfg.Store.Proposals(r.Context(), store.ProposalFilter{Status: r.URL.Query().Get("status"), OwnerID: newOwner(userFrom(r.Context()))})
 	if err != nil {
 		s.fail(w, "list proposals", err)
 		return
 	}
-	writeValue(w, ps)
+	filtered := []store.Proposal{}
+	for _, p := range ps {
+		if s.canReviewProposal(r.Context(), userFrom(r.Context()), p) {
+			filtered = append(filtered, p)
+		}
+	}
+	writeValue(w, filtered)
 }
 
 func (s *server) proposalFrom(w http.ResponseWriter, r *http.Request) (store.Proposal, bool) {
@@ -140,6 +163,10 @@ func (s *server) proposalFrom(w http.ResponseWriter, r *http.Request) (store.Pro
 	}
 	p, err := s.cfg.Store.Proposal(r.Context(), id)
 	if s.notFound(w, err, "read proposal") {
+		return p, false
+	}
+	if !s.canReviewProposal(r.Context(), userFrom(r.Context()), p) {
+		jsonError(w, http.StatusNotFound, "proposal not found")
 		return p, false
 	}
 	return p, true
@@ -218,6 +245,9 @@ func (s *server) acceptProposal(ctx context.Context, p store.Proposal, by string
 		return nil, &agentErr{status: http.StatusUnprocessableEntity, msg: "правка даёт ошибки проверки", check: sum}
 	}
 	v, err := s.cfg.Store.AcceptProposal(ctx, p.ID, p.CourseID, data, base, "agent:"+p.Agent, p.Title+" · принял "+by, by)
+	if errors.Is(err, store.ErrCourseLimit) {
+		return nil, errf(http.StatusConflict, err.Error())
+	}
 	if errors.Is(err, store.ErrConflict) {
 		return nil, errf(http.StatusConflict, "черновик или правка изменились одновременно — обнови страницу")
 	}

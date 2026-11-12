@@ -171,7 +171,7 @@ func TestLastAdminServerGuard(t *testing.T) {
 	}
 }
 
-func TestAuthorHasStudentAccess(t *testing.T) {
+func TestAuthorHasStaffAccess(t *testing.T) {
 	ts := newTestServerWith(t, func(cfg *Config) {
 		if _, err := cfg.Store.CreateUser(context.Background(), "author", "Author", testPassword, store.RoleAuthor); err != nil {
 			t.Fatal(err)
@@ -183,9 +183,9 @@ func TestAuthorHasStudentAccess(t *testing.T) {
 		status int
 	}{
 		{"/api/courses", http.StatusOK},
-		{"/api/admin/courses", http.StatusForbidden},
+		{"/api/admin/courses", http.StatusOK},
 		{"/api/admin/users", http.StatusForbidden},
-		{"/admin", http.StatusFound},
+		{"/admin", http.StatusOK},
 	} {
 		if resp, _ := do(t, author, "GET", ts.URL+check.path, ""); resp.StatusCode != check.status {
 			t.Fatalf("author %s: %d", check.path, resp.StatusCode)

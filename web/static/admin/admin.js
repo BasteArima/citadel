@@ -25,14 +25,14 @@ let courses = [];
 let selectedCheck = null; // курс, чья проверка открыта на странице курсов
 
 function lastCourse() {
-  try { return localStorage.getItem(LAST) || (courses[0] && courses[0].id) || ''; } catch (e) { return courses[0] ? courses[0].id : ''; }
+  try { const id = localStorage.getItem(LAST); return courses.some((c) => c.id === id) ? id : (courses[0] && courses[0].id) || ''; } catch (e) { return courses[0] ? courses[0].id : ''; }
 }
 function rememberCourse(id) { try { localStorage.setItem(LAST, id); } catch (e) { /* без хранилища */ } }
 
 function shell(current) {
   const c = lastCourse();
-  const items = [
-    ['courses', '#/', 'Курсы'],
+  let items = [
+    ['courses', '#/', me.role === 'author' ? 'Мои курсы' : 'Курсы'],
     ['edit', c ? '#/c/' + c + '/edit' : '#/', 'Редактор'],
     ['questions', c ? '#/c/' + c + '/questions' : '#/', 'Вопросы и словарь'],
     ['audio', c ? '#/c/' + c + '/audio' : '#/', 'Озвучка'],
@@ -43,10 +43,11 @@ function shell(current) {
     ['tokens', '#/tokens', 'Токены агентов'],
     ['audit', '#/audit', 'Журнал']
   ];
+  if (me.role === 'author') items = [['courses', '#/', 'Мои курсы'], ['agents', '#/agents', 'Агенты'], ['audio', '#/audio', 'Озвучка']];
   const app = document.getElementById('app');
   app.innerHTML = '<div class="ad">' +
-    '<nav class="ad-side" aria-label="Админка">' +
-    '<a class="ad-brand" href="#/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="#9aa4b0" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="#8ab4f8" stroke-width="2.5"/></svg>Citadel <span>админ</span></a>' +
+    '<nav class="ad-side' + (me.role === 'author' ? ' ad-author-side' : '') + '" aria-label="Админка">' +
+    '<a class="ad-brand" href="#/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="#9aa4b0" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="#8ab4f8" stroke-width="2.5"/></svg>Citadel <span>' + (me.role === 'author' ? 'автор' : 'админ') + '</span></a>' +
     '<a class="ad-back" href="/">← На сайт</a>' +
     items.map((it) => '<a href="' + esc(it[1]) + '"' + (it[0] === current ? ' class="on" aria-current="page"' : '') + '>' + esc(it[2]) + '</a>').join('') +
     '<span class="ad-sp"></span>' + themeSwitch() + '</nav>' +
@@ -77,6 +78,12 @@ export function courseBar(main, crumbs) {
     '<button type="button" class="btn ad-save">Сохранить <kbd>Ctrl S</kbd></button>' +
     '<button type="button" class="btn pri ad-pub">Опубликовать…</button>';
   main.appendChild(bar);
+  if (me.role === 'author') {
+    const nav = h('nav', 'ad-course-nav');
+    nav.setAttribute('aria-label', 'Разделы курса');
+    nav.innerHTML = [['edit', 'Редактор'], ['questions', 'Вопросы и словарь'], ['versions', 'Версии'], ['audio', 'Озвучка']].map(([view, label]) => '<a class="btn" href="#/c/' + encodeURIComponent(draft.id) + '/' + view + '">' + label + '</a>').join('');
+    main.append(nav);
+  }
   const state = bar.querySelector('.ad-state'), saveBtn = bar.querySelector('.ad-save');
   const draw = () => {
     const st = draft.dirty ? 'есть несохранённое' : draft.published ? 'опубликована' : 'сохранена, не опубликована';
@@ -100,9 +107,9 @@ document.addEventListener('keydown', (e) => {
 // ── курсы ──
 async function pageCourses() {
   const main = shell('courses');
-  main.innerHTML = '<div class="ad-page"><div class="ad-head"><div><h1>Курсы</h1><p class="ad-sub">Ученики видят только опубликованную версию. Каждое сохранение — новая версия.</p></div>' +
+  main.innerHTML = '<div class="ad-page"><div class="ad-head"><div><h1>' + (me.role === 'author' ? 'Мои курсы' : 'Курсы') + '</h1><p class="ad-sub">' + (me.role === 'author' ? 'Здесь твои курсы и проекты. Каждое сохранение — новая версия. Доступ другим выдаёт админ.' : 'Ученики видят только опубликованную версию. Каждое сохранение — новая версия.') + '</p></div>' +
     '<div class="ad-acts"><label class="btn ad-file">Импорт JSON<input type="file" accept=".json,application/json" hidden></label><button type="button" class="btn pri" id="ad-new">+ Новый курс</button></div></div>' +
-    '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Курс</th><th>Доступ</th><th>Опубликовано</th><th>Черновик</th><th>Изменён</th><th>Правки агентов</th><th>Проверка</th><th></th></tr></thead><tbody id="ad-rows"><tr><td colspan="8">Загружаю…</td></tr></tbody></table></div>' +
+    '<p id="ad-limit" class="ad-sub" role="status"></p><div class="ad-table-w"><table class="ad-table ad-responsive ad-courses"><thead><tr><th>Курс</th>' + (me.role === 'admin' ? '<th>Владелец</th><th>Доступ</th>' : '') + '<th>Опубликовано</th><th>Черновик</th><th>Изменён</th><th>Правки агентов</th><th>Проверка</th><th></th></tr></thead><tbody id="ad-rows"><tr><td colspan="8">Загружаю…</td></tr></tbody></table></div>' +
     '<section class="ad-card ad-check" id="ad-check" aria-labelledby="ad-check-h"></section></div>';
   main.querySelector('#ad-new').addEventListener('click', newCourse);
   main.querySelector('.ad-file input').addEventListener('change', (e) => importFile(e.target.files[0]));
@@ -113,6 +120,14 @@ async function loadCourses() {
   const r = await req('GET', '/api/admin/courses');
   if (!r.ok) { toast('Не загрузился список курсов: ' + r.status, 'bad'); return; }
   courses = r.data;
+  const limit = document.getElementById('ad-limit'), create = document.getElementById('ad-new');
+  if (me.role === 'author' && limit) {
+    const current = await req('GET', '/api/me');
+    if (current.ok) me = current.data;
+    limit.textContent = 'Курсов: ' + courses.length + ' из ' + me.courseLimit;
+    create.disabled = courses.length >= me.courseLimit;
+    create.title = create.disabled ? 'Лимит исчерпан. Попроси админа увеличить лимит курсов.' : '';
+  }
   const rows = document.getElementById('ad-rows');
   if (!rows) return;
   if (!courses.length) { rows.innerHTML = '<tr><td colspan="7">Курсов пока нет. Создай новый или импортируй JSON.</td></tr>'; }
@@ -122,7 +137,7 @@ async function loadCourses() {
       : '<span class="ad-pill acc">v' + c.latest.version + (c.published ? ' · ' + changes + ' ' + plural(changes, 'изменение', 'изменения', 'изменений') : '') + '</span>';
     return '<tr data-id="' + esc(c.id) + '"' + (c.id === selectedCheck ? ' class="is-sel"' : '') + '>' +
       '<td><div class="ad-course">' + linkIcon(c.metal, !c.published) + '<span><a href="#/c/' + esc(c.id) + '/edit" class="ad-ct">' + esc(c.title || c.id) + '</a><code>' + esc(c.id) + ' · ' + esc(METALS[c.metal] || c.metal) + (c.type === 'project' ? ' · проект' : '') + '</code></span></div></td>' +
-      '<td><select class="ad-access" aria-label="Доступ к курсу ' + esc(c.title) + '"><option value="public"' + (c.access !== 'private' ? ' selected' : '') + '>всем</option><option value="private"' + (c.access === 'private' ? ' selected' : '') + '>по доступу</option></select>' + (c.access === 'private' ? '<div class="ad-small ad-course-grants">Видят: ' + c.grantedUsers + ' — <button type="button" class="ad-linkbtn ad-grant ad-course-users">изменить</button></div>' : c.grantedUsers ? '<div class="ad-small ad-mut ad-course-grants" title="Если сделать курс закрытым, его увидят ' + c.grantedUsers + ' человек">Сохранён доступ: ' + c.grantedUsers + '</div>' : '') + '</td>' +
+      (me.role === 'admin' ? '<td>' + esc(c.ownerName || 'платформа') + '<br><button type="button" class="ad-linkbtn ad-owner">изменить</button></td>' + ('<td><select class="ad-access" aria-label="Доступ к курсу ' + esc(c.title) + '"><option value="public"' + (c.access !== 'private' ? ' selected' : '') + '>всем</option><option value="private"' + (c.access === 'private' ? ' selected' : '') + '>по доступу</option></select>' + (c.access === 'private' ? '<div class="ad-small ad-course-grants">Видят: ' + c.grantedUsers + ' — <button type="button" class="ad-linkbtn ad-grant ad-course-users">изменить</button></div>' : c.grantedUsers ? '<div class="ad-small ad-mut ad-course-grants" title="Если сделать курс закрытым, его увидят ' + c.grantedUsers + ' человек">Сохранён доступ: ' + c.grantedUsers + '</div>' : '') + '</td>') : '') +
       '<td>' + (c.published ? '<span class="ad-pill good">v' + c.published + '</span>' : '<span class="ad-mut">не опубликован</span>') + '</td>' +
       '<td>' + draftCell + '</td>' +
       '<td class="ad-mut">' + esc(when(c.latest.createdAt)) + ' · ' + esc(authorName(c.latest.author)) + '</td>' +
@@ -130,6 +145,21 @@ async function loadCourses() {
       '<td><button type="button" class="ad-linkbtn ad-ck" aria-label="Проверка ' + esc(c.title) + '">' + checkPill(c.check) + '</button></td>' +
       '<td class="ad-r"><a class="btn" href="#/c/' + esc(c.id) + '/edit">Открыть</a> <button type="button" class="btn ad-danger ad-del">Удалить</button></td></tr>';
   }).join('');
+  const labels = ['Курс', ...(me.role === 'admin' ? ['Владелец', 'Доступ'] : []), 'Опубликовано', 'Черновик', 'Изменён', 'Правки агентов', 'Проверка', 'Действия'];
+  rows.querySelectorAll('tr[data-id]').forEach((tr) => [...tr.cells].forEach((td, i) => { td.dataset.label = labels[i]; }));
+  rows.querySelectorAll('.ad-owner').forEach((button) => button.addEventListener('click', async () => {
+    const c = courses.find((c) => c.id === button.closest('tr').dataset.id);
+    const response = await req('GET', '/api/admin/users');
+    if (!response.ok) { toast('Не загрузились пользователи', 'bad'); return; }
+    const form = h('div', 'ad-form');
+    const owners = response.data.users.filter((u) => u.role === 'author' || u.role === 'admin');
+    form.innerHTML = '<label class="ad-f">Владелец<select><option value="0">платформа</option>' + owners.map((u) => '<option value="' + u.id + '"' + (u.id === c.ownerId ? ' selected' : '') + '>' + esc(u.name) + '</option>').join('') + '</select></label>';
+    dialog('Владелец · ' + c.title, form, [{ label: 'Отмена' }, { label: 'Передать', primary: true, onClick: async (close) => {
+      const result = await req('PUT', '/api/admin/courses/' + encodeURIComponent(c.id) + '/owner', { ownerId: Number(form.querySelector('select').value) });
+      if (!result.ok) { toast(result.data.error || 'Не удалось передать курс', 'bad'); return; }
+      close(); toast('Владелец изменён', 'good'); await loadCourses();
+    } }]);
+  }));
   rows.querySelectorAll('.ad-access').forEach((sel) => sel.addEventListener('change', async () => {
     const id = sel.closest('tr').dataset.id;
     const r2 = await req('PUT', '/api/admin/courses/' + encodeURIComponent(id) + '/access', { access: sel.value });
@@ -194,7 +224,7 @@ function newCourse() {
     '<div class="ad-f"><label for="nc-metal">Металл звена в цепи</label><select id="nc-metal">' + Object.keys(METALS).map((m) => '<option value="' + m + '">' + METALS[m] + '</option>').join('') + '</select></div>' +
     '<div class="ad-grid2"><div class="ad-f"><label for="nc-tool">Инструмент</label><input id="nc-tool" placeholder="PostgreSQL"></div>' +
     '<div class="ad-f"><label for="nc-ver">Версия · на ней получены выводы</label><input id="nc-ver" placeholder="18"></div></div>' +
-    '<p class="ad-small ad-mut">Курс появится черновиком: ученики увидят плитку «Скоро», а открыть его можно будет после публикации.</p><p class="ad-err" role="alert"></p>';
+    '<p class="ad-small ad-mut">' + (me.role === 'author' ? 'Курс появится закрытым черновиком. Публикация позволит тебе открыть его в каталоге. Доступ другим выдаёт админ.' : 'Курс появится черновиком: ученики увидят плитку «Скоро», а открыть его можно будет после публикации.') + '</p><p class="ad-err" role="alert"></p>';
   const title = form.querySelector('#nc-title'), id = form.querySelector('#nc-id');
   title.addEventListener('input', () => {
     if (id.dataset.touched) return;
@@ -230,6 +260,7 @@ async function importFile(file) {
 
 function pageAgents(id) {
   const main = shell('agents');
+  if (me.role === 'author') { const box = h('section', 'ad-page'); main.append(box); renderTokens(box, courses, me.role); }
   renderAgents(main, id, () => { draft.course = draft.dirty ? draft.course : null; refreshBadge(); });
 }
 
@@ -248,12 +279,23 @@ let offBar = null;
 async function route() {
   if (offBar) { offBar(); offBar = null; }
   const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
+  if (['agents', 'tokens', 'audio'].includes(parts[0]) || (parts[0] === 'c' && !courses.some((c) => c.id === parts[1]))) {
+    const list = await req('GET', '/api/admin/courses');
+    if (list.ok) courses = list.data;
+  }
+  if (me.role === 'author' && ['invites', 'users', 'audit'].includes(parts[0])) return pageCourses();
+  if (parts[0] === 'audio') {
+    const main = shell('audio'), page = h('div', 'ad-page'); main.append(page);
+    page.innerHTML = '<h1>Озвучка</h1><p class="ad-sub">' + (courses.length ? 'Выбери свой курс. Запись делается по опубликованному тексту.' : 'Сначала создай курс в «Моих курсах» и опубликуй текст.') + '</p>' + courses.map((c) => '<a class="btn" href="#/c/' + encodeURIComponent(c.id) + '/audio">' + esc(c.title) + '</a>').join('');
+    return;
+  }
+  if (me.role === 'author' && parts[0] === 'tokens') return pageAgents(0);
   if (parts[0] === 'invites') return renderInvites(shell('invites'), courses);
   if (parts[0] === 'users') return renderUsers(shell('users'));
   if (parts[0] === 'tokens') {
     const main = shell('tokens');
     main.innerHTML = '<div class="ad-page"><h1>Токены агентов</h1><section class="ad-sec" id="ad-tokens"></section></div>';
-    return renderTokens(main.querySelector('#ad-tokens'), courses);
+    return renderTokens(main.querySelector('#ad-tokens'), courses, me.role);
   }
   if (parts[0] === 'audit') return renderAudit(shell('audit'));
   if (parts[0] === 'agents') return pageAgents(+parts[1] || 0);
@@ -280,7 +322,7 @@ async function route() {
 async function boot() {
   const r = await req('GET', '/api/me');
   me = r.data;
-  if (me.role !== 'admin') { location.href = '/'; return; }
+  if (!['admin', 'author'].includes(me.role)) { location.href = '/'; return; }
   const list = await req('GET', '/api/admin/courses');
   if (list.ok) courses = list.data;
   window.addEventListener('hashchange', route);

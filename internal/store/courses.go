@@ -140,6 +140,8 @@ type VersionInfo struct {
 
 // CourseInfo is a course as the admin list sees it.
 type CourseInfo struct {
+	OwnerID   int64       `json:"ownerId,omitempty"`
+	OwnerName string      `json:"ownerName,omitempty"`
 	ID        string      `json:"id"`
 	Title     string      `json:"title"` // from the latest version
 	Metal     string      `json:"metal"`
@@ -151,7 +153,7 @@ type CourseInfo struct {
 // Courses lists every course with its published and latest versions.
 func (s *Store) Courses(ctx context.Context) ([]CourseInfo, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, COALESCE(c.published_version, 0), v.version, v.author, v.note, v.created_at, v.data
+		SELECT c.id, COALESCE(c.owner_id, 0), COALESCE((SELECT name FROM users WHERE id = c.owner_id), ''), COALESCE(c.published_version, 0), v.version, v.author, v.note, v.created_at, v.data
 		FROM courses c
 		JOIN course_versions v ON v.course_id = c.id
 		  AND v.version = (SELECT MAX(version) FROM course_versions WHERE course_id = c.id)
@@ -164,7 +166,7 @@ func (s *Store) Courses(ctx context.Context) ([]CourseInfo, error) {
 	for rows.Next() {
 		var ci CourseInfo
 		var data string
-		if err := rows.Scan(&ci.ID, &ci.Published, &ci.Latest.Version, &ci.Latest.Author, &ci.Latest.Note, &ci.Latest.CreatedAt, &data); err != nil {
+		if err := rows.Scan(&ci.ID, &ci.OwnerID, &ci.OwnerName, &ci.Published, &ci.Latest.Version, &ci.Latest.Author, &ci.Latest.Note, &ci.Latest.CreatedAt, &data); err != nil {
 			return nil, err
 		}
 		ci.Latest.Published = ci.Latest.Version == ci.Published
@@ -229,13 +231,17 @@ func (s *Store) Version(ctx context.Context, id string, v int) ([]byte, VersionI
 
 // CreateCourse stores the first version of a new, unpublished course.
 func (s *Store) CreateCourse(ctx context.Context, id string, data []byte, author string) error {
+	return s.CreateOwnedCourse(ctx, id, data, author, 0)
+}
+
+func (s *Store) CreateOwnedCourse(ctx context.Context, id string, data []byte, author string, ownerID int64) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO courses (id, created_at) VALUES (?, ?)`, id, now()); err != nil {
-		return fmt.Errorf("course %s already exists: %w", id, ErrConflict)
+	if err := insertOwnedCourse(ctx, tx, id, ownerID); err != nil {
+		return err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM deleted_courses WHERE id = ?`, id); err != nil {
 		return err

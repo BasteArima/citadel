@@ -135,7 +135,16 @@ func (s *server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) me(w http.ResponseWriter, r *http.Request) {
-	writeValue(w, userFrom(r.Context()))
+	u := userFrom(r.Context())
+	info, err := s.cfg.Store.UserInfoByID(r.Context(), u.ID)
+	if err != nil {
+		s.fail(w, "account limits", err)
+		return
+	}
+	writeValue(w, struct {
+		store.User
+		CourseLimit int `json:"courseLimit"`
+	}{u, info.CourseLimit})
 }
 
 const loginError = "Логин или пароль не подошли"

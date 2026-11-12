@@ -226,7 +226,7 @@ func TestTokens(t *testing.T) {
 		t.Fatalf("secret %d chars, tail %q", len(secret), tok.Tail)
 	}
 	got, err := s.TokenBySecret(ctx, secret)
-	if err != nil || got.ID != tok.ID || !got.CanPropose || got.CanCreate || !got.Allows("go") || got.Allows("pg") || got.LastUsedAt == "" {
+	if err != nil || got.ID != tok.ID || !got.CanPropose || got.CanCreate || !s.TokenAllows(ctx, got, "go") || s.TokenAllows(ctx, got, "pg") || got.LastUsedAt == "" {
 		t.Fatalf("by secret: %+v %v", got, err)
 	}
 	for _, bad := range []string{"", "cit_", secret + "x", strings.TrimPrefix(secret, TokenPrefix)} {
