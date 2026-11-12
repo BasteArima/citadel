@@ -67,6 +67,21 @@ func usage() {
 
 func dbPath(dataDir string) string { return filepath.Join(dataDir, "citadel.db") }
 
+// validCourses drops course files that fail the check instead of refusing to start. The database
+// is the source of courses (decision 0009): a stricter check (decision 0021) must not take the
+// service down because of a stale file in the content directory. The course in the database stays.
+func validCourses(courses []*course.Course, log *slog.Logger) []*course.Course {
+	var out []*course.Course
+	for _, c := range courses {
+		if errs := course.Errors(course.Validate(c)); len(errs) > 0 {
+			log.Error("course file skipped: it fails the check, the course in the database is unchanged (run citadel check)", "id", c.ID, "errors", len(errs), "first", errs[0].String())
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", envOr("CITADEL_ADDR", ":8080"), "listen address")
@@ -101,11 +116,7 @@ func serve(args []string) error {
 	if err != nil {
 		return err
 	}
-	for _, c := range courses {
-		if errs := course.Errors(course.Validate(c)); len(errs) > 0 {
-			return fmt.Errorf("course %s is invalid: %v (run citadel check)", c.ID, errs[0])
-		}
-	}
+	courses = validCourses(courses, log)
 	if err := os.MkdirAll(*data, 0o755); err != nil {
 		return err
 	}
