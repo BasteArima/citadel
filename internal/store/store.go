@@ -148,6 +148,30 @@ var migrations = []string{
 	ALTER TABLE users ADD COLUMN disabled_at TEXT;
 	ALTER TABLE users ADD COLUMN invite_id INTEGER;
 	CREATE UNIQUE INDEX users_login ON users(login COLLATE NOCASE);`,
+	// Invitations and one-time password recovery (0022).
+	`CREATE TABLE invites (
+		id INTEGER PRIMARY KEY,
+		code TEXT NOT NULL UNIQUE,
+		note TEXT NOT NULL,
+		role TEXT NOT NULL CHECK (role IN ('student', 'author')),
+		courses TEXT NOT NULL,
+		max_uses INTEGER CHECK (max_uses > 0),
+		uses INTEGER NOT NULL DEFAULT 0,
+		expires_at TEXT,
+		created_by INTEGER NOT NULL REFERENCES users(id),
+		created_at TEXT NOT NULL,
+		revoked_at TEXT
+	);
+	CREATE INDEX users_invite ON users(invite_id);
+	CREATE TABLE password_resets (
+		token_hash TEXT PRIMARY KEY,
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		created_by INTEGER NOT NULL REFERENCES users(id),
+		created_at TEXT NOT NULL,
+		expires_at TEXT NOT NULL,
+		used_at TEXT
+	);
+	CREATE INDEX password_resets_user ON password_resets(user_id);`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

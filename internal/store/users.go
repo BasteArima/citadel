@@ -29,6 +29,7 @@ type User struct {
 	Name         string `json:"name"`
 	Role         string `json:"role"`
 	Login        string `json:"login"`
+	InviteID     int64  `json:"-"`
 	passwordHash string // authentication snapshot; never serialized
 }
 
@@ -188,6 +189,9 @@ func (s *Store) replacePassword(ctx context.Context, id int64, old, password, ke
 	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND token_hash != ?`, id, tokenHash(keep)); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, `UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL`, now(), id); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -205,6 +209,9 @@ func (s *Store) SetDisabled(ctx context.Context, id int64, disabled bool) error 
 	defer tx.Rollback()
 	var at any
 	if disabled {
+		if _, err := tx.ExecContext(ctx, `UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL`, now(), id); err != nil {
+			return err
+		}
 		at = now()
 	}
 	res, err := tx.ExecContext(ctx, `UPDATE users SET disabled_at = ? WHERE id = ? AND (? = 0 OR role != 'admin' OR disabled_at IS NOT NULL OR EXISTS (SELECT 1 FROM users WHERE role = 'admin' AND disabled_at IS NULL AND id != ?))`, at, id, disabled, id)

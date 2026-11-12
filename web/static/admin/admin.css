@@ -337,3 +337,7 @@ tr.tk-off td { opacity: .55; }
 .ag-tech { padding: 12px 16px; }
 .ag-tech > summary { min-height: 32px; font-size: 14px; color: var(--mut); cursor: pointer; }
 .ag-tech .ag-diff { margin-top: 10px; }
+
+.ad-form [hidden] { display: none; }
+
+.iv-courses { flex: none; align-items: flex-start; }

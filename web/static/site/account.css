@@ -1,0 +1,29 @@
+
+  body { margin: 0; background: var(--bg); color: var(--txt); font-family: var(--body); }
+  .lg { min-height: 100vh; display: flex; flex-wrap: wrap; }
+  .lg-brand { flex: 1 1 480px; min-width: 0; padding: 56px 64px; background: #111418; color: #e3e7ec; display: flex; flex-direction: column; justify-content: space-between; gap: 48px; }
+  .lg-logo { display: inline-flex; align-items: center; gap: 12px; font-weight: 700; font-size: 22px; }
+  .lg-pitch { display: flex; flex-direction: column; gap: 24px; max-width: 560px; }
+  .lg-pitch h1 { margin: 0; font-size: 40px; line-height: 1.15; letter-spacing: -.02em; color: #fff; }
+  .lg-pitch p { margin: 0; font-size: 18px; line-height: 1.5; color: #9aa4b0; }
+  .lg-foot { margin: 0; font-size: 14px; color: #7f8994; }
+  .lg-main { flex: 1 1 420px; min-width: 0; padding: 56px 24px; display: flex; align-items: center; justify-content: center; }
+  .lg-form { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 22px; }
+  .lg-form h2 { margin: 0; font-size: 28px; letter-spacing: -.01em; }
+  .lg-sub { margin: 6px 0 0; color: var(--mut); }
+  .lg-f { display: flex; flex-direction: column; gap: 8px; }
+  .lg-f label { font-size: 14px; font-weight: 600; }
+  .lg-f input { height: 48px; padding: 0 14px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); color: var(--txt); font: 400 16px var(--body); }
+  .lg-f input:focus { outline: 2px solid var(--acc-fill); outline-offset: 1px; border-color: var(--acc-fill); }
+  .lg-rem { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; color: var(--mut); }
+  .lg-rem input { width: 18px; height: 18px; accent-color: var(--acc-fill); }
+  .lg-err { margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--rose-soft); color: var(--rose); font-size: 15px; }
+  .lg-go { min-height: 48px; border: 0; border-radius: 8px; background: var(--acc-fill); color: var(--acc-ink); font: 600 16px var(--body); cursor: pointer; }
+  .lg-go:disabled { opacity: .6; cursor: default; }
+  .lg-note { margin: 0; font-size: 14px; color: var(--mut); }
+  @media (max-width: 640px) { .lg-brand { padding: 32px 24px; gap: 28px; } .lg-pitch h1 { font-size: 30px; } }
+
+.lg-form[hidden], .lg-form [hidden] { display: none; }
+.lg-f small { color: var(--mut); line-height: 1.5; }
+.lg-info { padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.lg-info ul { padding-left: 22px; }

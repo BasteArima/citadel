@@ -12,6 +12,7 @@ import { draft, openDraft, onDraft, save, publishFlow } from './draft.js';
 import { renderEditor } from './editor.js';
 import { renderQuestions } from './questions.js';
 import { renderVersions, authorLabel } from './versions.js';
+import { renderInvites, resetLinkDialog } from './invites.js';
 import { renderAudio } from './audio.js';
 import { renderTokens, renderAgents, pendingCount } from './agents.js';
 import { readTheme, saveTheme, applyTheme } from '../site/topbar.js';
@@ -35,6 +36,7 @@ function shell(current) {
     ['audio', c ? '#/c/' + c + '/audio' : '#/', 'Озвучка'],
     ['versions', c ? '#/c/' + c + '/versions' : '#/', 'Версии'],
     ['agents', '#/agents', 'Правки агентов'],
+    ['invites', '#/invites', 'Приглашения'],
     ['users', '#/users', 'Пользователи и токены']
   ];
   const app = document.getElementById('app');
@@ -225,7 +227,7 @@ async function pageUsers() {
   const main = shell('users');
   main.innerHTML = '<div class="ad-page"><h1>Пользователи и токены</h1>' +
     '<section class="ad-sec" aria-labelledby="ad-users-h"><div class="ad-head"><div><h2 id="ad-users-h">Пользователи</h2>' +
-    '<p class="ad-sub">Вход по логину и паролю. Создание аккаунтов и восстановление доступа пока доступны через <code>citadel user</code> в консоли сервера.</p></div></div>' +
+    '<p class="ad-sub">Вход по логину и паролю. Новые аккаунты — через «Приглашения». Для восстановления доступа создай ссылку сброса пароля.</p></div></div>' +
     '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Курсы</th><th>Последний вход</th><th>Впервые</th><th></th></tr></thead><tbody id="ad-urows"><tr><td colspan="7">Загружаю…</td></tr></tbody></table></div></section>' +
     '<section class="ad-sec" aria-labelledby="ad-tok-h" id="ad-tokens"></section></div>';
   renderTokens(document.getElementById('ad-tokens'), courses);
@@ -253,8 +255,9 @@ async function loadUsers() {
       '<td>' + esc(u.login || '—') + (u.disabledAt ? ' · заблокирован' : '') + '</td>' +
       '<td><span class="ad-pill ' + (u.role === 'admin' ? 'acc' : '') + '">' + (u.role === 'admin' ? 'админ' : u.role === 'author' ? 'автор' : 'ученик') + '</span>' + '</td>' +
       '<td>' + coursesCell(u) + '</td>' +
-      '<td class="ad-mut">' + esc(u.lastSeenAt ? when(u.lastSeenAt) : 'ещё не входил') + '</td><td class="ad-mut">' + esc(when(u.createdAt)) + '</td><td class="ad-r">' + action + (self ? '' : ' <button type="button" class="btn ad-disable" data-id="' + u.id + '" data-disabled="' + !u.disabledAt + '">' + (u.disabledAt ? 'Разблокировать' : 'Заблокировать') + '</button>') + '</td></tr>';
+      '<td class="ad-mut">' + esc(u.lastSeenAt ? when(u.lastSeenAt) : 'ещё не входил') + '</td><td class="ad-mut">' + esc(when(u.createdAt)) + '</td><td class="ad-r">' + action + (!u.disabledAt ? ' <button type="button" class="btn ad-reset" data-id="' + u.id + '">Ссылка для сброса пароля</button>' : '') + (self ? '' : ' <button type="button" class="btn ad-disable" data-id="' + u.id + '" data-disabled="' + !u.disabledAt + '">' + (u.disabledAt ? 'Разблокировать' : 'Заблокировать') + '</button>') + '</td></tr>';
   }).join('');
+  rows.querySelectorAll('.ad-reset').forEach((b) => b.addEventListener('click', () => resetLinkDialog(r.data.users.find((u) => String(u.id) === b.dataset.id), loadUsers)));
   rows.querySelectorAll('.ad-grant').forEach((b) => b.addEventListener('click', () => {
     const u = r.data.users.find((x) => String(x.id) === b.dataset.id);
     const form = h('div', 'ad-form');
@@ -306,6 +309,7 @@ let offBar = null;
 async function route() {
   if (offBar) { offBar(); offBar = null; }
   const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
+  if (parts[0] === 'invites') return renderInvites(shell('invites'), courses);
   if (parts[0] === 'users') return pageUsers();
   if (parts[0] === 'agents') return pageAgents(+parts[1] || 0);
   if (parts[0] === 'c' && parts[1]) {

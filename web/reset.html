@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Новый пароль · Citadel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/theme.js"></script>
+<link rel="stylesheet" href="/static/site/account.css">
+</head>
+<body>
+<div class="lg">
+  <section class="lg-brand" aria-label="О Цитадели">
+    <div class="lg-logo"><svg width="36" height="24" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="#9aa4b0" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="#8ab4f8" stroke-width="2.5"/></svg>Citadel</div>
+    <div class="lg-pitch">
+      <svg viewBox="0 0 520 90" width="100%" role="img" aria-label="Цепь из звеньев разных металлов">
+        <rect x="6" y="20" width="110" height="50" rx="25" fill="none" stroke="#9aa4b0" stroke-width="9"/>
+        <rect x="96" y="20" width="110" height="50" rx="25" fill="none" stroke="#d08a5e" stroke-width="9"/>
+        <rect x="186" y="20" width="110" height="50" rx="25" fill="none" stroke="#c9a45a" stroke-width="9"/>
+        <rect x="276" y="20" width="110" height="50" rx="25" fill="none" stroke="#c3cad3" stroke-width="9"/>
+        <rect x="366" y="20" width="110" height="50" rx="25" fill="none" stroke="#343c47" stroke-width="9" stroke-dasharray="12 10"/>
+      </svg>
+      <h1>Курсы с объяснением почему</h1>
+      <p>За каждую освоенную науку мейстер Цитадели куёт звено своей цепи. Здесь звено — это пройденный курс.</p>
+    </div>
+    <p class="lg-foot">Учебные курсы: проходишь, повторяешь, собираешь цепь.</p>
+  </section>
+
+  <main class="lg-main">
+<section class="lg-form" id="loading" role="status">Загружаю…</section><section class="lg-form" id="unavailable" hidden><h2>Ссылка не работает</h2><p id="reason"></p><a href="/login">Перейти ко входу</a></section><section class="lg-form" id="signed-in" hidden><h2>Ты уже вошёл</h2><p id="identity"></p><button class="lg-go" id="sign-out" type="button">Выйти и создать новый аккаунт</button><a href="/">В каталог</a></section><form class="lg-form" id="form" hidden><h2>Новый пароль</h2><p class="lg-sub">Задай новый пароль. Все прежние сессии закроются, а здесь ты войдёшь автоматически. Ссылка действует один раз, в течение 24 часов.</p><div class="lg-f"><label for="password">Новый пароль</label><input id="password" type="password" autocomplete="new-password" required><small>10–256 символов. Пароль не должен совпадать с логином.</small></div>
+<div class="lg-f"><label for="repeat">Повтори пароль</label><input id="repeat" type="password" autocomplete="new-password" required></div>
+<p class="lg-err" id="err" role="alert" hidden></p>
+<button class="lg-go" id="go" type="submit">Продолжить</button></form>
+  </main>
+</div>
+<script type="module" src="/static/site/account-links.js"></script>
+</body>
+</html>

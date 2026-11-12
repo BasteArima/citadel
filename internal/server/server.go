@@ -102,6 +102,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.HandleFunc("GET /login", s.loginPage)
 	mux.HandleFunc("POST /api/login", s.login)
 	mux.HandleFunc("POST /api/logout", s.logout)
+	s.accountLinkRoutes(mux)
 	// signed-in only
 	mux.Handle("GET /api/me", s.api(s.me))
 	mux.Handle("PUT /api/me/name", s.api(s.changeName))
@@ -328,6 +329,6 @@ func (s *server) logRequests(next http.Handler) http.Handler {
 		if r.Method == http.MethodHead || r.URL.Path == "/healthz" {
 			return // health probes would drown the log
 		}
-		s.log.Info("request", "method", r.Method, "path", r.URL.Path, "status", sw.status, "dur", time.Since(start).Round(time.Microsecond).String())
+		s.log.Info("request", "method", r.Method, "path", safeRequestPath(r.URL.Path), "status", sw.status, "dur", time.Since(start).Round(time.Microsecond).String())
 	})
 }
