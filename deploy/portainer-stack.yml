@@ -6,8 +6,6 @@ services:
     ports:
       - "${CITADEL_PORT:-8088}:8080"
     environment:
-      CITADEL_ACCESS_CODE: ${CITADEL_ACCESS_CODE}
-      CITADEL_ADMINS: ${CITADEL_ADMINS}
       CITADEL_RUNNER_SECRET: ${CITADEL_RUNNER_SECRET}
       CITADEL_RUNNER_URL: http://runner:8090
       CITADEL_TTS: edge-tts

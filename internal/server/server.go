@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -24,10 +23,8 @@ import (
 
 // Config is what the server needs to run.
 type Config struct {
-	Store      *store.Store
-	AccessCode string   // the service access code, from CITADEL_ACCESS_CODE
-	Admins     []string // names that get the admin role
-	Log        *slog.Logger
+	Store *store.Store
+	Log   *slog.Logger
 	// the runner of course code (decision 0013); empty URL — running is off
 	RunnerURL    string
 	RunnerSecret string
@@ -52,13 +49,14 @@ type Summary struct {
 }
 
 type server struct {
-	cfg     Config
-	log     *slog.Logger
-	cat     atomic.Pointer[catalog]
-	limiter *limiter
-	runs    runLocks
-	audio   audioJobs
-	ctx     context.Context // lives as long as the service: background jobs stop with it
+	cfg          Config
+	log          *slog.Logger
+	cat          atomic.Pointer[catalog]
+	limiter      *limiter
+	loginLimiter *limiter
+	runs         runLocks
+	audio        audioJobs
+	ctx          context.Context // lives as long as the service: background jobs stop with it
 }
 
 // catalog is a snapshot of the published courses. Publishing builds a new one and swaps it in,
@@ -83,10 +81,12 @@ type Soon struct {
 
 // New returns the HTTP handler.
 func New(ctx context.Context, cfg Config) (http.Handler, error) {
-	if cfg.AccessCode == "" {
-		return nil, errors.New("access code is empty")
+	s := &server{cfg: cfg, log: cfg.Log, limiter: newLimiter(10, 10*time.Minute), loginLimiter: newLimiter(10, 15*time.Minute), ctx: ctx, audio: audioJobs{jobs: map[string]*audioJob{}}}
+	if ok, err := cfg.Store.HasSignInAdmin(ctx); err != nil {
+		return nil, err
+	} else if !ok {
+		s.log.Warn(`no admin can sign in: run "citadel user reset-password <login>" or "citadel user add --role admin …"`)
 	}
-	s := &server{cfg: cfg, log: cfg.Log, limiter: newLimiter(10, 10*time.Minute), ctx: ctx, audio: audioJobs{jobs: map[string]*audioJob{}}}
 	if err := s.reload(ctx); err != nil {
 		return nil, err
 	}
@@ -104,6 +104,9 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.HandleFunc("POST /api/logout", s.logout)
 	// signed-in only
 	mux.Handle("GET /api/me", s.api(s.me))
+	mux.Handle("PUT /api/me/name", s.api(s.changeName))
+	mux.Handle("PUT /api/me/password", s.api(s.changePassword))
+	mux.Handle("POST /api/me/logout-all", s.api(s.logoutAll))
 	mux.Handle("GET /api/courses", s.api(s.listCourses))
 	mux.Handle("GET /api/overview", s.api(s.overview))
 	mux.Handle("GET /api/courses/{id}", s.api(s.getCourse))

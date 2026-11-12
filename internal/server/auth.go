@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"mime"
@@ -13,20 +11,16 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"citadel/internal/store"
 	"citadel/web"
 )
 
-// Sign-in: a name plus the service access code (CITADEL_ACCESS_CODE). A new name
-// creates a user. The session token lives in an HttpOnly cookie; the database keeps only its hash.
+// The session token lives in an HttpOnly cookie; the database keeps only its hash.
 const (
-	cookieName   = "citadel_session"
-	rememberTTL  = 180 * 24 * time.Hour
-	shortTTL     = 24 * time.Hour
-	maxNameRunes = 40
+	cookieName  = "citadel_session"
+	rememberTTL = 180 * 24 * time.Hour
+	shortTTL    = 24 * time.Hour
 )
 
 type ctxKey struct{}
@@ -78,57 +72,47 @@ func (s *server) loginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 type loginRequest struct {
-	Name     string `json:"name"`
-	Code     string `json:"code"`
+	Login    string `json:"login"`
+	Password string `json:"password"`
 	Remember bool   `json:"remember"`
 }
 
 func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	if !isJSON(r) {
-		jsonError(w, http.StatusUnsupportedMediaType, "expected application/json")
+		jsonError(w, http.StatusUnsupportedMediaType, loginError)
 		return
 	}
 	ip := clientIP(r)
-	if !s.limiter.allow(ip) {
-		jsonError(w, http.StatusTooManyRequests, "Слишком много неудачных попыток. Подожди несколько минут.")
-		return
-	}
 	var req loginRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "bad request")
-		return
-	}
-	name, ok := cleanName(req.Name)
-	if !ok {
-		jsonError(w, http.StatusBadRequest, "Имя — от 1 до 40 букв, цифр, пробелов, точек, дефисов или подчёркиваний.")
-		return
-	}
-	if !s.codeMatches(req.Code) {
 		s.limiter.fail(ip)
-		s.log.Warn("sign-in failed", "ip", ip)
-		jsonError(w, http.StatusUnauthorized, "Код не подошёл. Проверь раскладку и попробуй ещё раз.")
+		jsonError(w, http.StatusBadRequest, loginError)
 		return
 	}
-	configAdmin := false
-	for _, a := range s.cfg.Admins {
-		if strings.EqualFold(a, name) {
-			configAdmin = true
-		}
+	login := strings.ToLower(req.Login)
+	if !s.limiter.allow(ip) || !s.loginLimiter.allow(login) {
+		jsonError(w, http.StatusTooManyRequests, loginError)
+		return
 	}
-	u, err := s.cfg.Store.SignIn(r.Context(), name, configAdmin)
+	u, err := s.cfg.Store.Authenticate(r.Context(), login, req.Password)
 	if err != nil {
-		s.log.Error("sign in", "err", err)
-		jsonError(w, http.StatusInternalServerError, "server error")
+		s.limiter.fail(ip)
+		s.loginLimiter.fail(login)
+		jsonError(w, http.StatusUnauthorized, loginError)
 		return
 	}
 	ttl := shortTTL
 	if req.Remember {
 		ttl = rememberTTL
 	}
-	token, err := s.cfg.Store.CreateSession(r.Context(), u.ID, ttl)
+	token, err := s.cfg.Store.CreateAuthenticatedSession(r.Context(), u, ttl)
 	if err != nil {
+		if errors.Is(err, store.ErrCredentials) {
+			jsonError(w, http.StatusUnauthorized, loginError)
+			return
+		}
 		s.log.Error("create session", "err", err)
-		jsonError(w, http.StatusInternalServerError, "server error")
+		jsonError(w, http.StatusInternalServerError, loginError)
 		return
 	}
 	cookie := &http.Cookie{Name: cookieName, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isHTTPS(r)}
@@ -136,7 +120,7 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		cookie.MaxAge = int(rememberTTL / time.Second)
 	}
 	http.SetCookie(w, cookie)
-	s.log.Info("signed in", "user", u.Name, "role", u.Role)
+	s.log.Info("signed in", "login", u.Login)
 	writeValue(w, u)
 }
 
@@ -154,24 +138,58 @@ func (s *server) me(w http.ResponseWriter, r *http.Request) {
 	writeValue(w, userFrom(r.Context()))
 }
 
-// codeMatches compares in constant time; hashing first makes the lengths equal.
-func (s *server) codeMatches(code string) bool {
-	a, b := sha256.Sum256([]byte(code)), sha256.Sum256([]byte(s.cfg.AccessCode))
-	return subtle.ConstantTimeCompare(a[:], b[:]) == 1
+const loginError = "Логин или пароль не подошли"
+
+func (s *server) changeName(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if !readJSON(w, r, &req, 4096) {
+		return
+	}
+	if err := s.cfg.Store.SetName(r.Context(), userFrom(r.Context()).ID, req.Name); err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			jsonError(w, http.StatusConflict, "это имя уже занято")
+			return
+		}
+		jsonError(w, http.StatusBadRequest, "Имя — от 1 до 40 букв, цифр, пробелов, точек, дефисов или подчёркиваний.")
+		return
+	}
+	u := userFrom(r.Context())
+	u.Name, _ = store.CleanName(req.Name)
+	writeValue(w, u)
 }
 
-func cleanName(name string) (string, bool) {
-	name = strings.Join(strings.Fields(name), " ")
-	n := utf8.RuneCountInString(name)
-	if n == 0 || n > maxNameRunes {
-		return "", false
+func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Old string `json:"oldPassword"`
+		New string `json:"newPassword"`
 	}
-	for _, r := range name {
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune(" .-_", r) {
-			return "", false
+	if !readJSON(w, r, &req, 8192) {
+		return
+	}
+	c, _ := r.Cookie(cookieName)
+	if err := s.cfg.Store.ChangePassword(r.Context(), userFrom(r.Context()).ID, req.Old, req.New, c.Value); err != nil {
+		msg := "Не удалось сменить пароль. Проверь текущий пароль и попробуй ещё раз."
+		if errors.Is(err, store.ErrPasswordPolicy) {
+			msg = err.Error()
 		}
+		jsonError(w, http.StatusBadRequest, msg)
+		return
 	}
-	return name, true
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *server) logoutAll(w http.ResponseWriter, r *http.Request) {
+	var req struct{}
+	if !readJSON(w, r, &req, 1024) {
+		return
+	}
+	if err := s.cfg.Store.DeleteUserSessions(r.Context(), userFrom(r.Context()).ID, ""); err != nil {
+		s.fail(w, "logout all", err)
+		return
+	}
+	s.logout(w, r)
 }
 
 // isJSON guards state-changing requests: a cross-site HTML form cannot send application/json.

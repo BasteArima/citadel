@@ -42,6 +42,17 @@ function render() {
         stat('Звеньев выковано', forged + ' из ' + courses.length) +
       '</div>' +
       '<div class="panels">' +
+        '<section class="card panel account-panel" aria-labelledby="account-title"><h2 id="account-title">Аккаунт</h2><div class="account-basics">' +
+          '<div><label class="lbl" for="account-login">Логин</label><input class="inp" id="account-login" value="' + esc(user.login) + '" readonly></div>' +
+          '<form id="name-form" class="account-form"><label class="lbl" for="account-name">Имя</label><input class="inp" id="account-name" name="name" value="' + esc(user.name) + '" maxlength="40" autocomplete="nickname" required>' +
+          '<button class="btn btn-l" type="submit">Сохранить имя</button><p id="name-status" role="status" hidden></p></form>' +
+          '<button class="btn btn-l" type="button" id="logout-all">Выйти на всех устройствах</button><p id="logout-status" role="status" hidden></p></div>' +
+          '<form id="password-form" class="account-form"><h3>Сменить пароль</h3>' +
+          '<label class="lbl" for="old-password">Текущий пароль</label><input class="inp" id="old-password" type="password" autocomplete="current-password" required>' +
+          '<label class="lbl" for="new-password">Новый пароль</label><input class="inp" id="new-password" type="password" autocomplete="new-password" required>' +
+          '<label class="lbl" for="repeat-password">Повтори новый пароль</label><input class="inp" id="repeat-password" type="password" autocomplete="new-password" required>' +
+          '<p>От 10 до 256 символов. Пароль не должен совпадать с логином. После смены пароля остальные устройства выйдут из аккаунта.</p>' +
+          '<button class="btn btn-l" type="submit">Сменить пароль</button><p id="password-status" role="status" hidden></p></form></section>' +
         '<section class="card panel" aria-labelledby="pr"><h2 id="pr">Прогресс</h2>' +
           '<p>Хранится на сервере и в браузере. Без сети курс работает, отметки уходят на сервер при подключении. Файл — на всякий случай или чтобы перенести прогресс на другой сервер Citadel.</p>' +
           syncNote() +
@@ -119,6 +130,40 @@ function chain(forged, forging) {
 }
 
 function wire() {
+  const message = (id, text, bad = false) => {
+    const el = document.getElementById(id);
+    el.textContent = text; el.hidden = false; el.className = bad ? 'note-bad' : 'note-ok';
+  };
+  document.getElementById('name-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const button = e.currentTarget.querySelector('button'); button.disabled = true;
+    try {
+      user = await api('/api/me/name', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: document.getElementById('account-name').value }) });
+      render(); message('name-status', 'Имя сохранено.');
+    } catch (err) { message('name-status', err.message, true); }
+    finally { button.disabled = false; }
+  });
+  document.getElementById('password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget, button = form.querySelector('button');
+    const password = document.getElementById('new-password').value;
+    if (password !== document.getElementById('repeat-password').value) { message('password-status', 'Новые пароли не совпадают.', true); return; }
+    const length = Array.from(password).length;
+    if (length < 10 || length > 256 || password.toLowerCase() === user.login.toLowerCase()) { message('password-status', 'Пароль — от 10 до 256 символов и не должен совпадать с логином.', true); return; }
+    button.disabled = true;
+    try {
+      await api('/api/me/password', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oldPassword: document.getElementById('old-password').value, newPassword: password }) });
+      form.reset(); message('password-status', 'Пароль изменён. Остальные устройства вышли из аккаунта.');
+    } catch (err) { message('password-status', err.message, true); }
+    finally { button.disabled = false; }
+  });
+  document.getElementById('logout-all').addEventListener('click', async (e) => {
+    e.currentTarget.disabled = true;
+    try {
+      await api('/api/me/logout-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      location.href = '/login';
+    } catch (err) { message('logout-status', err.message, true); document.getElementById('logout-all').disabled = false; }
+  });
   // элемент ищем каждый раз: после загрузки файла страница перерисовывается
   const say = (text, bad) => {
     const io = document.getElementById('io');

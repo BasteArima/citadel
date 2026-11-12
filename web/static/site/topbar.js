@@ -45,6 +45,13 @@ export function siteTop(current) {
   });
   return {
     redraw() { markTheme(top, readTheme()); },
-    update(user, due) { setDue(top, due, current); }
+    update(user, due) {
+      setDue(top, due, current);
+      const profile = top.querySelector('.tb-me');
+      if (profile && user) {
+        profile.textContent = Array.from(user.name)[0].toUpperCase();
+        profile.setAttribute('aria-label', 'Профиль: ' + user.name);
+      }
+    }
   };
 }

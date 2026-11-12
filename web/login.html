@@ -56,11 +56,11 @@
     <form class="lg-form" id="form" novalidate>
       <div>
         <h2>Вход</h2>
-        <p class="lg-sub">Имя и код доступа. Код выдаёт владелец сервиса.</p>
+        <p class="lg-sub">Войди в свой аккаунт, чтобы продолжить учиться.</p>
       </div>
-      <div class="lg-f"><label for="name">Имя</label><input id="name" name="name" type="text" autocomplete="username" maxlength="40" required></div>
-      <div class="lg-f"><label for="code">Код доступа</label><input id="code" name="code" type="password" autocomplete="current-password" required></div>
-      <label class="lg-rem"><input id="remember" type="checkbox" checked>Запомнить на этом устройстве</label>
+      <div class="lg-f"><label for="login">Логин</label><input id="login" name="login" type="text" autocomplete="username" maxlength="32" autocapitalize="none" spellcheck="false" required></div>
+      <div class="lg-f"><label for="password">Пароль</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
+      <label class="lg-rem"><input id="remember" type="checkbox" checked>Запомнить меня</label>
       <p class="lg-err" id="err" role="alert" hidden></p>
       <button class="lg-go" id="go" type="submit">Войти</button>
       <p class="lg-note">Прогресс хранится и на сервере, и в браузере: без сети курс тоже работает, отметки догонят сервер при подключении.</p>

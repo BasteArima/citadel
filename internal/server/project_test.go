@@ -55,12 +55,13 @@ func TestProject(t *testing.T) {
 	if _, err := st.ImportContent(ctx, []*course.Course{lessons, project}); err != nil {
 		t.Fatal(err)
 	}
-	h, err := New(ctx, Config{Store: st, AccessCode: testCode, Admins: []string{"Baste"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	h, err := New(ctx, Config{Store: st, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ts := httptest.NewServer(h)
 	t.Cleanup(ts.Close)
+	registerTestStore(t, ts, st)
 	admin, student := signIn(t, ts, "Baste"), signIn(t, ts, "Ученик")
 
 	// a new project starts closed: the student does not see it, not even in lessons

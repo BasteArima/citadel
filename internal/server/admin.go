@@ -59,6 +59,7 @@ func (s *server) adminRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/admin/courses/{id}/versions/{v}", s.admin(s.adminVersion))
 	mux.Handle("GET /api/admin/users", s.admin(s.adminUsers))
 	mux.Handle("PUT /api/admin/users/{id}", s.admin(s.adminSetRole))
+	mux.Handle("PUT /api/admin/users/{id}/disabled", s.admin(s.adminSetDisabled))
 	mux.Handle("PUT /api/admin/users/{id}/courses", s.admin(s.adminSetUserCourses))
 	mux.Handle("PUT /api/admin/courses/{id}/access", s.admin(s.adminSetAccess))
 	s.adminAgentRoutes(mux)
@@ -372,7 +373,7 @@ func (s *server) adminUsers(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, row{u, c})
 	}
-	writeValue(w, map[string]any{"users": out, "configAdmins": s.cfg.Admins})
+	writeValue(w, map[string]any{"users": out})
 }
 
 // adminSetAccess makes a course public or private (decision 0012).
@@ -416,8 +417,7 @@ func (s *server) adminSetUserCourses(w http.ResponseWriter, r *http.Request) {
 	writeValue(w, map[string]any{"courses": req.Courses})
 }
 
-// adminSetRole changes another user's role. Your own role is not changed here, so an admin
-// cannot lock everyone out; names from CITADEL_ADMINS get admin back on their next sign-in.
+// adminSetRole changes another user's role.
 func (s *server) adminSetRole(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -439,10 +439,41 @@ func (s *server) adminSetRole(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, http.StatusNotFound, "no such user")
 			return
 		}
+		if errors.Is(err, store.ErrConflict) {
+			jsonError(w, http.StatusBadRequest, "нельзя понизить последнего активного админа")
+			return
+		}
 		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	writeValue(w, map[string]any{"role": req.Role})
+}
+
+func (s *server) adminSetDisabled(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "bad id")
+		return
+	}
+	var req struct {
+		Disabled bool `json:"disabled"`
+	}
+	if !readJSON(w, r, &req, 1024) {
+		return
+	}
+	if req.Disabled && id == userFrom(r.Context()).ID {
+		jsonError(w, http.StatusBadRequest, "себя заблокировать нельзя")
+		return
+	}
+	if err := s.cfg.Store.SetDisabled(r.Context(), id, req.Disabled); err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			jsonError(w, http.StatusBadRequest, "нельзя заблокировать последнего активного админа")
+			return
+		}
+		s.notFound(w, err, "disable user")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // reloadOrLog refreshes the catalog after a change that is already stored: the change itself

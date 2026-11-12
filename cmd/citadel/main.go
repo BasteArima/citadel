@@ -5,6 +5,7 @@
 //	citadel convert-v0  convert the legacy Go course to format v1
 //	citadel backup      write a consistent copy of the database
 //	citadel runner      run course code in throwaway containers (decision 0013)
+//	citadel user        manage accounts and recover access
 package main
 
 import (
@@ -48,6 +49,8 @@ func main() {
 		err = backup(os.Args[2:])
 	case "runner":
 		err = runRunner(os.Args[2:])
+	case "user":
+		err = userCommand(os.Args[2:], os.Stdout)
 	default:
 		usage()
 		os.Exit(2)
@@ -59,7 +62,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: citadel serve | check | convert-v0 | backup | runner [flags]")
+	fmt.Fprintln(os.Stderr, "usage: citadel serve | check | convert-v0 | backup | runner | user [flags]")
 }
 
 func dbPath(dataDir string) string { return filepath.Join(dataDir, "citadel.db") }
@@ -76,15 +79,22 @@ func serve(args []string) error {
 	if err := loadEnvFile(*envFile); err != nil {
 		return err
 	}
-	code := os.Getenv("CITADEL_ACCESS_CODE")
-	if code == "" {
-		return errors.New("CITADEL_ACCESS_CODE is not set: put it in .env (see .env.example)")
+	// Resolve file settings after loading .env, while keeping explicit flags first.
+	explicit := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+	if !explicit["data"] {
+		*data = envOr("CITADEL_DATA", *data)
 	}
-	var admins []string
-	for _, a := range strings.Split(os.Getenv("CITADEL_ADMINS"), ",") {
-		if a = strings.TrimSpace(a); a != "" {
-			admins = append(admins, a)
-		}
+	if !explicit["addr"] {
+		*addr = envOr("CITADEL_ADDR", *addr)
+	}
+	if !explicit["content"] {
+		*content = envOr("CITADEL_CONTENT", *content)
+	}
+	_, oldCode := os.LookupEnv("CITADEL_ACCESS_CODE")
+	_, oldAdmins := os.LookupEnv("CITADEL_ADMINS")
+	if oldCode || oldAdmins {
+		log.Warn("CITADEL_ACCESS_CODE and CITADEL_ADMINS are no longer used; see docs/dev/decisions/0022-accounts-passwords-invites.md")
 	}
 
 	courses, err := course.LoadDir(*content)
@@ -123,7 +133,7 @@ func serve(args []string) error {
 		log.Info("course", "id", im.ID, "version", im.Version, "new_version", im.New)
 	}
 
-	cfg := server.Config{Store: st, AccessCode: code, Admins: admins, Log: log,
+	cfg := server.Config{Store: st, Log: log,
 		RunnerURL: os.Getenv("CITADEL_RUNNER_URL"), RunnerSecret: os.Getenv("CITADEL_RUNNER_SECRET"),
 		AudioDir: filepath.Join(*data, "audio")}
 	// narration is recorded by edge-tts (decision 0015): CITADEL_TTS or edge-tts from PATH
@@ -147,7 +157,7 @@ func serve(args []string) error {
 		defer cancel()
 		srv.Shutdown(shutdown)
 	}()
-	log.Info("listening", "addr", *addr, "db", dbPath(*data), "admins", len(admins))
+	log.Info("listening", "addr", *addr, "db", dbPath(*data))
 	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

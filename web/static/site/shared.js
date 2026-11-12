@@ -52,7 +52,10 @@ export async function api(url, opts) {
     location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
     return new Promise(() => {});
   }
-  if (!r.ok) throw new Error('сервер ответил ' + r.status);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body.error || ('сервер ответил ' + r.status));
+  }
   return r.status === 204 ? null : r.json();
 }
 

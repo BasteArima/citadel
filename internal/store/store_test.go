@@ -79,26 +79,14 @@ func TestReopenKeepsData(t *testing.T) {
 
 func TestSessions(t *testing.T) {
 	s, ctx := open(t), context.Background()
-	u, err := s.SignIn(ctx, "Baste", true)
+	u, err := s.CreateUser(ctx, "baste", "Baste", "test-password-long", RoleAdmin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// same person; not in the config list any more, but the stored role stays
-	u2, err := s.SignIn(ctx, "baste", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u2.ID != u.ID || u2.Name != "Baste" || u2.Role != RoleAdmin {
-		t.Fatalf("second sign-in: %+v", u2)
-	}
-	if err := s.SetRole(ctx, u.ID, RoleStudent); err != nil {
-		t.Fatal(err)
-	}
-	if u3, _ := s.SignIn(ctx, "Baste", false); u3.Role != RoleStudent {
-		t.Fatalf("role set in the admin panel: %+v", u3)
-	}
-	if u4, _ := s.SignIn(ctx, "Baste", true); u4.Role != RoleAdmin {
-		t.Fatalf("CITADEL_ADMINS always wins: %+v", u4)
+	// Case-insensitive login preserves the stored role and display name.
+	u2, err := s.Authenticate(ctx, "BASTE", "test-password-long")
+	if err != nil || u2.ID != u.ID || u2.Name != "Baste" || u2.Role != RoleAdmin {
+		t.Fatalf("authenticate: %+v %v", u2, err)
 	}
 	tok, err := s.CreateSession(ctx, u.ID, time.Hour)
 	if err != nil {
@@ -180,7 +168,7 @@ func TestDraftsAndPublishing(t *testing.T) {
 
 func TestMergeProgressNewerWins(t *testing.T) {
 	s, ctx := open(t), context.Background()
-	u, _ := s.SignIn(ctx, "A", false)
+	u, _ := s.CreateUser(ctx, "user-a", "A", "test-password-long", RoleStudent)
 	v := func(s string) json.RawMessage { return json.RawMessage(`"` + s + `"`) }
 
 	// device 1
@@ -308,7 +296,7 @@ func TestCourseAccess(t *testing.T) {
 	if _, err := s.ImportContent(ctx, []*course.Course{testCourse("Go")}); err != nil {
 		t.Fatal(err)
 	}
-	u, _ := s.SignIn(ctx, "Гость", false)
+	u, _ := s.CreateUser(ctx, "guest", "Гость", "test-password-long", RoleStudent)
 	if a, _ := s.CourseAccess(ctx); a["go"] != AccessPublic {
 		t.Fatalf("a new course must be public: %v", a)
 	}

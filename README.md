@@ -60,7 +60,7 @@
 
 ## Быстрый старт
 
-Нужны Go 1.27 и [Task](https://taskfile.dev), для запуска в контейнерах — Docker Desktop. Скопируй `.env.example` в `.env` и впиши код доступа. Готовый образ лежит в `ghcr.io/bastearima/citadel`.
+Нужны Go 1.27 и [Task](https://taskfile.dev), для запуска в контейнерах — Docker Desktop. Скопируй `.env.example` в `.env`, после запуска создай первого админа командой `citadel user add --role admin --name "Владелец" baste` (в контейнере — через его консоль). Готовый образ лежит в `ghcr.io/bastearima/citadel`.
 
 ```bash
 go install github.com/go-task/task/v3/cmd/task@latest

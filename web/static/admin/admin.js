@@ -225,8 +225,8 @@ async function pageUsers() {
   const main = shell('users');
   main.innerHTML = '<div class="ad-page"><h1>Пользователи и токены</h1>' +
     '<section class="ad-sec" aria-labelledby="ad-users-h"><div class="ad-head"><div><h2 id="ad-users-h">Пользователи</h2>' +
-    '<p class="ad-sub">Вход по имени и коду доступа сервиса. Новое имя при входе создаёт ученика. Код задаётся на сервере в <code>CITADEL_ACCESS_CODE</code>.</p></div></div>' +
-    '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Имя</th><th>Роль</th><th>Курсы</th><th>Последний вход</th><th>Впервые</th><th></th></tr></thead><tbody id="ad-urows"><tr><td colspan="6">Загружаю…</td></tr></tbody></table></div></section>' +
+    '<p class="ad-sub">Вход по логину и паролю. Создание аккаунтов и восстановление доступа пока доступны через <code>citadel user</code> в консоли сервера.</p></div></div>' +
+    '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Курсы</th><th>Последний вход</th><th>Впервые</th><th></th></tr></thead><tbody id="ad-urows"><tr><td colspan="7">Загружаю…</td></tr></tbody></table></div></section>' +
     '<section class="ad-sec" aria-labelledby="ad-tok-h" id="ad-tokens"></section></div>';
   renderTokens(document.getElementById('ad-tokens'), courses);
   await loadUsers();
@@ -236,7 +236,6 @@ async function loadUsers() {
   const r = await req('GET', '/api/admin/users');
   const rows = document.getElementById('ad-urows');
   if (!r.ok || !rows) return;
-  const cfg = (r.data.configAdmins || []).map((n) => n.toLowerCase());
   const priv = courses.filter((c) => c.access === 'private');
   const title = (id) => { const c = courses.find((x) => x.id === id); return c ? c.title : id; };
   // Курсы пользователя: публичные видят все, админ — всё; приватные — только выданные
@@ -247,13 +246,14 @@ async function loadUsers() {
     return '<span>' + esc(text) + '</span>' + (priv.length ? ' <button type="button" class="ad-linkbtn ad-grant" data-id="' + u.id + '">изменить</button>' : '');
   };
   rows.innerHTML = r.data.users.map((u) => {
-    const self = u.name.toLowerCase() === me.name.toLowerCase(), fixed = cfg.includes(u.name.toLowerCase());
+    const self = u.name.toLowerCase() === me.name.toLowerCase();
     const action = self ? '<span class="ad-mut">это ты</span>'
       : '<button type="button" class="btn ad-role" data-id="' + u.id + '" data-role="' + (u.role === 'admin' ? 'student' : 'admin') + '">' + (u.role === 'admin' ? 'Сделать учеником' : 'Сделать админом') + '</button>';
     return '<tr><td><span class="ad-user"><i class="ad-ava' + (u.role === 'admin' ? ' adm' : '') + '">' + esc(u.name.slice(0, 1).toUpperCase()) + '</i><strong>' + esc(u.name) + '</strong></span></td>' +
-      '<td><span class="ad-pill ' + (u.role === 'admin' ? 'acc' : '') + '">' + (u.role === 'admin' ? 'админ' : 'ученик') + '</span>' + (fixed ? ' <span class="ad-small ad-mut" title="Имя есть в CITADEL_ADMINS: админом станет при каждом входе">из настроек</span>' : '') + '</td>' +
+      '<td>' + esc(u.login || '—') + (u.disabledAt ? ' · заблокирован' : '') + '</td>' +
+      '<td><span class="ad-pill ' + (u.role === 'admin' ? 'acc' : '') + '">' + (u.role === 'admin' ? 'админ' : u.role === 'author' ? 'автор' : 'ученик') + '</span>' + '</td>' +
       '<td>' + coursesCell(u) + '</td>' +
-      '<td class="ad-mut">' + esc(u.lastSeenAt ? when(u.lastSeenAt) : 'ещё не входил') + '</td><td class="ad-mut">' + esc(when(u.createdAt)) + '</td><td class="ad-r">' + action + '</td></tr>';
+      '<td class="ad-mut">' + esc(u.lastSeenAt ? when(u.lastSeenAt) : 'ещё не входил') + '</td><td class="ad-mut">' + esc(when(u.createdAt)) + '</td><td class="ad-r">' + action + (self ? '' : ' <button type="button" class="btn ad-disable" data-id="' + u.id + '" data-disabled="' + !u.disabledAt + '">' + (u.disabledAt ? 'Разблокировать' : 'Заблокировать') + '</button>') + '</td></tr>';
   }).join('');
   rows.querySelectorAll('.ad-grant').forEach((b) => b.addEventListener('click', () => {
     const u = r.data.users.find((x) => String(x.id) === b.dataset.id);
@@ -271,6 +271,12 @@ async function loadUsers() {
         loadUsers();
       } }
     ]);
+  }));
+  rows.querySelectorAll('.ad-disable').forEach((b) => b.addEventListener('click', async () => {
+    const r2 = await req('PUT', '/api/admin/users/' + b.dataset.id + '/disabled', { disabled: b.dataset.disabled === 'true' });
+    if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); return; }
+    toast('Статус изменён', 'good');
+    loadUsers();
   }));
   rows.querySelectorAll('.ad-role').forEach((b) => b.addEventListener('click', async () => {
     const r2 = await req('PUT', '/api/admin/users/' + b.dataset.id, { role: b.dataset.role });

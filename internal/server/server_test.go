@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,13 +11,33 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"citadel/internal/course"
 	"citadel/internal/store"
 )
 
-const testCode = "test-access-code"
+const testPassword = "test-password-long"
+
+var testStores sync.Map
+
+func registerTestStore(t *testing.T, ts *httptest.Server, st *store.Store) {
+	testStores.Store(ts.URL, st)
+	t.Cleanup(func() { testStores.Delete(ts.URL) })
+}
+
+func testLogin(name string) string {
+	switch name {
+	case "Гость":
+		return "guest"
+	case "Ученик":
+		return "student"
+	case "A":
+		return "user-a"
+	}
+	return strings.ToLower(name)
+}
 
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -43,7 +64,7 @@ func newTestServerWith(t *testing.T, tune func(*Config)) *httptest.Server {
 	if _, err := st.ImportContent(ctx, []*course.Course{c}); err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{Store: st, AccessCode: testCode, Admins: []string{"Baste"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	cfg := Config{Store: st, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	tune(&cfg)
 	h, err := New(ctx, cfg)
 	if err != nil {
@@ -51,6 +72,7 @@ func newTestServerWith(t *testing.T, tune func(*Config)) *httptest.Server {
 	}
 	ts := httptest.NewServer(h)
 	t.Cleanup(ts.Close)
+	registerTestStore(t, ts, st)
 	return ts
 }
 
@@ -78,7 +100,20 @@ func do(t *testing.T, c *http.Client, method, url, body string) (*http.Response,
 func signIn(t *testing.T, ts *httptest.Server, name string) *http.Client {
 	t.Helper()
 	c := client()
-	resp, body := do(t, c, "POST", ts.URL+"/api/login", `{"name":"`+name+`","code":"`+testCode+`","remember":true}`)
+	login := testLogin(name)
+	value, _ := testStores.Load(ts.URL)
+	st := value.(*store.Store)
+	if _, err := st.UserByLogin(context.Background(), login); err != nil {
+		role := store.RoleStudent
+		if login == "baste" {
+			role = store.RoleAdmin
+			name = "Baste"
+		}
+		if _, err := st.CreateUser(context.Background(), login, name, testPassword, role); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resp, body := do(t, c, "POST", ts.URL+"/api/login", `{"login":"`+login+`","password":"`+testPassword+`","remember":true}`)
 	if resp.StatusCode != 200 {
 		t.Fatalf("sign in: %d %s", resp.StatusCode, body)
 	}
@@ -94,7 +129,7 @@ func TestPublicRoutes(t *testing.T) {
 		has    string
 	}{
 		{"/healthz", 200, "ok"},
-		{"/login", 200, "Код доступа"},
+		{"/login", 200, "Пароль"},
 		{"/static/engine/app.js", 200, "export function start"},
 		{"/api/courses/go", 401, "sign in required"},
 		{"/api/progress/go", 401, "sign in required"},
@@ -115,9 +150,9 @@ func TestSignInFlow(t *testing.T) {
 	ts := newTestServer(t)
 	c := client()
 	for _, tt := range []struct{ body, want string }{
-		{`{"name":"Baste","code":"wrong"}`, "Код не подошёл"},
-		{`{"name":"","code":"` + testCode + `"}`, "Имя"},
-		{`{"name":"<script>","code":"` + testCode + `"}`, "Имя"},
+		{`{"login":"Baste","password":"wrong"}`, loginError},
+		{`{"login":"","password":"` + testPassword + `"}`, loginError},
+		{`{"login":"<script>","password":"` + testPassword + `"}`, loginError},
 	} {
 		resp, body := do(t, c, "POST", ts.URL+"/api/login", tt.body)
 		if resp.StatusCode < 400 || !strings.Contains(body, tt.want) {
@@ -125,7 +160,7 @@ func TestSignInFlow(t *testing.T) {
 		}
 	}
 	// a form post from another site cannot sign in
-	req, _ := http.NewRequest("POST", ts.URL+"/api/login", strings.NewReader("name=Baste&code="+testCode))
+	req, _ := http.NewRequest("POST", ts.URL+"/api/login", strings.NewReader("login=Baste&password="+testPassword))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if resp, err := c.Do(req); err != nil || resp.StatusCode != http.StatusUnsupportedMediaType {
 		t.Errorf("form post: %v %v", resp, err)
@@ -156,19 +191,19 @@ func TestSignInFlow(t *testing.T) {
 
 func TestSignInRateLimit(t *testing.T) {
 	ts := newTestServer(t)
-	c := client()
+	c := signIn(t, ts, "Baste")
 	var last int
 	for i := 0; i < 11; i++ {
-		resp, _ := do(t, c, "POST", ts.URL+"/api/login", `{"name":"x","code":"wrong"}`)
+		resp, _ := do(t, c, "POST", ts.URL+"/api/login", fmt.Sprintf(`{"login":"user-%d","password":"wrong"}`, i))
 		last = resp.StatusCode
 	}
 	if last != http.StatusTooManyRequests {
 		t.Fatalf("11th failed attempt: %d", last)
 	}
-	// even the right code is refused while blocked
-	resp, _ := do(t, c, "POST", ts.URL+"/api/login", `{"name":"x","code":"`+testCode+`"}`)
+	// even the right password is refused while blocked
+	resp, _ := do(t, c, "POST", ts.URL+"/api/login", `{"login":"baste","password":"`+testPassword+`"}`)
 	if resp.StatusCode != http.StatusTooManyRequests {
-		t.Fatalf("right code while blocked: %d", resp.StatusCode)
+		t.Fatalf("right password while blocked: %d", resp.StatusCode)
 	}
 }
 

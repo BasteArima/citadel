@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -141,6 +142,12 @@ var migrations = []string{
 	);`,
 	// a token that may decide other agents' proposals and publish (decision 0019)
 	`ALTER TABLE tokens ADD COLUMN can_review INTEGER NOT NULL DEFAULT 0;`,
+	// Accounts (0022). Login backfill uses Unicode case conversion in Go below.
+	`ALTER TABLE users ADD COLUMN login TEXT COLLATE NOCASE;
+	ALTER TABLE users ADD COLUMN password_hash TEXT;
+	ALTER TABLE users ADD COLUMN disabled_at TEXT;
+	ALTER TABLE users ADD COLUMN invite_id INTEGER;
+	CREATE UNIQUE INDEX users_login ON users(login COLLATE NOCASE);`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {
@@ -168,11 +175,53 @@ func (s *Store) migrate(ctx context.Context) error {
 			tx.Rollback()
 			return fmt.Errorf("migration %d: %w", i+1, err)
 		}
+		if i == 7 {
+			if err := backfillLogins(ctx, tx); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
 		if _, err := tx.ExecContext(ctx, `UPDATE schema_version SET version = ?`, i+1); err != nil {
 			tx.Rollback()
 			return err
 		}
 		if err := tx.Commit(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func backfillLogins(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, `SELECT id, name FROM users ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	type candidate struct {
+		id    int64
+		login string
+	}
+	var candidates []candidate
+	for rows.Next() {
+		var id int64
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			rows.Close()
+			return err
+		}
+		if login, err := CleanLogin(strings.ToLower(name)); err == nil {
+			candidates = append(candidates, candidate{id, login})
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	// SQLite's NOCASE only folds ASCII. Legacy Unicode names such as Kelvin's
+	// sign can normalize to the same ASCII login; the lowest id keeps it.
+	for _, c := range candidates {
+		if _, err := tx.ExecContext(ctx, `UPDATE OR IGNORE users SET login = ? WHERE id = ?`, c.login, c.id); err != nil {
 			return err
 		}
 	}

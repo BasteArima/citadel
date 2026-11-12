@@ -89,6 +89,16 @@
 .panels { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
 .panel { flex: 1 1 380px; min-width: 0; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
 .panel p { margin: 0; color: var(--mut); font-size: 15px; }
+.account-form { display: flex; flex-direction: column; gap: 10px; }
+.account-form h3 { margin: 0; }
+.account-panel { flex-basis: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 24px; }
+.account-panel h2 { grid-column: 1 / -1; }
+.account-basics { display: flex; flex-direction: column; gap: 14px; }
+@media (max-width: 640px) { .account-panel { grid-template-columns: minmax(0, 1fr); } }
+.panel .inp { display: block; box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--txt); font: 16px var(--body); }
+.panel .inp:focus-visible { outline: 2px solid var(--acc-fill); outline-offset: 2px; }
+.panel .inp[readonly] { color: var(--mut); }
+.panel p.note-bad { color: var(--rose); }
 .note-ok { padding: 10px 14px; border-radius: 9px; background: var(--good-soft); font-size: 15px; }
 .note-bad { padding: 10px 14px; border-radius: 9px; background: var(--rose-soft); color: var(--rose); font-size: 15px; }
 
