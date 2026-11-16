@@ -3,9 +3,8 @@
 import { esc, h, toast, confirmDialog, walk } from './ui.js';
 import { draft, touch, onDraft } from './draft.js';
 import { blockForm, newBlock, SPECS, loadSpecs } from './blocks.js';
-import { renderBlock } from '../engine/blocks/index.js';
-import { indexCourse } from '../engine/course.js';
-import { initRich, rich } from '../engine/rich.js';
+import { bindMenu } from '../site/topbar.js';
+import { previewTools } from './preview.js';
 
 const KIND = { section: 'раздел', lesson: 'урок', part: 'часть', page: 'страница' };
 const CHILD = { section: 'lesson', lesson: 'part' };
@@ -20,17 +19,19 @@ export function renderEditor(main, nodeId, courseBar) {
 
   const { off } = courseBar(main, '<a href="#/c/' + esc(draft.id) + '/edit">' + esc(c.title) + '</a>' + crumbs(node));
   const wrap = h('div', 'ed');
-  wrap.innerHTML = '<nav class="ed-tree" aria-label="Дерево курса"></nav><div class="ed-body"></div><aside class="ed-prev" aria-label="Живое превью"></aside>';
+  wrap.innerHTML = '<nav id="editor-tree" class="ed-tree" aria-label="Дерево курса"></nav><div class="ed-body"></div><aside class="ed-prev" aria-label="Живое превью"></aside>';
   main.appendChild(wrap);
   const treeBox = wrap.querySelector('.ed-tree'), body = wrap.querySelector('.ed-body'), prev = wrap.querySelector('.ed-prev');
 
-  let timer = 0;
-  const changed = () => { touch(); clearTimeout(timer); timer = setTimeout(drawPreview, 250); };
+  const preview = previewTools(main, wrap, () => node);
+  let closeEditorMenu = () => {};
+  const changed = () => { touch(); preview.update(); };
   const offDraft = onDraft(() => drawTree());
 
   // ── дерево ──
   function drawTree() {
-    treeBox.innerHTML = '<div class="ed-tree-h"><span class="lbl">Дерево</span><button type="button" class="ad-ib" id="ed-add" aria-label="Добавить узел" title="Добавить узел">+</button></div><ul class="ed-ul" role="tree"></ul>' +
+    closeEditorMenu();
+    treeBox.innerHTML = '<a class="ed-passport-link" href="#/c/' + encodeURIComponent(c.id) + '/passport">Паспорт курса →</a><div class="ed-tree-h"><span class="lbl">Дерево</span><button type="button" class="ad-ib" id="ed-add" aria-haspopup="menu" aria-expanded="false" aria-label="Добавить узел" title="Добавить узел">+</button></div><ul class="ed-ul" role="tree"></ul>' +
       '<p class="ad-small ad-mut">Перетащи узел, чтобы переставить. Двойной клик — переименовать.</p>';
     const ul = treeBox.querySelector('ul');
     const add = (nodes, depth, into) => nodes.forEach((n) => {
@@ -113,12 +114,14 @@ export function renderEditor(main, nodeId, courseBar) {
     let k = 0;
     walk(c.root, (n) => { if (n.kind === 'lesson') n.n = ++k; });
     walk(c.root, (n) => { if (n.children && !n.children.length) delete n.children; });
-    changed();
+    changed(); preview.update({ full: true, navigate: true });
     drawTree();
     drawBody();
   }
 
   function addMenu(e) {
+    closeEditorMenu();
+    const trigger = e.currentTarget;
     const menu = h('div', 'ad-menu');
     menu.setAttribute('role', 'menu');
     const opts = [['section', 'Раздел в корне'], ['page', 'Страницу курса в корне']];
@@ -128,9 +131,9 @@ export function renderEditor(main, nodeId, courseBar) {
     if (les && !(les.blocks && les.blocks.length)) opts.unshift(['part', 'Часть в урок «' + les.title + '»']);
     menu.innerHTML = opts.map((o) => '<button type="button" role="menuitem" data-k="' + o[0] + '">' + esc(o[1]) + '</button>').join('');
     e.currentTarget.parentNode.appendChild(menu);
-    const close = () => { menu.remove(); document.removeEventListener('click', outside, true); };
-    const outside = (ev) => { if (!menu.contains(ev.target)) close(); };
-    setTimeout(() => document.addEventListener('click', outside, true));
+    menu.hidden = true;
+    const binding = bindMenu(trigger.parentNode, trigger, menu, null, true); binding.open();
+    const close = () => { binding.close(); binding(); menu.remove(); }; closeEditorMenu = close;
     menu.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
       close();
       const kind = b.dataset.k;
@@ -276,17 +279,20 @@ export function renderEditor(main, nodeId, courseBar) {
       list.appendChild(card);
     });
     const addW = h('div', 'ed-addw');
-    addW.innerHTML = '<button type="button" class="btn ed-addb" aria-expanded="false">+ Добавить блок</button>';
+    addW.innerHTML = '<button type="button" class="btn ed-addb" aria-haspopup="menu" aria-expanded="false">+ Добавить блок</button>';
     body.appendChild(addW);
     const btn = addW.querySelector('button');
     btn.addEventListener('click', () => {
       const ex = addW.querySelector('.ad-menu');
-      if (ex) { ex.remove(); btn.setAttribute('aria-expanded', 'false'); return; }
+      if (ex && !ex.hidden) { closeEditorMenu(); return; }
+      closeEditorMenu();
       const menu = h('div', 'ad-menu ed-bmenu');
       menu.setAttribute('role', 'menu');
       menu.innerHTML = Object.values(SPECS).map((s) => '<button type="button" role="menuitem" data-t="' + esc(s.type) + '">' + esc(s.title) + ' <code>' + esc(s.type) + '</code></button>').join('');
       addW.appendChild(menu);
-      btn.setAttribute('aria-expanded', 'true');
+      menu.hidden = true;
+      const binding = bindMenu(addW, btn, menu, null, true); binding.open();
+      closeEditorMenu = () => { binding.close(); binding(); menu.remove(); };
       menu.querySelectorAll('button').forEach((m) => m.addEventListener('click', () => {
         n.blocks.push(newBlock(m.dataset.t, c, lessonOf(n)));
         changed(); drawBody();
@@ -299,36 +305,17 @@ export function renderEditor(main, nodeId, courseBar) {
     });
   }
 
-  // ── превью ──
-  function drawPreview() {
-    prev.innerHTML = '<div class="ad-row"><span class="lbl">Превью</span><span class="ad-sp"></span><span class="ad-small ad-mut">так увидит ученик</span></div>';
-    if (!node) return;
-    const page = h('div', 'ed-page');
-    page.id = 'page';
-    prev.appendChild(page);
-    try {
-      initRich(indexCourse(c));
-      page.appendChild(h('h2', 'pt-title', esc(node.title)));
-      if (node.lead) page.appendChild(h('p', 'lead', rich(node.lead)));
-      const ctx = { tool: c.tool || { name: '', version: '' }, csLabel: c.labels && c.labels.cs, label: 'Вопрос', store: { state: () => 0, answer() {} }, onSolve() {}, onChange() {} };
-      const blocks = node.blocks || [];
-      if (!blocks.length && !(node.children && node.children.length)) page.appendChild(h('p', 'ad-mut', 'Блоков пока нет.'));
-      if (node.children && node.children.length) page.appendChild(h('p', 'ad-mut', 'Части: ' + node.children.map((p) => esc(p.title)).join(' · ')));
-      blocks.forEach((b, i) => {
-        try {
-          const bctx = b.type === 'hands' ? Object.assign({}, ctx, { store: () => ctx.store }) : Object.assign({}, ctx, { label: 'Вопрос ' + (i + 1) });
-          page.appendChild(renderBlock(b, bctx));
-        } catch (e) {
-          page.appendChild(h('div', 'callout warn', '<b>Блок ' + (i + 1) + ' не рисуется</b>' + esc(e.message)));
-        }
-      });
-    } catch (e) {
-      page.appendChild(h('p', 'ad-err', 'Превью не построилось: ' + esc(e.message)));
-    }
-  }
+  function drawPreview() { preview.update(); }
 
-  loadSpecs().then(() => { drawTree(); drawBody(); });
-  return () => { off(); offDraft(); clearTimeout(timer); };
+  let disposed = false;
+  loadSpecs().then(() => { if (!disposed) { drawTree(); drawBody(); } });
+  const cleanup = () => { disposed = true; closeEditorMenu(); off(); offDraft(); preview.destroy(); };
+  cleanup.navigate = (id) => {
+    node = find(id) || firstLeaf();
+    pathTo(node).concat(node ? [node] : []).forEach((n) => open.add(n.id));
+    drawTree(); drawBody(); preview.update({ navigate: true });
+  };
+  return cleanup;
 
   // ── помощники по дереву ──
   function find(id) { let out = null; walk(c.root, (n) => { if (n.id === id) out = n; }); return out; }

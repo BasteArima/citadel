@@ -190,6 +190,15 @@ var migrations = []string{
 	ALTER TABLE proposals ADD COLUMN owner_id INTEGER REFERENCES users(id);
 	CREATE INDEX courses_owner ON courses(owner_id);
 	CREATE INDEX tokens_user ON tokens(user_id);`,
+	// Directions belong to the platform, not to versioned course JSON.
+	`CREATE TABLE directions (id TEXT PRIMARY KEY, title TEXT NOT NULL, position INTEGER NOT NULL);
+	ALTER TABLE courses ADD COLUMN direction TEXT REFERENCES directions(id) ON DELETE SET NULL;`,
+	// Only normalized avatars are kept; source files are never stored.
+	`CREATE TABLE avatars (
+		user_id INTEGER PRIMARY KEY REFERENCES users(id),
+		png BLOB NOT NULL,
+		updated_at INTEGER NOT NULL
+	);`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

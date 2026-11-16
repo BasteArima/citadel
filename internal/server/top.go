@@ -12,8 +12,8 @@ import (
 // The header is rendered here, into the page HTML: it is there in the very first frame, so moving
 // between the catalog, the reviews, the profile and a course does not make it blink. The browser
 // only fills in what the server does not know: the card count, the course menu and lesson strip.
-// The active theme button is styled by CSS from <html data-theme>, which an inline script in
-// <head> sets before the first paint.
+// The active theme button is styled by CSS from <html data-theme>, which theme.js
+// sets before the first paint.
 
 const (
 	icSearch = `<svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>`
@@ -26,7 +26,7 @@ const (
 
 // topHTML is the inside of <header id="top">. current — catalog, review or profile; inCourse adds
 // the course menu button and the places the engine fills (lesson head and part strip on a phone).
-func topHTML(name, role, current string, inCourse bool) string {
+func topHTML(name, role, avatar, current string, inCourse bool) string {
 	var b strings.Builder
 	if inCourse {
 		b.WriteString(`<button type="button" class="tb-ic tb-menu" data-act="menu" aria-controls="side" aria-expanded="false" aria-label="Меню уроков">` + icMenu + `</button>`)
@@ -34,10 +34,7 @@ func topHTML(name, role, current string, inCourse bool) string {
 	}
 	b.WriteString(`<a class="tb-home" href="/">` + logo + `<span>Citadel</span></a>`)
 	b.WriteString(`<nav class="tb-nav" aria-label="Разделы">`)
-	nav := [][3]string{{"/", "Курсы", "catalog"}, {"/projects", "Проекты", "projects"}, {"/review", "Повторения", "review"}, {"/profile", "Профиль", "profile"}}
-	if role == "admin" || role == "author" {
-		nav = append(nav, [3]string{"/admin", "Админка", "admin"})
-	}
+	nav := [][3]string{{"/", "Курсы", "catalog"}, {"/projects", "Проекты", "projects"}, {"/review", "Повторения", "review"}}
 	for _, n := range nav {
 		b.WriteString(`<a href="` + n[0] + `"`)
 		if n[2] == current {
@@ -64,7 +61,31 @@ func topHTML(name, role, current string, inCourse bool) string {
 	if r, _ := utf8.DecodeRuneInString(name); r != utf8.RuneError {
 		initial = strings.ToUpper(string(r))
 	}
-	b.WriteString(`<a class="tb-me" href="/profile" aria-label="Профиль: ` + html.EscapeString(name) + `">` + html.EscapeString(initial) + `</a>`)
+	b.WriteString(`<div class="tb-account"><button type="button" class="tb-me" aria-haspopup="menu" aria-expanded="false" aria-controls="account-menu" aria-label="Меню аккаунта: ` + html.EscapeString(name) + `">`)
+	if avatar != "" {
+		b.WriteString(`<img src="` + html.EscapeString(avatar) + `" alt="" width="32" height="32">`)
+	} else {
+		b.WriteString(html.EscapeString(initial))
+	}
+	roleLabel := "Ученик"
+	if role == "admin" {
+		roleLabel = "Админ"
+	} else if role == "author" {
+		roleLabel = "Автор"
+	}
+	b.WriteString(`</button><div class="tb-account-menu" id="account-menu" role="menu" aria-label="Аккаунт" hidden><div class="tb-account-head" role="presentation"><b class="tb-account-name">` + html.EscapeString(name) + `</b><small>` + roleLabel + `</small></div>`)
+	items := [][3]string{{"/profile", "Профиль", "profile"}, {"/settings", "Настройки", "settings"}}
+	if role == "admin" || role == "author" {
+		items = append(items, [3]string{"/admin", "Админка", "admin"})
+	}
+	for _, item := range items {
+		b.WriteString(`<a role="menuitem" tabindex="-1" href="` + item[0] + `"`)
+		if current == item[2] {
+			b.WriteString(` aria-current="page"`)
+		}
+		b.WriteString(`>` + item[1] + `</a>`)
+	}
+	b.WriteString(`<hr role="separator"><button type="button" role="menuitem" tabindex="-1" class="account-danger" data-account-logout>Выйти…</button></div></div>`)
 	b.WriteString(`</div>`)
 	if inCourse {
 		b.WriteString(`<div class="tb-strip-w"></div>`)
@@ -80,7 +101,7 @@ func withTop(w http.ResponseWriter, r *http.Request, file, current string, inCou
 		return
 	}
 	u := userFrom(r.Context())
-	page := strings.Replace(string(data), `id="top"></header>`, `id="top">`+topHTML(u.Name, u.Role, current, inCourse)+`</header>`, 1)
+	page := strings.Replace(string(data), `id="top"></header>`, `id="top">`+topHTML(u.Name, u.Role, u.Avatar, current, inCourse)+`</header>`, 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Write([]byte(page))

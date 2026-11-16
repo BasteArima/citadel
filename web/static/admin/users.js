@@ -1,4 +1,4 @@
-import { req, esc, h, when, toast, dialog, confirmDialog } from './ui.js';
+import { req, esc, h, when, toast, dialog, confirmDialog, actionsMenu } from './ui.js';
 import { resetLinkDialog } from './invites.js';
 
 export const roles = { student: 'ученик', author: 'автор', admin: 'админ' };
@@ -118,14 +118,14 @@ export async function renderUsers(main) {
         e.target.value = u.role;
         if (role === u.role || !(await confirmDialog('Изменить роль · ' + u.name, roles[u.role] + ' → ' + roles[role] + (role === 'admin' ? '. Админ получает полный доступ к платформе.' : '. Права изменятся сразу.'), 'Изменить роль', true))) return;
         e.target.disabled = true;
-        if (await request('PUT', '/api/admin/users/' + u.id, { role })) { toast('Роль изменена', 'good'); await load(); } else e.target.disabled = false;
+        if (await request('PUT', '/api/admin/users/' + u.id, { role })) { toast('Роль изменена', 'good'); e.target.dispatchEvent(new Event('saved')); await load(); } else e.target.disabled = false;
       });
       const limit = tr.querySelector('[data-limit]');
       if (limit) limit.addEventListener('change', async () => {
         if (!limit.reportValidity()) return;
         const courseLimit = limit.value === '' ? null : Number(limit.value);
         limit.disabled = true;
-        if (await request('PUT', '/api/admin/users/' + u.id + '/course-limit', { courseLimit })) { toast('Лимит обновлён', 'good'); await load(); } else { limit.value = u.courseLimit; limit.disabled = false; }
+        if (await request('PUT', '/api/admin/users/' + u.id + '/course-limit', { courseLimit })) { toast('Лимит обновлён', 'good'); limit.dispatchEvent(new Event('saved')); await load(); } else { limit.value = u.courseLimit; limit.disabled = false; }
       });
       const grant = tr.querySelector('[data-grant]');
       if (grant) grant.addEventListener('click', () => {
@@ -136,6 +136,29 @@ export async function renderUsers(main) {
           await load(); return true;
         });
       });
+      const actions = tr.lastElementChild;
+      const roleControl = tr.querySelector('[data-role]'), roleWrap = roleControl.parentElement;
+      const limitControl = tr.querySelector('[data-limit]'), grantControl = tr.querySelector('[data-grant]');
+      const reset = tr.querySelector('[data-reset]'), block = tr.querySelector('[data-block]');
+      reset.title = reset.parentElement.title; block.title = block.parentElement.title;
+      const items = [];
+      const editControl = (label, control, content = control) => {
+        const button = h('button', 'btn', label); button.type = 'button';
+        button.disabled = control.disabled; button.title = control.parentElement?.title || '';
+        button.addEventListener('click', () => {
+          const d = dialog(label + ' · ' + u.name, content);
+          control.addEventListener('saved', () => { d.close(); d.remove(); button.focus(); }, { once: true });
+        }); return button;
+      };
+      items.push(editControl('Роль', roleControl, roleWrap));
+      tr.cells[2].textContent = roles[u.role];
+      const limitItem = limitControl ? editControl('Лимит курсов', limitControl) : null;
+      if (limitControl) tr.cells[3].textContent = u.courseLimit;
+      if (grantControl) { grantControl.textContent = 'Доступ к курсам'; items.push(grantControl); }
+      if (!grantControl) { const all = h('button', 'btn', 'Доступ к курсам'); all.type = 'button'; all.disabled = true; all.title = 'Админы видят все курсы'; items.push(all); }
+      items.push(reset, block); if (limitItem) items.push(limitItem);
+      // Moving the original controls keeps their existing API and confirmation handlers.
+      actions.replaceChildren(); actionsMenu(actions, items);
     });
   }
 }

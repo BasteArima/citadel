@@ -17,6 +17,12 @@
       "name": "docker",
       "url": "http://localhost:8080",
       "port": 8080
+    },
+    {
+      "name": "citadel-dev",
+      "runtimeExecutable": "go",
+      "runtimeArgs": ["run", "./cmd/citadel", "serve", "-addr", ":8082", "-data", "data-dev", "-content", "content-demo"],
+      "port": 8082
     }
   ]
 }

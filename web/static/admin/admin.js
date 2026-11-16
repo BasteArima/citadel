@@ -1,99 +1,92 @@
-// Админка: тёмное боковое меню и страницы по адресу после #.
+// Shared header, global lists and explicit course tabs.
 //
 //   #/                       курсы
 //   #/c/<курс>/edit/<узел>   редактор узла
-//   #/c/<курс>/questions     вопросы и словарь (#/c/<курс>/glossary — сразу словарь)
+//   #/c/<курс>/questions     вопросы; /glossary — словарь
 //   #/c/<курс>/audio         озвучка: записи частей и словарь произношения
 //   #/c/<курс>/versions/<v>  версии и разница
 //   #/users                  пользователи
 //   #/agents                 правки агентов (этап 6)
-import { req, esc, h, when, plural, toast, dialog, confirmDialog, linkIcon, checkPill, AREAS, areaOf, METALS } from './ui.js';
+import { req, esc, h, when, plural, toast, dialog, confirmDialog, linkIcon, checkPill, actionsMenu, AREAS, areaOf, METALS } from './ui.js';
 import { draft, openDraft, onDraft, save, publishFlow } from './draft.js';
 import { renderEditor } from './editor.js';
 import { renderQuestions } from './questions.js';
+import { renderGlossary } from './glossary.js';
+import { renderPassport, renderAccess } from './passport.js';
 import { renderVersions, authorLabel } from './versions.js';
 import { renderInvites } from './invites.js';
-import { renderUsers, courseUsersDialog } from './users.js';
+import { renderUsers } from './users.js';
 import { renderAudit } from './audit.js';
+import { directionsDialog } from './directions.js';
 import { renderAudio } from './audio.js';
 import { renderTokens, renderAgents, pendingCount } from './agents.js';
-import { readTheme, saveTheme, applyTheme } from '../site/topbar.js';
+import { siteTop, readTheme, saveTheme, applyTheme, markTheme } from '../site/topbar.js';
 
 const LAST = 'citadel-admin-course';
 let me = null;
 let courses = [];
 let selectedCheck = null; // курс, чья проверка открыта на странице курсов
 
-function lastCourse() {
-  try { const id = localStorage.getItem(LAST); return courses.some((c) => c.id === id) ? id : (courses[0] && courses[0].id) || ''; } catch (e) { return courses[0] ? courses[0].id : ''; }
-}
-function rememberCourse(id) { try { localStorage.setItem(LAST, id); } catch (e) { /* без хранилища */ } }
+function rememberCourse(id) { try { localStorage.setItem(LAST, id); } catch (e) { /* optional */ } }
 
 function shell(current) {
-  const c = lastCourse();
-  let items = [
-    ['courses', '#/', me.role === 'author' ? 'Мои курсы' : 'Курсы'],
-    ['edit', c ? '#/c/' + c + '/edit' : '#/', 'Редактор'],
-    ['questions', c ? '#/c/' + c + '/questions' : '#/', 'Вопросы и словарь'],
-    ['audio', c ? '#/c/' + c + '/audio' : '#/', 'Озвучка'],
-    ['versions', c ? '#/c/' + c + '/versions' : '#/', 'Версии'],
-    ['agents', '#/agents', 'Правки агентов'],
-    ['invites', '#/invites', 'Приглашения'],
-    ['users', '#/users', 'Пользователи'],
-    ['tokens', '#/tokens', 'Токены агентов'],
-    ['audit', '#/audit', 'Журнал']
-  ];
-  if (me.role === 'author') items = [['courses', '#/', 'Мои курсы'], ['agents', '#/agents', 'Агенты'], ['audio', '#/audio', 'Озвучка']];
+  const items = me.role === 'author' ? [['courses', '#/', 'Мои курсы'], ['agents', '#/agents', 'Агенты']] : [
+    ['courses', '#/', 'Курсы'], ['agents', '#/agents', 'Правки агентов'], ['users', '#/users', 'Пользователи'],
+    ['invites', '#/invites', 'Приглашения'], ['tokens', '#/tokens', 'Токены агентов'], ['audit', '#/audit', 'Журнал']];
+  const top = document.getElementById('top'), nav = top.querySelector('.tb-nav');
+  nav.id = 'admin-nav'; nav.setAttribute('aria-label', 'Админка');
+  nav.innerHTML = items.map(([key, href, title]) => '<a href="' + href + '"' + (key === current ? ' aria-current="page"' : '') + '>' + title + '</a>').join('');
+  nav.classList.remove('open'); top.querySelector('.ad-nav-toggle')?.setAttribute('aria-expanded', 'false');
   const app = document.getElementById('app');
-  app.innerHTML = '<div class="ad">' +
-    '<nav class="ad-side' + (me.role === 'author' ? ' ad-author-side' : '') + '" aria-label="Админка">' +
-    '<a class="ad-brand" href="#/"><svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="#9aa4b0" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="#8ab4f8" stroke-width="2.5"/></svg>Citadel <span>' + (me.role === 'author' ? 'автор' : 'админ') + '</span></a>' +
-    '<a class="ad-back" href="/">← На сайт</a>' +
-    items.map((it) => '<a href="' + esc(it[1]) + '"' + (it[0] === current ? ' class="on" aria-current="page"' : '') + '>' + esc(it[2]) + '</a>').join('') +
-    '<span class="ad-sp"></span>' + themeSwitch() + '</nav>' +
-    '<div class="ad-main" id="ad-main"></div></div>';
+  app.innerHTML = '<div class="ad"><main class="ad-main" id="ad-main"></main></div>';
   refreshBadge();
   return document.getElementById('ad-main');
 }
 
-// Тема — та же, что на сайте и в курсах (site/topbar.js).
-function themeSwitch() {
-  const t = readTheme();
-  return '<div class="ad-theme" role="group" aria-label="Тема">' + [['auto', 'Авто'], ['light', 'Светлая'], ['dark', 'Тёмная']].map((x) =>
-    '<button type="button" data-theme-set="' + x[0] + '" aria-pressed="' + (t === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+function initHeader() {
+  const top = document.getElementById('top'), home = top.querySelector('.tb-home');
+  home.href = '#/'; home.insertAdjacentHTML('beforeend', '<span class="ad-pill ad-role">' + (me.role === 'author' ? 'автор' : 'админ') + '</span>');
+  top.querySelector('.tb-search')?.remove(); top.querySelector('.tb-due')?.remove();
+  top.querySelector('a[href="/admin"]').href = '#/';
+  top.querySelector('.tb-tools').insertAdjacentHTML('afterbegin', '<a class="ad-site-link" href="/">На сайт</a>');
+  const toggle = h('button', 'tb-ic ad-nav-toggle', '☰');
+  toggle.type = 'button'; toggle.setAttribute('aria-label', 'Меню админки'); toggle.setAttribute('aria-controls', 'admin-nav'); toggle.setAttribute('aria-expanded', 'false');
+  home.after(toggle);
+  const nav = top.querySelector('.tb-nav');
+  const close = (focus) => { nav.classList.remove('open'); toggle.setAttribute('aria-expanded', 'false'); if (focus) toggle.focus(); };
+  toggle.addEventListener('click', () => { const open = nav.classList.toggle('open'); toggle.setAttribute('aria-expanded', String(open)); if (open) nav.querySelector('a')?.focus(); });
+  top.addEventListener('keydown', (e) => { if (e.key === 'Escape' && nav.classList.contains('open')) { e.preventDefault(); close(true); } });
+  document.addEventListener('click', (e) => { if (!nav.contains(e.target) && !toggle.contains(e.target)) close(false); });
+  siteTop('admin');
+  const theme = h('select', 'ad-theme-select', '<option value="auto">Авто</option><option value="light">Светлая</option><option value="dark">Тёмная</option>');
+  theme.setAttribute('aria-label', 'Тема'); theme.value = readTheme();
+  const themeControl = h('label', 'ad-theme-control', '<span aria-hidden="true"></span>');
+  themeControl.append(theme);
+  top.querySelector('.tb-theme').after(themeControl);
+  theme.addEventListener('change', () => { saveTheme(theme.value); applyTheme(theme.value); markTheme(top, theme.value); });
+  top.addEventListener('click', (e) => { if (e.target.closest('[data-theme-set]')) theme.value = readTheme(); });
+  // The actual height may grow at intermediate desktop widths.
+  new ResizeObserver(() => document.documentElement.style.setProperty('--admin-top-h', top.offsetHeight + 'px')).observe(top);
 }
-document.addEventListener('click', (e) => {
-  const b = e.target.closest('.ad-theme [data-theme-set]');
-  if (!b) return;
-  saveTheme(b.dataset.themeSet);
-  applyTheme(b.dataset.themeSet);
-  b.parentNode.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-});
 
 // Верхняя строка страниц курса: путь, состояние черновика, «Сохранить», «Опубликовать…».
-export function courseBar(main, crumbs) {
-  const bar = h('div', 'ad-bar');
-  bar.innerHTML = '<nav class="ad-crumbs" aria-label="Путь"><a href="#/">Курсы</a> / ' + crumbs + '</nav><span class="ad-sp"></span>' +
-    '<span class="ad-state" aria-live="polite"></span>' +
-    '<button type="button" class="btn ad-save">Сохранить <kbd>Ctrl S</kbd></button>' +
-    '<button type="button" class="btn pri ad-pub">Опубликовать…</button>';
-  main.appendChild(bar);
-  if (me.role === 'author') {
-    const nav = h('nav', 'ad-course-nav');
-    nav.setAttribute('aria-label', 'Разделы курса');
-    nav.innerHTML = [['edit', 'Редактор'], ['questions', 'Вопросы и словарь'], ['versions', 'Версии'], ['audio', 'Озвучка']].map(([view, label]) => '<a class="btn" href="#/c/' + encodeURIComponent(draft.id) + '/' + view + '">' + label + '</a>').join('');
-    main.append(nav);
-  }
-  const state = bar.querySelector('.ad-state'), saveBtn = bar.querySelector('.ad-save');
+export function courseBar(main) {
+  const header = h('div', 'ad-course-header');
+  header.innerHTML = '<div class="ad-bar"><nav class="ad-crumbs" aria-label="Путь"><a href="#/">Курсы</a> / <strong class="ad-course-title"></strong> <span class="ad-pill ad-version"></span></nav><span class="ad-sp"></span><span class="ad-state" aria-live="polite"></span><button type="button" class="btn ad-save">Сохранить <kbd>Ctrl S</kbd></button><button type="button" class="btn pri ad-pub">Опубликовать…</button></div>';
+  const nav = h('nav', 'ad-tabs ad-course-tabs'); nav.setAttribute('aria-label', 'Вкладки курса');
+  const view = location.hash.split('/')[3] || 'edit';
+  nav.innerHTML = [['edit', 'Редактор'], ['questions', 'Вопросы'], ['glossary', 'Словарь'], ['audio', 'Озвучка'], ['versions', 'Версии'], ...(me.role === 'admin' ? [['access', 'Доступ']] : []), ['passport', 'Паспорт']].map(([key, title]) => '<a href="#/c/' + encodeURIComponent(draft.id) + '/' + key + '"' + (view === key ? ' aria-current="page"' : '') + '>' + title + '</a>').join('');
+  header.append(nav); main.append(header);
+  const observer = new ResizeObserver(() => main.style.setProperty('--course-header-h', header.offsetHeight + 'px')); observer.observe(header);
+  const bar = header.querySelector('.ad-bar'), state = bar.querySelector('.ad-state'), saveBtn = bar.querySelector('.ad-save');
   const draw = () => {
-    const st = draft.dirty ? 'есть несохранённое' : draft.published ? 'опубликована' : 'сохранена, не опубликована';
-    state.innerHTML = '<i class="ad-dot ' + (draft.dirty ? 'dirty' : draft.published ? 'pub' : '') + '"></i>v' + draft.version + ' · ' + st;
+    bar.querySelector('.ad-course-title').textContent = draft.course.title;
+    bar.querySelector('.ad-version').textContent = 'v' + draft.version + (draft.published ? ' опубликована' : ' черновик');
+    state.innerHTML = '<i class="ad-dot ' + (draft.dirty ? 'dirty' : draft.published ? 'pub' : '') + '"></i>' + (draft.dirty ? 'есть несохранённое' : draft.published ? 'опубликована' : 'сохранена');
     saveBtn.disabled = !draft.dirty;
   };
-  draw();
-  const off = onDraft(draw);
-  saveBtn.addEventListener('click', () => save());
-  bar.querySelector('.ad-pub').addEventListener('click', () => publishFlow());
+  draw(); const unsubscribe = onDraft(draw); const off = () => { unsubscribe(); observer.disconnect(); };
+  saveBtn.addEventListener('click', () => save()); bar.querySelector('.ad-pub').addEventListener('click', () => publishFlow());
   return { bar, off };
 }
 
@@ -108,16 +101,20 @@ document.addEventListener('keydown', (e) => {
 async function pageCourses() {
   const main = shell('courses');
   main.innerHTML = '<div class="ad-page"><div class="ad-head"><div><h1>' + (me.role === 'author' ? 'Мои курсы' : 'Курсы') + '</h1><p class="ad-sub">' + (me.role === 'author' ? 'Здесь твои курсы и проекты. Каждое сохранение — новая версия. Доступ другим выдаёт админ.' : 'Ученики видят только опубликованную версию. Каждое сохранение — новая версия.') + '</p></div>' +
-    '<div class="ad-acts"><label class="btn ad-file">Импорт JSON<input type="file" accept=".json,application/json" hidden></label><button type="button" class="btn pri" id="ad-new">+ Новый курс</button></div></div>' +
-    '<p id="ad-limit" class="ad-sub" role="status"></p><div class="ad-table-w"><table class="ad-table ad-responsive ad-courses"><thead><tr><th>Курс</th>' + (me.role === 'admin' ? '<th>Владелец</th><th>Доступ</th>' : '') + '<th>Опубликовано</th><th>Черновик</th><th>Изменён</th><th>Правки агентов</th><th>Проверка</th><th></th></tr></thead><tbody id="ad-rows"><tr><td colspan="8">Загружаю…</td></tr></tbody></table></div>' +
+    '<div class="ad-acts">' + (me.role === 'admin' ? '<button type="button" class="btn" id="ad-directions">Направления…</button>' : '') + '<label class="btn ad-file" tabindex="0" role="button">Импорт JSON<input type="file" accept=".json,application/json" hidden></label><button type="button" class="btn pri" id="ad-new">+ Новый курс</button></div></div>' +
+    '<p id="ad-limit" class="ad-sub" role="status"></p><div class="ad-table-w"><table class="ad-table ad-responsive ad-courses"><thead><tr><th>Курс</th><th>Направление</th>' + (me.role === 'admin' ? '<th>Владелец</th><th>Доступ</th>' : '') + '<th>Опубликовано</th><th>Черновик</th><th>Изменён</th><th>Правки агентов</th><th>Проверка</th></tr></thead><tbody id="ad-rows"><tr><td colspan="8">Загружаю…</td></tr></tbody></table></div>' +
     '<section class="ad-card ad-check" id="ad-check" aria-labelledby="ad-check-h"></section></div>';
+  main.querySelector('#ad-directions')?.addEventListener('click', () => directionsDialog(loadCourses));
   main.querySelector('#ad-new').addEventListener('click', newCourse);
+  main.querySelector('.ad-file').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); main.querySelector('.ad-file input').click(); } });
   main.querySelector('.ad-file input').addEventListener('change', (e) => importFile(e.target.files[0]));
   await loadCourses();
 }
 
 async function loadCourses() {
-  const r = await req('GET', '/api/admin/courses');
+  const [r, directionResponse] = await Promise.all([req('GET', '/api/admin/courses'), req('GET', '/api/directions')]);
+  if (!directionResponse.ok) { toast('Не загрузились направления', 'bad'); return; }
+  const directions = directionResponse.data;
   if (!r.ok) { toast('Не загрузился список курсов: ' + r.status, 'bad'); return; }
   courses = r.data;
   const limit = document.getElementById('ad-limit'), create = document.getElementById('ad-new');
@@ -135,41 +132,24 @@ async function loadCourses() {
     const changes = c.published ? c.latest.version - c.published : c.latest.version;
     const draftCell = c.latest.version === c.published ? '<span class="ad-mut">нет</span>'
       : '<span class="ad-pill acc">v' + c.latest.version + (c.published ? ' · ' + changes + ' ' + plural(changes, 'изменение', 'изменения', 'изменений') : '') + '</span>';
-    return '<tr data-id="' + esc(c.id) + '"' + (c.id === selectedCheck ? ' class="is-sel"' : '') + '>' +
-      '<td><div class="ad-course">' + linkIcon(c.metal, !c.published) + '<span><a href="#/c/' + esc(c.id) + '/edit" class="ad-ct">' + esc(c.title || c.id) + '</a><code>' + esc(c.id) + ' · ' + esc(METALS[c.metal] || c.metal) + (c.type === 'project' ? ' · проект' : '') + '</code></span></div></td>' +
-      (me.role === 'admin' ? '<td>' + esc(c.ownerName || 'платформа') + '<br><button type="button" class="ad-linkbtn ad-owner">изменить</button></td>' + ('<td><select class="ad-access" aria-label="Доступ к курсу ' + esc(c.title) + '"><option value="public"' + (c.access !== 'private' ? ' selected' : '') + '>всем</option><option value="private"' + (c.access === 'private' ? ' selected' : '') + '>по доступу</option></select>' + (c.access === 'private' ? '<div class="ad-small ad-course-grants">Видят: ' + c.grantedUsers + ' — <button type="button" class="ad-linkbtn ad-grant ad-course-users">изменить</button></div>' : c.grantedUsers ? '<div class="ad-small ad-mut ad-course-grants" title="Если сделать курс закрытым, его увидят ' + c.grantedUsers + ' человек">Сохранён доступ: ' + c.grantedUsers + '</div>' : '') + '</td>') : '') +
+    return '<tr tabindex="0" data-id="' + esc(c.id) + '"' + (c.id === selectedCheck ? ' class="is-sel"' : '') + '>' +
+      '<td><div class="ad-course">' + linkIcon(c.metal, !c.published) + '<span><a href="#/c/' + esc(c.id) + '/edit" class="ad-ct">' + esc(c.title || c.id) + '</a><code>' + esc(c.id) + ' · ' + esc(METALS[c.metal] || c.metal) + (c.type === 'project' ? ' · проект' : '') + '</code></span></div>' + '</td><td>' + esc(directions.find((d) => d.id === c.direction)?.title || 'Без направления') + '</td>' +
+      (me.role === 'admin' ? '<td>' + esc(c.ownerName || 'платформа') + '</td><td>' + (c.access === 'private' ? 'по доступу · ' + c.grantedUsers : 'всем') + '</td>' : '') +
       '<td>' + (c.published ? '<span class="ad-pill good">v' + c.published + '</span>' : '<span class="ad-mut">не опубликован</span>') + '</td>' +
       '<td>' + draftCell + '</td>' +
       '<td class="ad-mut">' + esc(when(c.latest.createdAt)) + ' · ' + esc(authorName(c.latest.author)) + '</td>' +
       '<td>' + (c.agents ? '<a class="ad-pill acc" href="#/agents">' + c.agents + ' ' + plural(c.agents, 'ждёт', 'ждут', 'ждут') + '</a>' : '<span class="ad-mut">—</span>') + '</td>' +
       '<td><button type="button" class="ad-linkbtn ad-ck" aria-label="Проверка ' + esc(c.title) + '">' + checkPill(c.check) + '</button></td>' +
-      '<td class="ad-r"><a class="btn" href="#/c/' + esc(c.id) + '/edit">Открыть</a> <button type="button" class="btn ad-danger ad-del">Удалить</button></td></tr>';
+      '</tr>';
   }).join('');
-  const labels = ['Курс', ...(me.role === 'admin' ? ['Владелец', 'Доступ'] : []), 'Опубликовано', 'Черновик', 'Изменён', 'Правки агентов', 'Проверка', 'Действия'];
-  rows.querySelectorAll('tr[data-id]').forEach((tr) => [...tr.cells].forEach((td, i) => { td.dataset.label = labels[i]; }));
-  rows.querySelectorAll('.ad-owner').forEach((button) => button.addEventListener('click', async () => {
-    const c = courses.find((c) => c.id === button.closest('tr').dataset.id);
-    const response = await req('GET', '/api/admin/users');
-    if (!response.ok) { toast('Не загрузились пользователи', 'bad'); return; }
-    const form = h('div', 'ad-form');
-    const owners = response.data.users.filter((u) => u.role === 'author' || u.role === 'admin');
-    form.innerHTML = '<label class="ad-f">Владелец<select><option value="0">платформа</option>' + owners.map((u) => '<option value="' + u.id + '"' + (u.id === c.ownerId ? ' selected' : '') + '>' + esc(u.name) + '</option>').join('') + '</select></label>';
-    dialog('Владелец · ' + c.title, form, [{ label: 'Отмена' }, { label: 'Передать', primary: true, onClick: async (close) => {
-      const result = await req('PUT', '/api/admin/courses/' + encodeURIComponent(c.id) + '/owner', { ownerId: Number(form.querySelector('select').value) });
-      if (!result.ok) { toast(result.data.error || 'Не удалось передать курс', 'bad'); return; }
-      close(); toast('Владелец изменён', 'good'); await loadCourses();
-    } }]);
-  }));
-  rows.querySelectorAll('.ad-access').forEach((sel) => sel.addEventListener('change', async () => {
-    const id = sel.closest('tr').dataset.id;
-    const r2 = await req('PUT', '/api/admin/courses/' + encodeURIComponent(id) + '/access', { access: sel.value });
-    if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); loadCourses(); return; }
-    const c = courses.find((x) => x.id === id);
-    if (c) c.access = sel.value;
-    toast(sel.value === 'private' ? 'Курс виден админам и выбранным пользователям' : 'Курс виден всем, кто вошёл', 'good');
-    await loadCourses();
-  }));
-  rows.querySelectorAll('.ad-course-users').forEach((b) => b.addEventListener('click', () => courseUsersDialog(courses.find((c) => c.id === b.closest('tr').dataset.id), loadCourses)));
+  const labels = ['Курс', 'Направление', ...(me.role === 'admin' ? ['Владелец', 'Доступ'] : []), 'Опубликовано', 'Черновик', 'Изменён', 'Правки агентов', 'Проверка'];
+  rows.querySelectorAll('tr[data-id]').forEach((tr) => {
+    [...tr.cells].forEach((td, i) => { td.dataset.label = labels[i]; });
+    const go = () => { location.hash = '#/c/' + encodeURIComponent(tr.dataset.id) + '/edit'; };
+    tr.addEventListener('click', (e) => { if (!e.target.closest('a,button')) go(); });
+    tr.addEventListener('keydown', (e) => { if (e.target === tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); go(); } });
+    const cell = tr.lastElementChild, del = h('button', 'btn ad-danger ad-del', 'Удалить курс'); del.type = 'button'; cell.append(del);
+  });
   rows.querySelectorAll('.ad-del').forEach((b) => b.addEventListener('click', async () => {
     const id = b.closest('tr').dataset.id, c = courses.find((x) => x.id === id);
     const text = 'Удалятся все версии курса, прогресс и карточки всех учеников, правки агентов и записи озвучки. Отменить это нельзя. Файл курса на диске не удаляется и обратно курс сам не вернётся: только через «Импорт JSON».';
@@ -186,6 +166,7 @@ async function loadCourses() {
     rows.querySelectorAll('tr').forEach((tr) => tr.classList.toggle('is-sel', tr.dataset.id === selectedCheck));
     drawCheck();
   }));
+  rows.querySelectorAll('tr[data-id]').forEach((tr) => actionsMenu(tr.lastElementChild, [tr.querySelector('.ad-del')]));
   if (!selectedCheck || !courses.some((c) => c.id === selectedCheck)) {
     const worst = courses.find((c) => c.check && c.check.errors) || courses.find((c) => c.check && c.check.warnings) || courses[0];
     selectedCheck = worst ? worst.id : null;
@@ -267,7 +248,7 @@ function pageAgents(id) {
 // Сколько правок агентов ждёт — бейджем у пункта меню.
 async function refreshBadge() {
   const n = await pendingCount();
-  const a = document.querySelector('.ad-side a[href="#/agents"]');
+  const a = document.querySelector('#admin-nav a[href="#/agents"]');
   if (!a) return;
   const old = a.querySelector('.ad-badge');
   if (old) old.remove();
@@ -275,42 +256,54 @@ async function refreshBadge() {
 }
 
 // ── маршруты ──
-let offBar = null;
+let offBar = null, activeCourse = null, activeHash = '#/', routeGeneration = 0;
 async function route() {
-  if (offBar) { offBar(); offBar = null; }
+  const generation = ++routeGeneration;
+  const targetHash = location.hash || '#/';
   const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
+  if (activeCourse && draft.dirty && (parts[0] !== 'c' || parts[1] !== activeCourse)) {
+    const go = await confirmDialog('Уйти из курса?', 'В курсе «' + draft.course.title + '» есть несохранённые правки. Уйти без сохранения?', 'Уйти без сохранения', true);
+    if (generation !== routeGeneration) return;
+    if (!go) {
+      history.replaceState(null, '', activeHash); return;
+    }
+    draft.course = null; draft.dirty = false;
+  }
+  if (offBar?.navigate && activeCourse === parts[1] && parts[0] === 'c' && (parts[2] || 'edit') === 'edit') {
+    activeHash = targetHash; offBar.navigate(parts[3] || ''); return;
+  }
+  if (offBar) { offBar(); offBar = null; }
+  activeCourse = parts[0] === 'c' ? parts[1] : null; activeHash = targetHash;
   if (['agents', 'tokens', 'audio'].includes(parts[0]) || (parts[0] === 'c' && !courses.some((c) => c.id === parts[1]))) {
     const list = await req('GET', '/api/admin/courses');
+    if (generation !== routeGeneration) return;
     if (list.ok) courses = list.data;
   }
   if (me.role === 'author' && ['invites', 'users', 'audit'].includes(parts[0])) return pageCourses();
-  if (parts[0] === 'audio') {
-    const main = shell('audio'), page = h('div', 'ad-page'); main.append(page);
-    page.innerHTML = '<h1>Озвучка</h1><p class="ad-sub">' + (courses.length ? 'Выбери свой курс. Запись делается по опубликованному тексту.' : 'Сначала создай курс в «Моих курсах» и опубликуй текст.') + '</p>' + courses.map((c) => '<a class="btn" href="#/c/' + encodeURIComponent(c.id) + '/audio">' + esc(c.title) + '</a>').join('');
-    return;
-  }
+  if (parts[0] === 'audio') { location.hash = '#/'; return; }
   if (me.role === 'author' && parts[0] === 'tokens') return pageAgents(0);
   if (parts[0] === 'invites') return renderInvites(shell('invites'), courses);
   if (parts[0] === 'users') return renderUsers(shell('users'));
   if (parts[0] === 'tokens') {
     const main = shell('tokens');
-    main.innerHTML = '<div class="ad-page"><h1>Токены агентов</h1><section class="ad-sec" id="ad-tokens"></section></div>';
+    main.innerHTML = '<div class="ad-page"><section class="ad-sec" id="ad-tokens"></section></div>';
     return renderTokens(main.querySelector('#ad-tokens'), courses, me.role);
   }
   if (parts[0] === 'audit') return renderAudit(shell('audit'));
   if (parts[0] === 'agents') return pageAgents(+parts[1] || 0);
   if (parts[0] === 'c' && parts[1]) {
     const id = parts[1], view = parts[2] || 'edit';
-    if (draft.id && draft.id !== id && draft.dirty) {
-      const go = confirm('В курсе «' + draft.course.title + '» есть несохранённые правки. Уйти без сохранения?');
-      if (!go) { history.back(); return; }
-    }
-    if (!(await openDraft(id))) { location.hash = '#/'; return; }
+    const opened = await openDraft(id);
+    if (generation !== routeGeneration) return;
+    if (!opened) { location.hash = '#/'; return; }
     rememberCourse(id);
     const current = view === 'glossary' ? 'questions' : view;
     const main = shell(current);
     if (view === 'edit') offBar = renderEditor(main, parts[3] || '', courseBar);
-    else if (view === 'questions' || view === 'glossary') offBar = renderQuestions(main, view, courseBar);
+    else if (view === 'questions') offBar = renderQuestions(main, courseBar);
+    else if (view === 'glossary') offBar = renderGlossary(main, courseBar);
+    else if (view === 'passport') offBar = renderPassport(main, courseBar, courses.find((c) => c.id === id));
+    else if (view === 'access' && me.role === 'admin') offBar = renderAccess(main, courseBar, courses.find((c) => c.id === id));
     else if (view === 'audio') offBar = renderAudio(main, courseBar);
     else if (view === 'versions') offBar = renderVersions(main, +parts[3] || 0, courseBar);
     else location.hash = '#/c/' + id + '/edit';
@@ -325,7 +318,8 @@ async function boot() {
   if (!['admin', 'author'].includes(me.role)) { location.href = '/'; return; }
   const list = await req('GET', '/api/admin/courses');
   if (list.ok) courses = list.data;
-  window.addEventListener('hashchange', route);
+  initHeader();
+  window.addEventListener('hashchange', () => route().catch((e) => toast(e.message, 'bad')));
   route();
 }
 

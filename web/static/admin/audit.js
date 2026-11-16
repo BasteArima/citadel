@@ -2,6 +2,8 @@ import { req, esc, h, when, toast } from './ui.js';
 import { roles } from './users.js';
 
 const actions = {
+  'direction.created': 'Создание направления', 'direction.updated': 'Изменение направления',
+  'direction.deleted': 'Удаление направления', 'course.direction': 'Направление курса',
   'user.created': 'Создание аккаунта', 'user.role': 'Смена роли',
   'user.disabled': 'Блокировка', 'user.enabled': 'Разблокировка',
   'user.login': 'Смена логина', 'user.reset_link': 'Ссылка сброса пароля',
@@ -23,6 +25,10 @@ function describe(a, courseTitle, userName) {
     return [added.length ? 'Выдал доступ: ' + list(added, label) : '', removed.length ? 'Снял доступ: ' + list(removed, label) : ''].filter(Boolean).join('. ') || 'Список доступа сохранён без изменений';
   };
   switch (a.action) {
+    case 'direction.created': return 'Создал направление «' + d.title + '»';
+    case 'direction.updated': return 'Сохранил названия и порядок: ' + list(d.after, (v) => v.title);
+    case 'direction.deleted': return 'Удалил направление; его курсы остались без направления';
+    case 'course.direction': return 'Сменил направление: ' + (d.before || 'без направления') + ' → ' + (d.after || 'без направления');
     case 'user.created': return 'Создал аккаунт: ' + (d.login || '—') + ', роль — ' + (roles[d.role] || d.role);
     case 'user.role': return 'Сменил роль: ' + (roles[d.before] || d.before) + ' → ' + (roles[d.after] || d.after);
     case 'user.disabled': return 'Заблокировал аккаунт и закрыл его сессии';

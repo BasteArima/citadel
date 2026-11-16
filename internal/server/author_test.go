@@ -22,6 +22,10 @@ import (
 // Every registered admin route must have an explicit policy here. Course routes
 // also run the same positive/negative requests against three ownership states.
 var adminPolicies = map[string]string{
+	"POST /api/admin/directions":                "admin",
+	"PUT /api/admin/directions/{id}":            "admin",
+	"DELETE /api/admin/directions/{id}":         "admin",
+	"PUT /api/admin/courses/{id}/direction":     "staffCourse",
 	"GET /api/admin/courses":                    "staff",
 	"POST /api/admin/courses":                   "staff",
 	"DELETE /api/admin/courses/{id}":            "staffCourse",

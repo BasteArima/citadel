@@ -1,14 +1,11 @@
-// Профиль: цепь из звеньев-курсов, сводка, перенос прогресса файлом, тема и выход.
-import { api, esc, plural, today, metalName, courseState, readUI, applyTheme, UI_KEY } from './shared.js';
+// Профиль: кто ты и что прошёл.
+import { api, esc, plural, today, metalName, courseState, avatarHTML, roleName, linkIcon } from './shared.js';
 import { initSiteSearch } from './search.js';
 import { siteTop } from './topbar.js';
 
 initSiteSearch();
-
 const app = document.getElementById('app');
 const top = siteTop('profile');
-const FILE_FORMAT = 'citadel-progress';
-
 let user, courses;
 try {
   [user, { courses }] = await Promise.all([api('/api/me'), api('/api/overview?today=' + today())]);
@@ -17,80 +14,41 @@ try {
   app.innerHTML = '<main class="site-main"><p class="site-err">Не удалось загрузить профиль: ' + esc(e.message) + '</p></main>';
 }
 
-async function refresh() {
-  ({ courses } = await api('/api/overview?today=' + today()));
-  render();
-}
-
 function render() {
   const sum = (f) => courses.reduce((s, c) => s + f(c), 0);
   const forged = courses.filter((c) => courseState(c) === 'done').length;
   const forging = courses.filter((c) => courseState(c) === 'active').length;
   const answered = sum((c) => c.solved), right = sum((c) => c.firstRight);
   top.update(user, sum((c) => c.due));
-  app.innerHTML =
-    '<main class="site-main">' +
-      '<div class="me-h"><span class="me-av" aria-hidden="true">' + esc(user.name.slice(0, 1).toUpperCase()) + '</span>' +
-        '<div><h1>' + esc(user.name) + '</h1><p class="site-sub">' + (user.role === 'admin' ? 'Ученик и админ' : user.role === 'author' ? 'Ученик и автор' : 'Ученик') + '</p></div></div>' +
-      chain(forged, forging) +
-      '<div class="stats">' +
-        stat('Уроков пройдено', sum((c) => (c.type === 'project' ? 0 : c.done))) +
-        stat('Частей закрыто', sum((c) => c.parts)) +
-        stat('Вопросов отвечено', answered) +
-        stat('Первых ответов верно', answered ? Math.round(right / answered * 100) + '%' : '—') +
-        stat('Карточек на сегодня', sum((c) => c.due) + ' из ' + sum((c) => c.cards)) +
-        stat('Звеньев выковано', forged + ' из ' + courses.length) +
-      '</div>' +
-      '<div class="panels">' +
-        '<section class="card panel account-panel" aria-labelledby="account-title"><h2 id="account-title">Аккаунт</h2><div class="account-basics">' +
-          '<div><label class="lbl" for="account-login">Логин</label><input class="inp" id="account-login" value="' + esc(user.login) + '" readonly></div>' +
-          '<form id="name-form" class="account-form"><label class="lbl" for="account-name">Имя</label><input class="inp" id="account-name" name="name" value="' + esc(user.name) + '" maxlength="40" autocomplete="nickname" required>' +
-          '<button class="btn btn-l" type="submit">Сохранить имя</button><p id="name-status" role="status" hidden></p></form>' +
-          '<button class="btn btn-l" type="button" id="logout-all">Выйти на всех устройствах</button><p id="logout-status" role="status" hidden></p></div>' +
-          '<form id="password-form" class="account-form"><h3>Сменить пароль</h3>' +
-          '<label class="lbl" for="old-password">Текущий пароль</label><input class="inp" id="old-password" type="password" autocomplete="current-password" required>' +
-          '<label class="lbl" for="new-password">Новый пароль</label><input class="inp" id="new-password" type="password" autocomplete="new-password" required>' +
-          '<label class="lbl" for="repeat-password">Повтори новый пароль</label><input class="inp" id="repeat-password" type="password" autocomplete="new-password" required>' +
-          '<p>От 10 до 256 символов. Пароль не должен совпадать с логином. После смены пароля остальные устройства выйдут из аккаунта.</p>' +
-          '<button class="btn btn-l" type="submit">Сменить пароль</button><p id="password-status" role="status" hidden></p></form></section>' +
-        '<section class="card panel" aria-labelledby="pr"><h2 id="pr">Прогресс</h2>' +
-          '<p>Хранится на сервере и в браузере. Без сети курс работает, отметки уходят на сервер при подключении. Файл — на всякий случай или чтобы перенести прогресс на другой сервер Citadel.</p>' +
-          syncNote() +
-          '<div class="row"><button type="button" class="btn btn-l" id="export">Скачать прогресс</button>' +
-          '<label class="btn btn-l">Загрузить из файла<input type="file" id="import" accept="application/json,.json" hidden></label></div>' +
-          '<p id="io" role="status" hidden></p>' +
-          '<p>Прогресс из прежней версии курса, если она была, переносится на странице этого курса, внизу.</p></section>' +
-        '<section class="card panel" aria-labelledby="st"><h2 id="st">Настройки</h2>' +
-          '<div><div class="lbl" id="thl">Тема</div><div class="segs" role="group" aria-labelledby="thl" id="theme" style="margin-top:6px">' +
-            [['light', 'Светлая'], ['dark', 'Тёмная'], ['auto', 'Как в системе']].map((t) =>
-              '<button type="button" data-t="' + t[0] + '" aria-pressed="' + ((readUI().theme || 'auto') === t[0]) + '">' + t[1] + '</button>').join('') +
-          '</div></div>' +
-          '<div><label class="lbl" for="rate">Скорость озвучки</label><select id="rate" class="sel" style="margin-top:6px">' +
-            [0.9, 1, 1.25, 1.5].map((r) => '<option value="' + r + '"' + ((readUI().rate || 1) === r ? ' selected' : '') + '>' + String(r).replace('.', ',') + '×</option>').join('') +
-          '</select></div>' +
-          '<div><button type="button" class="btn btn-l" id="logout" style="color:var(--rose)">Выйти</button></div></section>' +
-      '</div>' +
-    '</main>';
-  wire();
+  app.innerHTML = '<main class="site-main">' +
+    '<div class="me-h"><span class="me-av" aria-hidden="true">' + avatarHTML(user, 72) + '</span>' +
+    '<div class="me-identity"><h1>' + esc(user.name) + '</h1><p class="site-sub">' + roleName(user.role) + '</p></div>' +
+    '<a class="btn btn-l me-settings" href="/settings">Настройки</a></div>' +
+    chain(forged, forging) +
+    '<section class="stats" aria-label="Статистика">' +
+      stat('Уроков пройдено', sum((c) => c.type === 'project' ? 0 : c.done)) +
+      stat('Частей закрыто', sum((c) => c.parts)) +
+      stat('Вопросов отвечено', answered) +
+      stat('Первых ответов верно', answered ? Math.round(right / answered * 100) + '%' : '—') +
+      stat('Карточек на сегодня', sum((c) => c.due) + ' из ' + sum((c) => c.cards)) +
+      stat('Звеньев выковано', forged + ' из ' + courses.length) +
+    '</section>' + myCourses() + '</main>';
 }
 
-// Состояние синхронизации по данным движка в этом браузере: есть ли неотправленные отметки
-// и когда был последний обмен с сервером.
-function syncNote() {
-  let pending = 0, last = 0;
-  for (const c of courses) {
-    try {
-      const p = JSON.parse(localStorage.getItem('citadel-progress:' + c.id) || '{}') || {};
-      if (p.dirty) pending++;
-      last = Math.max(last, p.syncedAt || 0);
-    } catch (e) { /* нет данных — ничего не показываем */ }
-  }
-  if (pending) return '<p class="note-bad">В этом браузере есть отметки, которые ещё не дошли до сервера. Они уйдут, когда откроешь курс при подключении.</p>';
-  if (!last) return '';
-  const min = Math.round((Date.now() - last) / 60000);
-  const ago = min < 1 ? 'только что' : min < 60 ? min + ' ' + plural(min, 'минуту', 'минуты', 'минут') + ' назад' :
-    new Date(last).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-  return '<p class="note-ok">Всё сохранено на сервере · последний обмен ' + ago + '</p>';
+function myCourses() {
+  const started = courses.filter((c) => courseState(c) !== 'new');
+  return '<section class="my-courses" aria-labelledby="my-courses-title"><h2 id="my-courses-title">Мои курсы</h2>' +
+    (started.length ? '<ul class="my-course-list">' + started.map((c) => {
+      const done = courseState(c) === 'done';
+      const part = c.lessons ? Math.min(1, c.done / c.lessons) : 0;
+      const href = (c.type === 'project' ? '/p/' : '/c/') + encodeURIComponent(c.id) + '/';
+      const next = !done && c.next ? '#' + encodeURIComponent(c.next.id) : '';
+      return '<li class="card my-course-row">' + linkIcon(c.metal, part, 48) +
+        '<div class="my-course-info"><a href="' + href + '">' + esc(c.title) + '</a><small>' + c.done + ' из ' + c.lessons + ' ' +
+        (c.type === 'project' ? plural(c.lessons, 'шага', 'шагов', 'шагов') : plural(c.lessons, 'урока', 'уроков', 'уроков')) + '</small>' +
+        '<div class="bar" role="progressbar" aria-label="' + esc(c.title) + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(part * 100) + '"><i style="width:' + part * 100 + '%"></i></div></div>' +
+        (done ? '<span class="my-course-done">Пройден</span>' : '<a class="btn btn-l" href="' + href + next + '">Продолжить</a>') + '</li>';
+    }).join('') + '</ul>' : '<div class="empty">Пока ничего не начато. <a href="/">Выбери курс в каталоге</a>.</div>') + '</section>';
 }
 
 function stat(label, value) {
@@ -118,7 +76,7 @@ function chain(forged, forging) {
     '<div class="row" style="justify-content:space-between;align-items:flex-end"><div><h2 id="ch">Цепь</h2>' +
       '<p>Звено куётся, пока идёт курс, и замыкается, когда курс пройден.</p></div>' +
       '<p>' + forged + ' ' + plural(forged, 'звено выковано', 'звена выковано', 'звеньев выковано') + (forging ? ' · ' + forging + ' куётся' : '') + '</p></div>' +
-    '<svg viewBox="0 0 ' + vbw + ' 150" role="img" aria-label="Цепь: ' + esc(label) + '">' + links + empty + '</svg>' +
+    '<div class="chain-scroll" tabindex="0" role="region" aria-label="Цепь курсов · прокручивай по горизонтали"><svg width="' + (vbw * 33 / 150) + '" height="33" viewBox="0 0 ' + vbw + ' 150" role="img" aria-label="Цепь: ' + esc(label) + '">' + links + empty + '</svg></div>' +
     '<div class="chain-cards">' + courses.map((c) => {
       const st = courseState(c);
       return '<a class="chain-card metal-' + esc(c.metal) + '" href="/c/' + encodeURIComponent(c.id) + '/">' +
@@ -127,104 +85,4 @@ function chain(forged, forging) {
     }).join('') +
     '<div class="chain-card slot">Следующие звенья появятся с новыми курсами</div></div>' +
   '</section>';
-}
-
-function wire() {
-  const message = (id, text, bad = false) => {
-    const el = document.getElementById(id);
-    el.textContent = text; el.hidden = false; el.className = bad ? 'note-bad' : 'note-ok';
-  };
-  document.getElementById('name-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const button = e.currentTarget.querySelector('button'); button.disabled = true;
-    try {
-      user = await api('/api/me/name', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: document.getElementById('account-name').value }) });
-      render(); message('name-status', 'Имя сохранено.');
-    } catch (err) { message('name-status', err.message, true); }
-    finally { button.disabled = false; }
-  });
-  document.getElementById('password-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = e.currentTarget, button = form.querySelector('button');
-    const password = document.getElementById('new-password').value;
-    if (password !== document.getElementById('repeat-password').value) { message('password-status', 'Новые пароли не совпадают.', true); return; }
-    const length = Array.from(password).length;
-    if (length < 10 || length > 256 || password.toLowerCase() === user.login.toLowerCase()) { message('password-status', 'Пароль — от 10 до 256 символов и не должен совпадать с логином.', true); return; }
-    button.disabled = true;
-    try {
-      await api('/api/me/password', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oldPassword: document.getElementById('old-password').value, newPassword: password }) });
-      form.reset(); message('password-status', 'Пароль изменён. Остальные устройства вышли из аккаунта.');
-    } catch (err) { message('password-status', err.message, true); }
-    finally { button.disabled = false; }
-  });
-  document.getElementById('logout-all').addEventListener('click', async (e) => {
-    e.currentTarget.disabled = true;
-    try {
-      await api('/api/me/logout-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      location.href = '/login';
-    } catch (err) { message('logout-status', err.message, true); document.getElementById('logout-all').disabled = false; }
-  });
-  // элемент ищем каждый раз: после загрузки файла страница перерисовывается
-  const say = (text, bad) => {
-    const io = document.getElementById('io');
-    io.hidden = false; io.className = bad ? 'note-bad' : 'note-ok'; io.textContent = text;
-  };
-
-  document.getElementById('export').addEventListener('click', async () => {
-    try {
-      const out = { format: FILE_FORMAT, version: 1, exported: new Date().toISOString(), user: user.name, courses: {} };
-      for (const c of courses) out.courses[c.id] = (await api('/api/progress/' + encodeURIComponent(c.id))).items;
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }));
-      a.download = 'citadel-progress-' + today() + '.json';
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-      say('Файл с прогрессом скачан.');
-    } catch (e) {
-      say('Не получилось скачать: ' + e.message, true);
-    }
-  });
-
-  // Загрузка сливает отметки с сервером по тем же правилам, что и синхронизация: свежая побеждает.
-  document.getElementById('import').addEventListener('change', async (e) => {
-    const f = e.target.files[0];
-    e.target.value = '';
-    if (!f) return;
-    try {
-      const data = JSON.parse(await f.text());
-      if (data.format !== FILE_FORMAT || !data.courses) throw new Error('это не файл прогресса Citadel');
-      let n = 0, skipped = 0;
-      for (const id of Object.keys(data.courses)) {
-        if (!courses.some((c) => c.id === id)) { skipped++; continue; }
-        const items = data.courses[id] || {};
-        await api('/api/progress/' + encodeURIComponent(id), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
-        n += Object.keys(items).length;
-      }
-      await refresh();
-      say('Загружено отметок: ' + n + (skipped ? '. Курсов, которых здесь нет: ' + skipped : '') + '. Совпадающие отметки не задвоились.');
-    } catch (err) {
-      say('Не получилось загрузить: ' + err.message, true);
-    }
-  });
-
-  document.getElementById('theme').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-t]');
-    if (!b) return;
-    const ui = readUI();
-    ui.theme = b.getAttribute('data-t');
-    try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (err) { /* тема только на этот раз */ }
-    applyTheme(ui.theme);
-    top.redraw();
-    document.querySelectorAll('#theme button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-  });
-
-  document.getElementById('rate').addEventListener('change', (e) => {
-    const ui = readUI();
-    ui.rate = parseFloat(e.target.value);
-    try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (err) { /* только на этот раз */ }
-  });
-
-  document.getElementById('logout').addEventListener('click', () => {
-    fetch('/api/logout', { method: 'POST' }).finally(() => { location.href = '/login'; });
-  });
 }

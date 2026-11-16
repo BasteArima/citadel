@@ -1,5 +1,6 @@
 // Общее для страниц с проектами: столбики уровней, плитка проекта, степени помощи (решение 0016).
-import { esc, plural, linkIcon, metalName, courseState } from './shared.js';
+import { esc, linkIcon } from './shared.js';
+import { tileMeta, tileFooter } from './tiles.js';
 
 // Сколько помощи даёт уровень: поле tag у узла section.
 export const HELP = {
@@ -34,26 +35,23 @@ export function allBars(levels) {
     levels.map((l, i) => levelBars(l.total, l.closed, i === curLevel ? l.closed : -1)).join('') + '</div>';
 }
 
-const STATE = { done: ['Пройден', 'good'], active: ['В работе', 'acc'], new: ['Не начат', ''] };
+export function projectCard(projects) {
+  const c = projects.find((x) => x.started && x.next);
+  if (!c) return '';
+  return '<section class="card top-card" aria-labelledby="project-now-title"><div class="lbl" id="project-now-title">В проекте сейчас</div>' +
+    '<div><p>' + esc(c.title) + '</p><h2>Шаг ' + esc(c.next.num || c.next.n) + '. ' + esc(c.next.title) + '</h2></div>' +
+    '<div class="row"><a class="btn btn-l pri" href="/p/' + encodeURIComponent(c.id) + '/#' + encodeURIComponent(c.next.id) + '">Открыть ТЗ</a></div></section>';
+}
 
-export function projectTile(c) {
-  const st = courseState(c), href = '/p/' + encodeURIComponent(c.id) + '/', levels = c.levels || [];
-  const pct = c.lessons ? Math.round(c.done / c.lessons * 100) : 0;
-  return '<article class="card tile metal-' + esc(c.metal) + '">' +
-    '<div class="tile-h">' + allBars(levels) + '<span class="chip ' + STATE[st][1] + '">' + STATE[st][0] + '</span></div>' +
-    (c.onlyYours ? '<span class="chip">Только у тебя</span>' : '') + '<div><h3><a href="' + href + '">' + esc(c.title) + '</a></h3>' + (c.subtitle ? '<p>' + esc(c.subtitle) + '</p>' : '') + '</div>' +
-    '<ul class="chips"><li class="chip">' + esc(c.tool.name + ' ' + c.tool.version) + '</li>' +
-      '<li class="chip">' + levels.length + ' ' + plural(levels.length, 'уровень', 'уровня', 'уровней') + ', ' + c.lessons + ' ' + plural(c.lessons, 'шаг', 'шага', 'шагов') + '</li>' +
-      '<li class="chip"><span class="dot"></span>звено: ' + esc(metalName(c.metal)) + '</li></ul>' +
-    '<div class="prog"><div class="prog-t"><span>' + (c.next ? 'Сейчас: шаг ' + esc(c.next.num) + '. ' + esc(c.next.title) : 'Все шаги закрыты') + '</span><span>' + c.done + ' из ' + c.lessons + '</span></div>' +
-      '<div class="bar" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" aria-label="Прогресс проекта"><i style="width:' + pct + '%"></i></div></div>' +
-    '<div class="row">' + (c.next ? '<a class="btn btn-l pri" href="' + href + '#' + encodeURIComponent(c.next.id) + '">Открыть ТЗ</a>' : '') +
-      '<a class="btn btn-l" href="' + href + '">О проекте</a></div>' +
-    '</article>';
+export function projectTile(c, context) {
+  return '<article class="card tile metal-' + esc(c.metal) + '">' + tileMeta(c, context, true) +
+    '<h3><a href="/p/' + encodeURIComponent(c.id) + '/">' + esc(c.title) + '</a></h3>' +
+    '<p class="tile-subtitle" title="' + esc(c.subtitle || '') + '">' + esc(c.subtitle || '') + '</p>' +
+    tileFooter(c, true) + '</article>';
 }
 
 export function soonProjectTile(c) {
   return '<article class="card tile tile-soon" aria-label="' + esc(c.title) + ' — скоро">' +
-    '<div class="tile-h">' + linkIcon(c.metal, 0) + '<span class="chip">Скоро</span></div>' +
-    '<div><h3>' + esc(c.title) + '</h3><p>Проект готовится. Откроется, когда его опубликуют.</p></div></article>';
+    '<div class="tile-meta">' + linkIcon(c.metal, 0, 32) + '<span>Скоро</span></div>' +
+    '<h3>' + esc(c.title) + '</h3><p>Проект готовится</p></article>';
 }

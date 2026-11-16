@@ -1,3 +1,5 @@
+import { bindMenu } from '../site/topbar.js';
+
 // Общее для страниц админки: запросы к API, экранирование, диалоги, сообщения.
 
 export function esc(s) {
@@ -94,7 +96,10 @@ export function toast(msg, kind) {
 
 // Модальный диалог. body — HTML или узел; buttons — [{ label, primary, danger, onClick(close) }].
 export function dialog(title, body, buttons) {
+  const opener = document.activeElement;
   const d = h('dialog', 'ad-dialog');
+  d.setAttribute('aria-label', title);
+  d.addEventListener('close', () => { d.remove(); if (opener?.isConnected) opener.focus(); }, { once: true });
   d.innerHTML = '<form method="dialog" class="ad-dlg-in"><h2>' + esc(title) + '</h2><div class="ad-dlg-body"></div><div class="ad-dlg-btns"></div></form>';
   const bodyBox = d.querySelector('.ad-dlg-body');
   if (typeof body === 'string') bodyBox.innerHTML = body; else bodyBox.appendChild(body);
@@ -115,10 +120,11 @@ export function dialog(title, body, buttons) {
 
 export function confirmDialog(title, text, label, danger) {
   return new Promise((resolve) => {
-    dialog(title, '<p>' + esc(text) + '</p>', [
+    const d = dialog(title, '<p>' + esc(text) + '</p>', [
       { label: 'Отмена', onClick: (close) => { close(); resolve(false); } },
       { label, primary: !danger, danger, onClick: (close) => { close(); resolve(true); } }
     ]);
+    d.addEventListener('close', () => resolve(false), { once: true });
   });
 }
 
@@ -140,4 +146,36 @@ export function nodeLabel(course, id) {
     else out = n.title;
   });
   return out;
+}
+
+// Nonmodal drawer: the list remains in place and usable.
+export function drawer(title) {
+  const opener = document.activeElement, panel = h('dialog', 'ad-drawer');
+  panel.setAttribute('aria-label', title);
+  panel.innerHTML = '<div class="ad-row ad-drawer-head"><h2>' + esc(title) + '</h2><span class="ad-sp"></span><button type="button" class="btn" aria-label="Закрыть панель">✕</button></div><div class="ad-drawer-body ad-form"></div>';
+  let disposed = false;
+  const key = (e) => { if (e.key === 'Escape' && !document.querySelector('.ad-dialog[open]')) { e.preventDefault(); close(); } };
+  function close() {
+    if (disposed) return; disposed = true;
+    document.removeEventListener('keydown', key); panel.close(); panel.remove();
+    if (opener?.isConnected) opener.focus();
+  }
+  panel.querySelector('button').addEventListener('click', close);
+  document.addEventListener('keydown', key);
+  panel.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  document.body.append(panel); panel.show(); panel.querySelector('button').focus();
+  return { panel, body: panel.querySelector('.ad-drawer-body'), close };
+}
+
+// Preserve existing action listeners when moving controls into the shared menu.
+export function actionsMenu(box, controls = [...box.children]) {
+  if (!controls.length) return;
+  const root = h('div', 'tb-account ad-actions-menu');
+  root.innerHTML = '<button type="button" class="btn" aria-haspopup="menu" aria-expanded="false">Действия ▾</button><div class="tb-account-menu" role="menu" aria-label="Действия" hidden></div>';
+  const button = root.firstElementChild, menu = root.lastElementChild;
+  controls.forEach((control) => {
+    control.setAttribute('role', 'menuitem'); control.tabIndex = -1; menu.append(control);
+  });
+  box.append(root);
+  bindMenu(root, button, menu);
 }

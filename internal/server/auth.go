@@ -158,7 +158,7 @@ func (s *server) changeName(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.cfg.Store.SetName(r.Context(), userFrom(r.Context()).ID, req.Name); err != nil {
 		if errors.Is(err, store.ErrConflict) {
-			jsonError(w, http.StatusConflict, "это имя уже занято")
+			jsonError(w, http.StatusConflict, "Это имя уже занято, выбери другое.")
 			return
 		}
 		jsonError(w, http.StatusBadRequest, "Имя — от 1 до 40 букв, цифр, пробелов, точек, дефисов или подчёркиваний.")

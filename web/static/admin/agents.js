@@ -1,6 +1,6 @@
 // Агенты в админке: токены (выпустить, подключить одной командой, отозвать) и очередь правок.
 // Принятая правка становится версией черновика. Принимает и публикует админ или агент с правом проверяющего (решения 0003, 0019).
-import { esc, h, req, toast, when, plural, walk, dialog, confirmDialog, AREAS, areaOf } from './ui.js';
+import { esc, h, req, toast, when, plural, walk, dialog, confirmDialog, actionsMenu, AREAS, areaOf } from './ui.js';
 import { diffCourses, renderDiff, words } from './versions.js';
 import { loadSpecs } from './blocks.js';
 import { renderBlock } from '../engine/blocks/index.js';
@@ -16,11 +16,11 @@ export async function pendingCount() {
 
 // ── токены ──
 export function renderTokens(box, courses, role = 'admin') {
-  box.innerHTML = '<div class="ad-head"><div><h2 id="ad-tok-h">Токены агентов</h2>' +
+  box.innerHTML = '<div class="ad-head"><div><h1 id="ad-tok-h">Токены агентов</h1>' +
     '<p class="ad-sub">Для API и MCP. Агент может читать курсы и предлагать правки. Токен с правом проверяющего может принимать свои и чужие правки, новые курсы и публиковать.</p></div>' +
     '<button type="button" class="btn pri" id="tk-new" aria-expanded="false">+ Новый токен</button></div>' +
     '<div id="tk-form"></div><div id="tk-made"></div>' +
-    '<div class="ad-table-w"><table class="ad-table"><thead><tr><th>Название</th><th>Права</th><th>Курсы</th><th>Токен</th><th>Использован</th><th></th></tr></thead><tbody id="tk-rows"><tr><td colspan="6">Загружаю…</td></tr></tbody></table></div>';
+    '<div class="ad-table-w"><table class="ad-table ad-responsive"><thead><tr><th>Название</th><th>Права</th><th>Курсы</th><th>Токен</th><th>Использован</th><th></th></tr></thead><tbody id="tk-rows"><tr><td colspan="6">Загружаю…</td></tr></tbody></table></div>';
   const formBox = box.querySelector('#tk-form'), made = box.querySelector('#tk-made'), btn = box.querySelector('#tk-new');
   btn.addEventListener('click', () => {
     const open = !formBox.firstChild;
@@ -68,6 +68,7 @@ export function renderTokens(box, courses, role = 'admin') {
       '<td><code class="tk-mask">cit_••••' + esc(t.tail) + '</code></td>' +
       '<td class="ad-mut">' + esc(t.lastUsedAt ? when(t.lastUsedAt) : 'ещё не использован') + '</td>' +
       '<td class="ad-r">' + (t.revokedAt ? '<span class="ad-pill">отозван</span> <button type="button" class="btn ad-danger" data-del="' + t.id + '" data-name="' + esc(t.name) + '">Удалить</button>' : '<button type="button" class="btn" data-review="' + t.id + '" data-on="' + (t.canReview ? '1' : '') + '" data-name="' + esc(t.name) + '">' + (t.canReview ? 'Снять право принимать' : 'Дать право принимать') + '</button> <button type="button" class="btn ad-danger" data-revoke="' + t.id + '" data-name="' + esc(t.name) + '">Отозвать</button>') + '</td></tr>').join('');
+    rows.querySelectorAll('tr').forEach((tr) => [...tr.cells].forEach((td, i) => { td.dataset.label = ['Название', 'Права', 'Курсы', 'Токен', 'Использован', 'Действия'][i]; }));
     rows.querySelectorAll('[data-review]').forEach((b) => b.addEventListener('click', async () => {
       const on = !b.dataset.on;
       if (on && !(await confirmDialog('Дать токену «' + b.dataset.name + '» право принимать?', 'Агент сможет принимать свои и чужие правки, новые курсы и публиковать версии в пределах доступа токена. Принятие создаёт черновик; после публикации ученики увидят его сразу. Право можно снять в любой момент.', 'Дать право'))) return;
@@ -159,8 +160,8 @@ function facts(t) {
 export function renderAgents(main, selected, onDecided) {
   const page = h('div', 'ad-page');
   main.appendChild(page);
-  page.innerHTML = '<div><h1>Правки агентов</h1><p class="ad-sub">Здесь решаешь ты или агент с правом проверяющего. Он может принимать свои и чужие правки, включая новые курсы.</p>' +
-    '<ol class="ag-steps"><li><b>Прочитай</b> правку так, как её увидит ученик.</li><li><b>Прими или отклони.</b> Принятая правка попадает в черновик, ученики её пока не видят.</li><li><b>Опубликуй</b> черновик, и правка появится у учеников.</li></ol></div>' +
+  page.innerHTML = '<div class="ad-head"><div><h1>Правки агентов</h1><p class="ad-sub">Здесь решаешь ты или агент с правом проверяющего. Он может принимать свои и чужие правки, включая новые курсы.</p>' +
+    '<ol class="ag-steps"><li><b>Прочитай</b> правку так, как её увидит ученик.</li><li><b>Прими или отклони.</b> Принятая правка попадает в черновик, ученики её пока не видят.</li><li><b>Опубликуй</b> черновик, и правка появится у учеников.</li></ol></div></div>' +
     '<div class="ad-split ag-split"><section class="ad-card ag-queue" aria-label="Очередь"><div class="lbl v-hh ag-qh"><span>Очередь</span><span id="ag-n"></span></div><ul id="ag-list"><li class="ad-pad">Загружаю…</li></ul></section>' +
     '<section class="ag-detail" id="ag-detail" aria-label="Правка"></section></div>';
   let list = [];
@@ -275,6 +276,8 @@ export function renderAgents(main, selected, onDecided) {
         ? 'Принята ' + esc(when(p.decidedAt)) + ' (' + esc(p.decidedBy) + '): черновик v' + p.version + '. <a href="#/c/' + esc(p.course) + '/versions">Версии курса</a>'
         : 'Отклонена ' + esc(when(p.decidedAt)) + ' (' + esc(p.decidedBy) + ')' + (p.comment ? ': «' + esc(p.comment) + '»' : ' без комментария')) + '</p>';
     }
+    const row = act.querySelector('.ad-row'), extra = [act.querySelector('#ag-no'), act.querySelector('.ad-row > a')].filter(Boolean);
+    if (row && extra.length) actionsMenu(row, extra);
     box.appendChild(act);
   }
 }

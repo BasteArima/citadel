@@ -1,4 +1,4 @@
-import { req, esc, h, when, toast, dialog, confirmDialog } from './ui.js';
+import { req, esc, h, when, toast, dialog, confirmDialog, actionsMenu } from './ui.js';
 
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); toast('Скопировано', 'good'); }
@@ -27,8 +27,8 @@ export function resetLinkDialog(user, onChanged) {
         const box = h('div', 'ad-form');
         const url = new URL(r.data.url, location.origin);
         const text = location.origin + url.pathname;
-        box.innerHTML = '<p>Скопируй и передай человеку лично. Больше эту ссылку не покажем. Она действует 24 часа и даёт доступ к аккаунту.</p><div class="tk-cmd"><pre></pre><button type="button" class="btn">Скопировать</button></div>';
-        box.querySelector('pre').textContent = text;
+        box.innerHTML = '<p>Скопируй и передай человеку лично. Больше эту ссылку не покажем. Она действует 24 часа и даёт доступ к аккаунту.</p><div class="tk-cmd"><input readonly aria-label="Ссылка сброса пароля"><button type="button" class="btn">Скопировать</button></div>';
+        box.querySelector('input').value = text;
         box.querySelector('button').addEventListener('click', () => copy(text));
         dialog('Ссылка для сброса пароля создана', box, [{ label: 'Готово' }]);
         onChanged();
@@ -41,7 +41,7 @@ export function resetLinkDialog(user, onChanged) {
 export function renderInvites(main, courses) {
   const page = h('div', 'ad-page');
   main.append(page);
-  page.innerHTML = `<div class="ad-head"><div><h1>Приглашения</h1><p class="ad-sub">Новые аккаунты по ссылке: выбери роль, курсы, число использований и срок.</p></div><button type="button" class="btn pri" id="iv-new" aria-expanded="false">+ Новое приглашение</button></div><div id="iv-form"></div><div class="ad-table-w"><table class="ad-table"><thead><tr><th>Пометка</th><th>Роль и курсы</th><th>Использования</th><th>Срок и статус</th><th>Кто зарегистрировался</th><th></th></tr></thead><tbody id="iv-rows"><tr><td colspan="6">Загружаю…</td></tr></tbody></table></div>`;
+  page.innerHTML = `<div class="ad-head"><div><h1>Приглашения</h1><p class="ad-sub">Новые аккаунты по ссылке: выбери роль, курсы, число использований и срок.</p></div><button type="button" class="btn pri" id="iv-new" aria-expanded="false">+ Новое приглашение</button></div><div id="iv-form"></div><div class="ad-table-w"><table class="ad-table ad-responsive"><thead><tr><th>Пометка</th><th>Роль и курсы</th><th>Использования</th><th>Срок и статус</th><th>Кто зарегистрировался</th><th></th></tr></thead><tbody id="iv-rows"><tr><td colspan="6">Загружаю…</td></tr></tbody></table></div>`;
   const formBox = page.querySelector('#iv-form'), newButton = page.querySelector('#iv-new');
   newButton.addEventListener('click', () => {
     const open = !formBox.firstChild;
@@ -84,6 +84,10 @@ export function renderInvites(main, courses) {
     const statuses = { active: 'активна', exhausted: 'исчерпана', expired: 'истекла', revoked: 'отозвана' };
     const title = (id) => { const c = courses.find((c) => c.id === id); return c ? c.title : id + ' (удалён)'; };
     rows.innerHTML = r.data.map((i) => `<tr><td><strong>${esc(i.note || 'Без пометки')}</strong><br><span class="ad-small ad-mut">${esc(when(i.createdAt))}</span></td><td>${i.role === 'author' ? 'автор' : 'ученик'}<br><span class="ad-small ad-mut">${esc(i.courses.map(title).join(', ') || 'публичные курсы')}</span></td><td>использована ${i.uses}${i.maxUses === null ? ' · без ограничения' : ' из ' + i.maxUses}</td><td>${esc(i.expiresAt ? when(i.expiresAt) : 'бессрочно')}<br><span class="ad-pill ${i.status === 'active' ? 'good' : ''}">${statuses[i.status]}</span></td><td>${esc(i.users.join(', ') || '—')}</td><td class="ad-r"><div class="ad-acts"><button type="button" class="btn" data-copy="${i.id}">Скопировать ссылку</button>${i.status !== 'revoked' ? '<button type="button" class="btn ad-danger" data-revoke="' + i.id + '">Отозвать</button>' : ''}${i.status !== 'active' ? '<button type="button" class="btn ad-danger" data-delete="' + i.id + '">Удалить</button>' : ''}</div></td></tr>`).join('') || '<tr><td colspan="6">Приглашений пока нет. Создай первое.</td></tr>';
+    rows.querySelectorAll('tr').forEach((tr) => {
+      [...tr.cells].forEach((td, i) => { td.dataset.label = ['Пометка', 'Роль и курсы', 'Использования', 'Срок и статус', 'Кто зарегистрировался', 'Действия'][i]; });
+      const actions = tr.querySelector('.ad-acts'); if (actions) actionsMenu(actions);
+    });
     rows.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => copy(location.origin + '/join/' + r.data.find((i) => String(i.id) === b.dataset.copy).code)));
     rows.querySelectorAll('[data-revoke], [data-delete]').forEach((b) => b.addEventListener('click', async () => {
       const remove = !!b.dataset.delete, id = b.dataset.delete || b.dataset.revoke;

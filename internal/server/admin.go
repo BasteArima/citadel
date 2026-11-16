@@ -12,7 +12,6 @@ import (
 
 	"citadel/internal/course"
 	"citadel/internal/store"
-	"citadel/web"
 )
 
 // Admin panel: staff edit courses; only admins manage accounts and course access.
@@ -40,12 +39,12 @@ func (s *server) adminPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
-	w.Header().Set("Cache-Control", "no-cache")
-	http.ServeFileFS(w, r, web.FS, "admin.html")
+	withTop(w, r, "admin.html", "admin", false)
 }
 
 func (s *server) adminRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /admin", s.page(s.adminPage))
+	mux.Handle("GET /admin/preview/{id}", s.page(s.staffCourse(s.adminPreview).ServeHTTP))
 	mux.Handle("GET /api/admin/courses", s.staff(s.adminCourses))
 	mux.Handle("POST /api/admin/courses", s.staff(s.adminCreate))
 	mux.Handle("DELETE /api/admin/courses/{id}", s.staffCourse(s.adminDeleteCourse))

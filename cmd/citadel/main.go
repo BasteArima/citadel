@@ -6,6 +6,7 @@
 //	citadel backup      write a consistent copy of the database
 //	citadel runner      run course code in throwaway containers (decision 0013)
 //	citadel user        manage accounts and recover access
+//	citadel dev-seed    create isolated development data
 package main
 
 import (
@@ -51,6 +52,8 @@ func main() {
 		err = runRunner(os.Args[2:])
 	case "user":
 		err = userCommand(os.Args[2:], os.Stdout)
+	case "dev-seed":
+		err = devSeed(os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
@@ -62,7 +65,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: citadel serve | check | convert-v0 | backup | runner | user [flags]")
+	fmt.Fprintln(os.Stderr, "usage: citadel serve | check | convert-v0 | backup | runner | user | dev-seed [flags]")
 }
 
 func dbPath(dataDir string) string { return filepath.Join(dataDir, "citadel.db") }

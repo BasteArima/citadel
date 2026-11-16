@@ -29,6 +29,7 @@ type User struct {
 	Name         string `json:"name"`
 	Role         string `json:"role"`
 	Login        string `json:"login"`
+	Avatar       string `json:"avatar"`
 	InviteID     int64  `json:"-"`
 	passwordHash string // authentication snapshot; never serialized
 }
@@ -340,8 +341,10 @@ func (s *Store) createSession(ctx context.Context, userID int64, ttl time.Durati
 func (s *Store) UserBySession(ctx context.Context, token string) (User, error) {
 	var u User
 	err := s.db.QueryRowContext(ctx, `
-		SELECT u.id, u.name, u.role, COALESCE(u.login, '') FROM sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = ? AND s.expires_at > ? AND u.disabled_at IS NULL`, tokenHash(token), now()).Scan(&u.ID, &u.Name, &u.Role, &u.Login)
+		SELECT u.id, u.name, u.role, COALESCE(u.login, ''),
+		CASE WHEN a.user_id IS NULL THEN '' ELSE '/avatar/' || u.id || '?v=' || a.updated_at END
+		FROM sessions s JOIN users u ON u.id = s.user_id LEFT JOIN avatars a ON a.user_id = u.id
+		WHERE s.token_hash = ? AND s.expires_at > ? AND u.disabled_at IS NULL`, tokenHash(token), now()).Scan(&u.ID, &u.Name, &u.Role, &u.Login, &u.Avatar)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNoSession
 	}

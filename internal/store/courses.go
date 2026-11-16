@@ -140,6 +140,7 @@ type VersionInfo struct {
 
 // CourseInfo is a course as the admin list sees it.
 type CourseInfo struct {
+	Direction string      `json:"direction"`
 	OwnerID   int64       `json:"ownerId,omitempty"`
 	OwnerName string      `json:"ownerName,omitempty"`
 	ID        string      `json:"id"`
@@ -153,7 +154,7 @@ type CourseInfo struct {
 // Courses lists every course with its published and latest versions.
 func (s *Store) Courses(ctx context.Context) ([]CourseInfo, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, COALESCE(c.owner_id, 0), COALESCE((SELECT name FROM users WHERE id = c.owner_id), ''), COALESCE(c.published_version, 0), v.version, v.author, v.note, v.created_at, v.data
+		SELECT c.id, COALESCE(c.owner_id, 0), COALESCE((SELECT name FROM users WHERE id = c.owner_id), ''), COALESCE(c.published_version, 0), v.version, v.author, v.note, v.created_at, v.data, COALESCE(c.direction, '')
 		FROM courses c
 		JOIN course_versions v ON v.course_id = c.id
 		  AND v.version = (SELECT MAX(version) FROM course_versions WHERE course_id = c.id)
@@ -166,7 +167,7 @@ func (s *Store) Courses(ctx context.Context) ([]CourseInfo, error) {
 	for rows.Next() {
 		var ci CourseInfo
 		var data string
-		if err := rows.Scan(&ci.ID, &ci.OwnerID, &ci.OwnerName, &ci.Published, &ci.Latest.Version, &ci.Latest.Author, &ci.Latest.Note, &ci.Latest.CreatedAt, &data); err != nil {
+		if err := rows.Scan(&ci.ID, &ci.OwnerID, &ci.OwnerName, &ci.Published, &ci.Latest.Version, &ci.Latest.Author, &ci.Latest.Note, &ci.Latest.CreatedAt, &data, &ci.Direction); err != nil {
 			return nil, err
 		}
 		ci.Latest.Published = ci.Latest.Version == ci.Published

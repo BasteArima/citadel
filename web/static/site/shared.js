@@ -93,3 +93,36 @@ export function applyTheme(theme) {
 export function lastPlace() {
   try { return JSON.parse(localStorage.getItem('citadel-last') || 'null'); } catch (e) { return null; }
 }
+
+// Scan every cached course, including ones no longer present in the catalog.
+export function syncStatus() {
+  let pending = 0, last = 0;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('citadel-progress:')) continue;
+      try {
+        const p = JSON.parse(localStorage.getItem(key) || '{}') || {};
+        if (p.dirty || (p.lessons && !p.items)) pending++;
+        if (Number.isFinite(p.syncedAt)) last = Math.max(last, p.syncedAt);
+      } catch (_) { /* a damaged entry must not hide the other courses */ }
+    }
+  } catch (_) { /* storage may be unavailable */ }
+  return { pending, last };
+}
+
+export function syncNote() {
+  const { pending, last } = syncStatus();
+  if (pending) return '<p class="note-bad">В этом браузере есть отметки, которые ещё не дошли до сервера. Они уйдут, когда откроешь курс при подключении.</p>';
+  if (!last) return '<p>В этом браузере ещё не было синхронизации. Открой курс при подключении.</p>';
+  const min = Math.max(0, Math.round((Date.now() - last) / 60000));
+  const ago = min < 1 ? 'только что' : min < 60 ? min + ' ' + plural(min, 'минуту', 'минуты', 'минут') + ' назад' :
+    new Date(last).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  return '<p class="note-ok">Всё сохранено на сервере · последний обмен ' + esc(ago) + '</p>';
+}
+
+export const roleName = (role) => ({ admin: 'Админ', author: 'Автор' }[role] || 'Ученик');
+
+export function avatarHTML(user, size) {
+  return user.avatar ? '<img src="' + esc(user.avatar) + '" alt="" width="' + size + '" height="' + size + '">' : esc(Array.from(user.name || '·')[0].toUpperCase());
+}

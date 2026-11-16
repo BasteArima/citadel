@@ -1,177 +1,87 @@
-// Вопросы и словарь курса: таблица слева, форма выбранного справа.
-// Правки идут в тот же черновик, что и в редакторе узла.
-import { esc, h, toast, walk, nodeLabel, confirmDialog } from './ui.js';
+import { esc, h, toast, drawer } from './ui.js';
 import { draft, touch } from './draft.js';
-import { questionForm, loadSpecs, newBlock } from './blocks.js';
+import { questionForm, blockForm, loadSpecs, newBlock } from './blocks.js';
+import { allQuestions, plain } from './reference.js';
+import { renderQuestion } from '../engine/blocks/question.js';
+import { initRich } from '../engine/rich.js';
+import { indexCourse } from '../engine/course.js';
 
 const KINDS = { choice: 'выбор', text: 'ввод', order: 'порядок' };
-let picked = { q: null, g: null }; // выбранный вопрос (id) и термин (ключ)
-
-export function renderQuestions(main, view, courseBar) {
-  const c = draft.course;
-  c.glossary = c.glossary || {};
-  const tab = view === 'glossary' ? 'g' : 'q';
-  const { off } = courseBar(main, '<a href="#/c/' + esc(draft.id) + '/edit">' + esc(c.title) + '</a> / <strong>Вопросы и словарь</strong>');
-  const page = h('div', 'ad-page');
-  main.appendChild(page);
-  const qs = allQuestions(c);
-  const terms = Object.keys(c.glossary).sort();
-  page.innerHTML = '<div class="ad-head"><div><span class="ad-sub">' + esc(c.title) + ' · черновик v' + draft.version + '</span><h1>Вопросы и словарь</h1></div>' +
-    '<button type="button" class="btn pri" id="q-add">' + (tab === 'g' ? '+ Термин' : '+ Вопрос') + '</button></div>' +
-    '<div class="ad-tabs" role="tablist"><a role="tab" href="#/c/' + esc(draft.id) + '/questions"' + (tab === 'q' ? ' aria-selected="true"' : '') + '>Вопросы · ' + qs.length + '</a>' +
-    '<a role="tab" href="#/c/' + esc(draft.id) + '/glossary"' + (tab === 'g' ? ' aria-selected="true"' : '') + '>Словарь · ' + terms.length + '</a></div>' +
-    '<div class="ad-split"><div class="ad-table-w"><table class="ad-table"><thead></thead><tbody></tbody></table></div><section class="ad-card ad-pad ad-side-form"></section></div>';
-  const thead = page.querySelector('thead'), tbody = page.querySelector('tbody'), form = page.querySelector('.ad-side-form');
-  loadSpecs().then(() => (tab === 'q' ? drawQ() : drawG()));
-  return off;
-
-  // ── вопросы ──
-  function drawQ() {
-    page.querySelector('#q-add').onclick = addQuestion;
-    if (!qs.length) { tbody.innerHTML = '<tr><td>В курсе пока нет вопросов. Их добавляют блоком «Вопрос» в редакторе узла.</td></tr>'; form.hidden = true; return; }
-    if (!picked.q || !qs.some((x) => x.q.id === picked.q)) picked.q = qs[0].q.id;
-    thead.innerHTML = '<tr><th>Вопрос</th><th>Узел</th><th>Вид</th><th>В контрольной</th></tr>';
-    tbody.innerHTML = qs.map((x) => '<tr data-id="' + esc(x.q.id) + '"' + (x.q.id === picked.q ? ' class="is-sel"' : '') + ' tabindex="0">' +
-      '<td>' + esc(plain(x.q.q) || '(без текста)') + '</td><td class="ad-mut">' + esc(nodeLabel(c, x.node.id)) + (x.hands ? ' · руками' : '') + '</td>' +
-      '<td><span class="ad-pill">' + esc(KINDS[x.q.kind] || x.q.kind) + '</span></td><td>' + (x.q.exam === false || x.hands ? 'нет' : 'да') + '</td></tr>').join('');
-    bindRows((id) => { picked.q = id; drawQ(); });
-    const x = qs.find((y) => y.q.id === picked.q);
-    form.hidden = false;
-    form.innerHTML = '<div class="ad-row"><span class="lbl">Вопрос · ' + esc(nodeLabel(c, x.node.id)) + '</span><span class="ad-sp"></span><a href="#/c/' + esc(draft.id) + '/edit/' + esc(x.node.id) + '">В редакторе</a></div>';
-    questionForm(form, x.q, { course: c, onChange: () => { touch(); clearTimeout(form._t); form._t = setTimeout(() => refreshRow(x), 300); } });
-  }
-  function refreshRow(x) {
-    const tr = tbody.querySelector('tr[data-id="' + CSS.escape(x.q.id) + '"]');
-    if (tr) { tr.cells[0].textContent = plain(x.q.q) || '(без текста)'; tr.cells[2].innerHTML = '<span class="ad-pill">' + esc(KINDS[x.q.kind] || x.q.kind) + '</span>'; tr.cells[3].textContent = x.q.exam === false || x.hands ? 'нет' : 'да'; }
-  }
-
-  // ── словарь ──
-  function drawG() {
-    page.querySelector('#q-add').onclick = addTerm;
-    const keys = Object.keys(c.glossary).sort();
-    const uses = usage(c);
-    if (!keys.length) { tbody.innerHTML = '<tr><td>Словарь пуст. Термин добавляется кнопкой «+ Термин», в тексте на него ссылаются так: {{ключ}}.</td></tr>'; form.hidden = true; return; }
-    if (!picked.g || !c.glossary[picked.g]) picked.g = keys[0];
-    thead.innerHTML = '<tr><th>Ключ</th><th>Термин</th><th>English</th><th>Ссылок</th></tr>';
-    tbody.innerHTML = keys.map((k) => {
-      const t = c.glossary[k], n = (uses[k] || []).length;
-      return '<tr data-id="' + esc(k) + '"' + (k === picked.g ? ' class="is-sel"' : '') + ' tabindex="0"><td><code>' + esc(k) + '</code></td><td>' + esc(t.t) + '</td><td>' + esc(t.en || '') + '</td>' +
-        '<td>' + n + (n ? '' : ' <span class="ad-pill warn">не используется</span>') + '</td></tr>';
-    }).join('');
-    bindRows((k) => { picked.g = k; drawG(); });
-    const k = picked.g, t = c.glossary[k], where = [...new Set((uses[k] || []).map((id) => nodeLabel(c, id)))];
-    form.hidden = false;
-    form.innerHTML = '<span class="lbl">Термин</span>' +
-      '<div class="ad-f"><label for="g-key">Ключ · для ссылок {{' + esc(k) + '}}</label><input id="g-key" class="mono" value="' + esc(k) + '"></div>' +
-      '<div class="ad-grid2"><div class="ad-f"><label for="g-t">По-русски</label><input id="g-t" value="' + esc(t.t) + '"></div>' +
-      '<div class="ad-f"><label for="g-en">English</label><input id="g-en" value="' + esc(t.en || '') + '"></div></div>' +
-      '<div class="ad-f"><label for="g-d">Определение</label><textarea id="g-d" rows="4">' + esc(t.d || '') + '</textarea></div>' +
-      '<p class="ad-small ad-mut">' + (where.length ? 'Используется: ' + esc(where.join('; ')) + '. ' : 'Пока нигде не используется. ') + 'Переименование ключа обновит все ссылки.</p>' +
-      '<div class="ad-row"><span class="ad-sp"></span><button type="button" class="btn ad-danger" id="g-del">Удалить термин</button></div>';
-    const set = (f, v) => { if (v === '' && f === 'en') delete t.en; else t[f] = v; touch(); };
-    form.querySelector('#g-t').addEventListener('input', (e) => { set('t', e.target.value); tbody.querySelector('tr.is-sel').cells[1].textContent = e.target.value; });
-    form.querySelector('#g-en').addEventListener('input', (e) => { set('en', e.target.value); tbody.querySelector('tr.is-sel').cells[2].textContent = e.target.value; });
-    form.querySelector('#g-d').addEventListener('input', (e) => set('d', e.target.value));
-    form.querySelector('#g-key').addEventListener('change', (e) => {
-      const nk = e.target.value.trim();
-      if (nk === k) return;
-      if (!/^[a-z0-9][a-z0-9-]*$/.test(nk) || c.glossary[nk]) { toast(c.glossary[nk] ? 'Такой ключ уже есть' : 'Ключ — латиница, цифры и дефис', 'bad'); e.target.value = k; return; }
-      const n = renameTerm(c, k, nk);
-      picked.g = nk;
-      touch();
-      toast('Ключ переименован, ссылок обновлено: ' + n, 'good');
-      drawG();
-    });
-    form.querySelector('#g-del').addEventListener('click', async () => {
-      const n = (uses[k] || []).length;
-      if (!(await confirmDialog('Удалить термин «' + t.t + '»?', n ? 'На него ссылаются ' + n + ' раз: проверка покажет эти ссылки как ошибки, пока их не уберёшь.' : 'Ссылок на него нет.', 'Удалить', true))) return;
-      delete c.glossary[k];
-      picked.g = null;
-      touch();
-      drawG();
-    });
-  }
-
-  // Новый вопрос встаёт после выбранного, в тот же узел.
-  function addQuestion() {
-    const x = qs.find((y) => y.q.id === picked.q && !y.hands);
-    if (!x) { toast('Выбери вопрос-блок: новый встанет после него. Первый вопрос узла добавляется в редакторе блоком «Вопрос».', 'warn'); return; }
-    let lesson = x.node;
-    walk(c.root, (n, p) => { if (n === x.node && n.kind === 'part' && p) lesson = p; });
-    const q = newBlock('question', c, lesson);
-    x.node.blocks.splice(x.node.blocks.indexOf(x.q) + 1, 0, q);
-    qs.splice(qs.indexOf(x) + 1, 0, { q, node: x.node });
-    picked.q = q.id;
-    touch();
-    drawQ();
-    form.querySelector('textarea').focus();
-  }
-
-  function addTerm() {
-    let i = 1;
-    while (c.glossary['term-' + i]) i++;
-    c.glossary['term-' + i] = { t: 'Новый термин', d: '' };
-    picked.g = 'term-' + i;
-    touch();
-    drawG();
-    form.querySelector('#g-key').select();
-  }
-
-  function bindRows(pick) {
-    tbody.querySelectorAll('tr[data-id]').forEach((tr) => {
-      tr.addEventListener('click', () => pick(tr.dataset.id));
-      tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(tr.dataset.id); } });
-    });
-  }
-}
-
-function plain(html) { return String(html || '').replace(/<[^>]+>/g, '').replace(/\{\{>?([^}|]+)\|([^}]+)\}\}/g, '$2').replace(/\{\{>?([^}]+)\}\}/g, '$1'); }
-
-// Все вопросы курса по порядку: блоки question и вопросы заданий руками.
-function allQuestions(c) {
+export function questionProblems(q) {
   const out = [];
-  walk(c.root, (n) => (n.blocks || []).forEach((b) => {
-    if (b.type === 'question') out.push({ q: b, node: n });
-    if (b.type === 'hands') (b.check || []).forEach((q) => out.push({ q, node: n, hands: true }));
+  if (!plain(q.why).trim()) out.push('why');
+  if (!plain(q.q).trim()) out.push('text');
+  if (q.kind === 'choice' ? !Array.isArray(q.opts) || q.opts.length < 2 || q.opts.some((x) => !plain(x).trim()) || !Number.isInteger(q.a) || q.a < 0 || q.a >= q.opts.length :
+    q.kind === 'text' ? !Array.isArray(q.a) || !q.a.length || q.a.some((x) => !plain(x).trim()) :
+      q.kind === 'order' ? !Array.isArray(q.items) || q.items.length < 2 || q.items.some((x) => !plain(x).trim()) : true) out.push('answer');
+  if (!q.id) out.push('id');
+  return out;
+}
+const FILTERS = [['', 'Все'], ['why', 'Без объяснения'], ['answer', 'Без ответа или вариантов'], ['text', 'Без текста'], ['id', 'Без id']];
+
+export function renderQuestions(main, courseBar) {
+  const { off } = courseBar(main), c = draft.course, qs = allQuestions(c), collapsed = new Set();
+  const page = h('div', 'ad-page'); main.append(page);
+  const lessons = [...new Set(qs.map((x) => x.lesson))];
+  const lessonTitle = (l) => (l.kind === 'lesson' ? 'Урок ' + (l.n || '?') + '. ' : '') + l.title;
+  page.innerHTML = '<div class="ad-head"><div><h1>Вопросы</h1><p class="ad-sub">Вопросы по урокам, включая проверку заданий руками.</p></div><button type="button" class="btn pri" data-add>+ Вопрос</button></div>' +
+    '<div class="ad-filters"><label class="ad-f">Поиск<input type="search" placeholder="Текст вопроса"></label><label class="ad-f">Урок<select><option value="">Все уроки</option>' + lessons.map((l) => '<option value="' + esc(l.id) + '">' + esc(lessonTitle(l)) + '</option>').join('') + '</select></label></div>' +
+    '<div class="ad-question-filters" role="group" aria-label="Проблемы вопросов">' + FILTERS.map(([key, label]) => '<button type="button" class="chip" data-filter="' + key + '" aria-pressed="' + (key === '') + '">' + label + '</button>').join('') + '</div><p class="ad-sub" data-count role="status"></p><div class="ad-question-list"></div>';
+  const list = page.querySelector('.ad-question-list'), search = page.querySelector('input'), select = page.querySelector('select');
+  let filter = '', active = null, pane = null, timer;
+  const visible = () => qs.filter((x) => (!select.value || x.lesson.id === select.value) && plain(x.q.q).toLocaleLowerCase('ru').includes(search.value.toLocaleLowerCase('ru')) && (!filter || questionProblems(x.q).includes(filter)));
+  function draw() {
+    const shown = visible(); page.querySelector('[data-count]').textContent = 'Показано: ' + shown.length + ' из ' + qs.length;
+    list.innerHTML = lessons.map((lesson) => {
+      const rows = shown.filter((x) => x.lesson === lesson); if (!rows.length) return '';
+      return '<details class="ad-card ad-q-group" data-lesson="' + esc(lesson.id) + '"' + (collapsed.has(lesson.id) ? '' : ' open') + '><summary>' + esc(lessonTitle(lesson)) + ' · ' + rows.length + ' вопросов</summary>' + rows.map((x) => {
+        const problems = questionProblems(x.q);
+        return '<button type="button" class="ad-q-row' + (x === active ? ' is-sel' : '') + '" data-index="' + qs.indexOf(x) + '"><span class="ad-q-text">' + esc(plain(x.q.q) || '(без текста)') + '</span><span class="ad-pill">' + esc(KINDS[x.q.kind] || x.q.kind || '?') + '</span><span class="ad-small ad-mut">' + esc(x.node.title) + (x.hands ? ' · руками' : '') + '</span><span class="ad-q-problems">' + problems.map((key) => '<span class="ad-pill warn" title="' + FILTERS.find((f) => f[0] === key)[1] + '" aria-label="' + FILTERS.find((f) => f[0] === key)[1] + '">!</span>').join('') + '</span></button>';
+      }).join('') + '</details>';
+    }).join('') || '<p class="ad-mut">Вопросов не найдено. Первый вопрос добавь блоком в редакторе урока.</p>';
+    list.querySelectorAll('details').forEach((d) => d.addEventListener('toggle', () => { if (d.open) collapsed.delete(d.dataset.lesson); else collapsed.add(d.dataset.lesson); }));
+    list.querySelectorAll('[data-index]').forEach((b) => b.addEventListener('click', () => open(qs[Number(b.dataset.index)])));
+  }
+  function open(x) {
+    active = x;
+    if (!pane || !pane.panel.isConnected) {
+      pane = drawer('Вопрос');
+      pane.panel.addEventListener('close', () => { list.querySelector('[data-index="' + qs.indexOf(active) + '"]')?.focus(); });
+    }
+    const form = pane.body; form.replaceChildren();
+    const nav = h('div', 'ad-row', '<button type="button" class="btn" data-prev aria-label="Предыдущий вопрос">←</button><button type="button" class="btn" data-next aria-label="Следующий вопрос">→</button><a href="#/c/' + encodeURIComponent(c.id) + '/edit/' + encodeURIComponent(x.node.id) + '">Открыть в редакторе</a>');
+    const shown = visible(), i = shown.indexOf(x);
+    nav.querySelector('[data-prev]').disabled = i <= 0; nav.querySelector('[data-next]').disabled = i < 0 || i === shown.length - 1;
+    const step = (offset) => {
+      open(shown[i + offset]);
+      const button = pane.body.querySelector(offset < 0 ? '[data-prev]' : '[data-next]');
+      (button.disabled ? pane.panel.querySelector('.ad-drawer-head button') : button).focus();
+    };
+    nav.querySelector('[data-prev]').addEventListener('click', () => step(-1)); nav.querySelector('[data-next]').addEventListener('click', () => step(1));
+    form.append(nav);
+    const fields = h('div', 'ad-form'), preview = h('div', 'ad-question-preview'); form.append(fields, h('h3', '', 'Как увидит ученик'), preview);
+    const render = () => {
+      preview.replaceChildren(); initRich(indexCourse(c)); let answer = 0;
+      try { preview.append(renderQuestion(x.q, 'Вопрос', { state: () => answer, answer(ok) { answer = ok ? 1 : 2; } })); }
+      catch (e) { preview.textContent = 'Исправь поля вопроса: ' + e.message; }
+    };
+    const changed = () => { touch(); clearTimeout(timer); timer = setTimeout(() => { draw(); render(); }, 300); };
+    const ctx = { course: c, node: x.node, onChange: changed, onReplace: () => { changed(); open(x); } };
+    if (x.hands) questionForm(fields, x.q, ctx); else fields.append(blockForm(x.q, ctx));
+    render(); draw();
+  }
+  search.addEventListener('input', draw); select.addEventListener('change', draw);
+  page.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => {
+    filter = b.dataset.filter; page.querySelectorAll('[data-filter]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); draw();
   }));
-  return out;
-}
-
-const REF = /\{\{(>?)([^}|]+)(\|[^}]*)?\}\}/g;
-
-// Где используется каждый термин: ключ → id узлов (по разу на ссылку).
-function usage(c) {
-  const out = {};
-  const scan = (v, id) => {
-    if (typeof v === 'string') { for (const m of v.matchAll(REF)) if (!m[1]) (out[m[2].trim()] = out[m[2].trim()] || []).push(id); }
-    else if (Array.isArray(v)) v.forEach((x) => scan(x, id));
-    else if (v && typeof v === 'object') Object.keys(v).forEach((k) => { if (k !== 'children') scan(v[k], id); });
-  };
-  walk(c.root, (n) => scan(n, n.id));
-  Object.keys(c.glossary).forEach((k) => scan(c.glossary[k].d, 'словарь: ' + k));
-  scan([c.about, c.howto], 'паспорт');
-  return out;
-}
-
-// Переименовывает ключ термина во всех строках курса; возвращает число замен.
-function renameTerm(c, from, to) {
-  let n = 0;
-  const fix = (s) => s.replace(REF, (m, arrow, key, rest) => {
-    if (arrow || key.trim() !== from) return m;
-    n++;
-    return '{{' + to + (rest || '') + '}}';
+  page.querySelector('[data-add]').addEventListener('click', () => {
+    const x = active || visible().find((x) => !x.hands);
+    if (!x || x.hands) { toast('Первый вопрос узла добавляется в редакторе блоком «Вопрос».', 'warn'); return; }
+    const q = newBlock('question', c, x.lesson), item = { q, node: x.node, lesson: x.lesson };
+    x.node.blocks.splice(x.node.blocks.indexOf(x.q) + 1, 0, q); qs.splice(qs.indexOf(x) + 1, 0, item); filter = ''; search.value = ''; select.value = '';
+    page.querySelectorAll('[data-filter]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.filter === '')));
+    touch(); open(item);
   });
-  const deep = (v) => {
-    if (typeof v === 'string') return fix(v);
-    if (Array.isArray(v)) { v.forEach((x, i) => { v[i] = deep(x); }); return v; }
-    if (v && typeof v === 'object') { Object.keys(v).forEach((k) => { v[k] = deep(v[k]); }); return v; }
-    return v;
-  };
-  c.glossary[to] = c.glossary[from];
-  delete c.glossary[from];
-  deep(c.root);
-  Object.keys(c.glossary).forEach((k) => { c.glossary[k].d = fix(c.glossary[k].d || ''); });
-  if (c.about) c.about = fix(c.about);
-  if (c.howto) c.howto = c.howto.map(fix);
-  return n;
+  loadSpecs().then(() => { if (page.isConnected) draw(); });
+  return () => { off(); pane?.close(); clearTimeout(timer); };
 }

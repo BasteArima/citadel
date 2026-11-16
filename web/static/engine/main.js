@@ -1,7 +1,8 @@
 // Точка входа: кто вошёл, курс и список курсов из API — и запускаем движок.
 import { start } from './app.js';
 
-const id = decodeURIComponent(location.pathname.split('/')[2] || '');
+const preview = document.documentElement.dataset.preview === 'draft';
+const id = decodeURIComponent(location.pathname.split('/')[preview ? 3 : 2] || '');
 const page = document.getElementById('page');
 
 async function getJSON(url) {
@@ -17,10 +18,10 @@ async function getJSON(url) {
 try {
   const [user, course, catalog, audio, applied] = await Promise.all([
     getJSON('/api/me'),
-    getJSON('/api/courses/' + encodeURIComponent(id)),
+    preview ? getJSON('/api/admin/courses/' + encodeURIComponent(id) + '/draft').then((d) => d.course) : getJSON('/api/courses/' + encodeURIComponent(id)),
     getJSON('/api/courses'),
     // озвучка не обязательна: без неё у части просто нет кнопки «Слушать»
-    getJSON('/api/courses/' + encodeURIComponent(id) + '/audio').then((a) => a.parts).catch(() => ({})),
+    (preview ? Promise.resolve({ parts: {} }) : getJSON('/api/courses/' + encodeURIComponent(id) + '/audio')).then((a) => a.parts).catch(() => ({})),
     // шаги проектов, где пригодятся уроки курса: без них просто нет врезки
     getJSON('/api/courses/' + encodeURIComponent(id) + '/applied').catch(() => ({}))
   ]);

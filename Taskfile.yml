@@ -44,6 +44,16 @@ tasks:
     cmds:
       - go run ./cmd/citadel serve -addr :8081
 
+  seed-dev:
+    desc: Создать данные в data-dev или заменить базу с меткой dev-seed (data запрещена)
+    cmds:
+      - go run ./cmd/citadel dev-seed -force
+
+  run-dev:
+    desc: Запустить тестовый сайт на :8082
+    cmds:
+      - go run ./cmd/citadel serve -addr :8082 -data data-dev -content content-demo
+
   up:
     desc: Поднять в Docker Desktop на http://localhost:8080
     cmds:

@@ -75,10 +75,12 @@ type catalog struct {
 
 // Soon is a course that exists but was never published: the catalog shows it as «Скоро».
 type Soon struct {
-	ID    string `json:"id"`
-	Type  string `json:"type,omitempty"`
-	Title string `json:"title"`
-	Metal string `json:"metal"`
+	ID        string `json:"id"`
+	Type      string `json:"type,omitempty"`
+	Title     string `json:"title"`
+	Metal     string `json:"metal"`
+	Direction string `json:"direction"`
+	Author    string `json:"author"`
 }
 
 // New returns the HTTP handler.
@@ -109,6 +111,9 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.Handle("GET /api/me", s.api(s.me))
 	mux.Handle("PUT /api/me/name", s.api(s.changeName))
 	mux.Handle("PUT /api/me/password", s.api(s.changePassword))
+	mux.Handle("PUT /api/me/avatar", s.api(s.putAvatar))
+	mux.Handle("DELETE /api/me/avatar", s.api(s.deleteAvatar))
+	mux.Handle("GET /avatar/{userID}", s.api(s.getAvatar))
 	mux.Handle("POST /api/me/logout-all", s.api(s.logoutAll))
 	mux.Handle("GET /api/courses", s.api(s.listCourses))
 	mux.Handle("GET /api/overview", s.api(s.overview))
@@ -120,6 +125,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.Handle("GET /c/{id}/", s.page(s.coursePage))
 	mux.Handle("GET /{$}", s.page(sitePage("catalog.html", "catalog")))
 	mux.Handle("GET /profile", s.page(sitePage("profile.html", "profile")))
+	mux.Handle("GET /settings", s.page(sitePage("settings.html", "settings")))
 	mux.Handle("GET /review", s.page(sitePage("review.html", "review")))
 	mux.Handle("GET /projects", s.page(sitePage("projects.html", "projects")))
 	mux.Handle("GET /p/{id}/", s.page(s.projectPage))
@@ -127,6 +133,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	mux.Handle("GET /api/courses/{id}/applied", s.api(s.appliedIn))
 	// admins only
 	s.adminRoutes(mux)
+	s.directionRoutes(mux)
 	// agents, by token
 	s.agentRoutes(mux)
 	s.mcpRoutes(mux)

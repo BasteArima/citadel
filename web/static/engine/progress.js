@@ -55,6 +55,14 @@ function cardsOf(items) {
 // courseId — курс; hooks.onRemote — пришли отметки с другого устройства,
 // hooks.onStatus — сменилось состояние синхронизации, hooks.onSignedOut — сессия закончилась.
 export function loadState(courseId, hooks) {
+  if (document.documentElement.dataset.preview === 'draft') {
+    const S = { lessons: {}, cards: {}, theme: read(UI_KEY).theme || 'auto',
+      ui: { open: {}, runs: {}, rate: 1, focus: false }, sync: { state: 'idle' },
+      save() {}, startSync() {}, importV0() { return 0; },
+      lesson(id) { return S.lessons[id] || (S.lessons[id] = { t: {}, seen: {} }); },
+      putCard(key, value) { S.cards[key] = value; }, dropCard(key) { delete S.cards[key]; } };
+    return S;
+  }
   const KEY = 'citadel-progress:' + courseId;
   const ui = read(UI_KEY), pr = read(KEY);
   let items = pr.items || {};

@@ -5,33 +5,35 @@ import { renderBlock, questionsOf } from './blocks/index.js';
 import { cardButton } from './blocks/question.js';
 import { indexCourse } from './course.js';
 import { loadState } from './progress.js';
+import { applyPreviewMessage } from './preview.js';
 import { initRich, rich, trackTerms, takeTerms } from './rich.js';
 import { linkIcon, metalName } from '../site/shared.js';
 import { openSearch as openSiteSearch, allCourses, bindSearchKeys } from '../site/search.js';
-import { markTheme, setDue } from '../site/topbar.js';
+import { markTheme, setDue, initAccountMenu } from '../site/topbar.js';
 import { createPlayer } from './player.js';
 import { safeHref } from './sanitize.js';
 
 // course — курс v1, user — кто вошёл, catalog — список курсов (для «Опирается на» и «Что дальше»),
 // audio — записанная озвучка частей (player.js).
 export function start(course, user, catalog, audio, applied) {
-  const X = indexCourse(course);
+  const preview = document.documentElement.dataset.preview === 'draft';
+  let X = indexCourse(course);
   const C = course;
-  const STAGES = X.review; // интервалы карточек: «Забыл», «С трудом», «Помню»
+  let STAGES = X.review; // интервалы карточек: «Забыл», «С трудом», «Помню»
   const S = loadState(C.id, {
     onRemote: () => route(),
     onStatus: () => syncUi(),
     onSignedOut: () => { location.href = '/login?next=' + encodeURIComponent(location.pathname + location.hash); }
   });
   const save = S.save;
-  const ALL = X.all, TOTAL = X.total;
-  const lessonLabel = (C.labels && C.labels.lesson) || 'Урок';
-  const blockCtx = { tool: C.tool, csLabel: C.labels && C.labels.cs };
+  let ALL = X.all, TOTAL = X.total;
+  let lessonLabel = (C.labels && C.labels.lesson) || 'Урок';
+  let blockCtx = { tool: C.tool, csLabel: C.labels && C.labels.cs };
   initRich(X);
   const player = createPlayer(audio || {}, { rate: () => S.ui.rate || 1, setRate: (r) => { S.ui.rate = r; save(); } });
   player.onChange(() => renderTop());
 
-  const meta = X.meta, ready = X.ready;
+  let meta = X.meta, ready = X.ready;
   const isDone = (id) => !!(S.lessons[id] && S.lessons[id].done);
   const doneCount = (list) => list.filter((l) => isDone(l.id)).length;
   function nextReady(afterN) {
@@ -54,6 +56,7 @@ export function start(course, user, catalog, audio, applied) {
 
   // ── шапка ──
   const top = document.getElementById('top');
+  initAccountMenu(top);
   const side = document.getElementById('side');
   const page = document.getElementById('page');
   let current = '', currentPart = 1;
@@ -663,7 +666,7 @@ export function start(course, user, catalog, audio, applied) {
       const d = el('details', 'cp-sec');
       d.open = sec === openSec;
       d.innerHTML = '<summary><span class="cp-num">' + (i + 1) + '</span><span class="cp-sec-t"><b class="k-' + esc(sec.kind || '') + '">' + esc(sec.name) + '</b>' +
-        '<small>' + (ls.length > 1 ? ls[0].n + '–' + ls[ls.length - 1].n : ls[0].n) + '</small></span>' +
+        '<small>' + (ls.length > 1 ? ls[0].n + '–' + ls[ls.length - 1].n : (ls[0]?.n || '—')) + '</small></span>' +
         '<span class="cp-cnt">' + dn + ' из ' + ls.length + '</span>' + ic(IC.down, 18) + '</summary>' +
         (sec.about ? '<p class="cp-about">' + esc(sec.about) + '</p>' : '') +
         '<ol class="cp-ls">' + ls.map(lessonRow).join('') + '</ol>';
@@ -724,12 +727,14 @@ export function start(course, user, catalog, audio, applied) {
 
   // последнее место в этом курсе — для «Продолжить» здесь и в каталоге
   function lastPlace() {
+    if (preview) return null;
     try {
       const l = JSON.parse(localStorage.getItem('citadel-last') || 'null');
       return l && l.course === C.id && l.hash && ready(l.hash.replace(/^#/, '').split('/')[0]) ? l : null;
     } catch (e) { return null; }
   }
   function rememberPlace(hash, label, parts) {
+    if (preview) return;
     try { localStorage.setItem('citadel-last', JSON.stringify({ course: C.id, hash, label, parts: parts || null, at: Date.now() })); } catch (e) { /* не страшно */ }
   }
 
@@ -1030,7 +1035,7 @@ export function start(course, user, catalog, audio, applied) {
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const t = e.target;
-    if (t && t.closest && t.closest('input, textarea, select, .widget.anim')) return;
+    if (t && t.closest && t.closest('input, textarea, select, .widget.anim, dialog, .tb-account')) return;
     if (/^[1-9]$/.test(e.key)) {
       const q = activeQ(), b = q && q.querySelector('.opt[data-n="' + e.key + '"]');
       if (b && !b.disabled) { e.preventDefault(); b.focus(); b.click(); }
@@ -1052,6 +1057,13 @@ export function start(course, user, catalog, audio, applied) {
     leave();
     takeTerms();
     const seg = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/');
+    // Editor links use node ids; public links use lesson/part.
+    if (preview) {
+      for (const l of X.all) {
+        const ps = X.lesson(l.id).parts || [], k = ps.findIndex((p) => p.node.id === seg[0]);
+        if (k >= 0) { seg[0] = l.id; seg[1] = String(k + 1); break; }
+      }
+    }
     const id = seg[0];
     current = id;
     currentPart = parseInt(seg[1], 10) || 1;
@@ -1076,7 +1088,21 @@ export function start(course, user, catalog, audio, applied) {
     const m = meta(current);
     document.title = (m ? m.t + ' · ' : '') + C.title;
   }
+  if (preview) window.addEventListener('message', (event) => {
+    const m = applyPreviewMessage(event, C); if (!m) return;
+    if (['auto', 'light', 'dark'].includes(m.theme)) { S.theme = m.theme; applyTheme(); }
+    X = indexCourse(C); ALL = X.all; TOTAL = X.total; STAGES = X.review;
+    meta = X.meta; ready = X.ready;
+    lessonLabel = (C.labels && C.labels.lesson) || 'Урок';
+    blockCtx = { tool: C.tool, csLabel: C.labels && C.labels.cs };
+    initRich(X); searchIdx = null;
+    if (typeof m.navigate === 'string') history.replaceState(null, '', '#' + encodeURIComponent(m.navigate));
+    const y = window.scrollY;
+    try { route(); if (!m.navigate) window.scrollTo(0, y); }
+    catch (e) { page.textContent = 'Превью не построилось: ' + e.message; }
+  });
   window.addEventListener('hashchange', route);
+  if (preview && window.parent !== window) window.parent.postMessage({ type: 'citadel-preview-ready' }, location.origin);
   applyTheme();
   route();
   S.startSync();

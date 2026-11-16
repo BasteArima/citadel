@@ -15,8 +15,10 @@ import (
 // the signed-in user's progress in it.
 type Overview struct {
 	Summary
-	Done   int `json:"done"`   // lessons passed
-	Solved int `json:"solved"` // questions answered
+	Direction string `json:"direction"`
+	Author    string `json:"author"`
+	Done      int    `json:"done"`   // lessons passed
+	Solved    int    `json:"solved"` // questions answered
 	// questions answered right on the first attempt (decision 0008); old marks without
 	// a first attempt count as right
 	FirstRight int        `json:"firstRight"`
@@ -57,6 +59,16 @@ func (s *server) overview(w http.ResponseWriter, r *http.Request) {
 		today, _ = time.Parse(time.DateOnly, time.Now().UTC().Format(time.DateOnly))
 	}
 	u := userFrom(r.Context())
+	directions, err := s.cfg.Store.Directions(r.Context())
+	if err != nil {
+		s.fail(w, "list directions", err)
+		return
+	}
+	byID, err := s.cfg.Store.CourseMetadata(r.Context())
+	if err != nil {
+		s.fail(w, "course metadata", err)
+		return
+	}
 	cat := s.cat.Load()
 	see, err := s.visible(r)
 	if err != nil {
@@ -76,15 +88,17 @@ func (s *server) overview(w http.ResponseWriter, r *http.Request) {
 		}
 		o := overviewOf(cat.parsed[id], items, today)
 		o.OnlyYours = s.onlyYours(r, id)
+		o.Direction, o.Author = byID[id].Direction, byID[id].OwnerName
 		out = append(out, o)
 	}
 	soon := []Soon{}
 	for _, c := range cat.soon {
 		if see(c.ID) {
+			c.Direction, c.Author = byID[c.ID].Direction, byID[c.ID].OwnerName
 			soon = append(soon, c)
 		}
 	}
-	writeValue(w, map[string]any{"courses": out, "soon": soon})
+	writeValue(w, map[string]any{"courses": out, "soon": soon, "directions": directions})
 }
 
 func overviewOf(c *course.Course, items map[string]store.Item, today time.Time) Overview {

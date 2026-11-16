@@ -5,6 +5,8 @@
 
 # данные сервиса: база, загрузки, бэкапы
 /data/
+/data-dev/
+/.gocache/
 /backups/
 *.db
 *.db-shm

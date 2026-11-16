@@ -12,14 +12,17 @@ export const draft = {
   fresh: new Set() // id узлов, созданных в этой правке: их id ещё можно менять
 };
 
+let revision = 0, opening = 0;
 const listeners = new Set();
 export function onDraft(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 function emit() { listeners.forEach((fn) => fn(draft)); }
 
 export async function openDraft(id, force) {
   if (!force && draft.id === id && draft.course) return true;
+  const request = ++opening;
   const r = await req('GET', '/api/admin/courses/' + encodeURIComponent(id) + '/draft');
-  if (!r.ok) { toast(r.data.error || 'Не открылся черновик: ' + r.status, 'bad'); return false; }
+  if (request !== opening) return false;
+  if (!r.ok) { toast(r.status === 404 ? 'Курс не найден или недоступен' : r.data.error || 'Не открылся черновик: ' + r.status, 'bad'); return false; }
   Object.assign(draft, { id, course: r.data.course, version: r.data.version.version, published: r.data.version.published, check: null, dirty: false });
   draft.fresh = new Set();
   emit();
@@ -27,23 +30,29 @@ export async function openDraft(id, force) {
 }
 
 export function touch() {
-  if (!draft.dirty) { draft.dirty = true; emit(); }
+  revision++; draft.dirty = true; emit();
 }
 
-let saving = null;
+let saving = null, savingId = null;
 export function save(note) {
-  if (saving) return saving;
+  if (saving) return savingId === draft.id ? saving : saving.then(() => save(note));
+  const id = draft.id, course = draft.course, base = draft.version, started = revision;
+  savingId = id;
   saving = (async () => {
-    const r = await req('PUT', '/api/admin/courses/' + encodeURIComponent(draft.id) + '/draft', { base: draft.version, note: note || '', course: draft.course });
-    saving = null;
-    if (r.status === 409) { toast(r.data.error, 'bad'); return false; }
-    if (!r.ok) { toast(r.data.error || 'Не сохранилось: ' + r.status, 'bad'); return false; }
-    Object.assign(draft, { version: r.data.version, published: false, check: r.data.check, dirty: false });
-    draft.fresh = new Set();
-    emit();
-    const c = r.data.check;
-    toast('Сохранено: v' + r.data.version + (c.errors ? ' · ' + c.errors + ' ' + plural(c.errors, 'ошибка', 'ошибки', 'ошибок') + ' — опубликовать пока нельзя' : ''), c.errors ? 'warn' : 'good');
-    return true;
+    try {
+      const r = await req('PUT', '/api/admin/courses/' + encodeURIComponent(id) + '/draft', { base, note: note || '', course });
+      if (!r.ok) { toast(r.data.error || 'Не сохранилось: ' + r.status, 'bad'); return false; }
+      // A save may finish after navigation or while more text is being typed.
+      if (draft.id === id && draft.course === course) {
+        Object.assign(draft, { version: r.data.version, published: false, check: r.data.check, dirty: revision !== started });
+        if (!draft.dirty) draft.fresh = new Set();
+        emit();
+      }
+      const c = r.data.check;
+      toast('Сохранено: v' + r.data.version + (c.errors ? ' · ' + c.errors + ' ' + plural(c.errors, 'ошибка', 'ошибки', 'ошибок') + ' — опубликовать пока нельзя' : ''), c.errors ? 'warn' : 'good');
+      return true;
+    } catch (e) { toast('Нет связи с сервером. Черновик не сохранён.', 'bad'); return false; }
+    finally { saving = null; }
   })();
   return saving;
 }

@@ -27,6 +27,9 @@
   --code-bg: #f4f5f7;
   --shadow: 0 1px 2px rgba(31,35,40,.06);
   --pop-shadow: 0 12px 32px rgba(31,35,40,.16);
+  /* The chain keeps its dark palette in the light theme. */
+  --chain-bg: #111418; --chain-card: #171b21; --chain-slot-bg: transparent; --chain-line: #262c35; --chain-track: #343c47;
+  --chain-txt: #e3e7ec; --chain-heading: #ffffff; --chain-mut: #9aa4b0;
   --body: 'Golos Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --label: var(--body);
   --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, Menlo, monospace;
@@ -41,6 +44,8 @@
     --good: #7fcf9c; --good-ink: #0b2416; --good-soft: rgba(127,207,156,.10);
     --blue: #c4a7f5; --blue-soft: rgba(196,167,245,.08); --code-bg: #0d1013;
     --shadow: none; --pop-shadow: 0 12px 32px rgba(0,0,0,.4);
+    --chain-bg: var(--panel); --chain-card: var(--panel-2); --chain-slot-bg: var(--panel-2); --chain-line: var(--line-2); --chain-track: var(--line-2);
+    --chain-txt: var(--txt); --chain-heading: var(--txt); --chain-mut: var(--mut);
   }
 }
 :root[data-theme="dark"] {
@@ -52,6 +57,8 @@
   --good: #7fcf9c; --good-ink: #0b2416; --good-soft: rgba(127,207,156,.10);
   --blue: #c4a7f5; --blue-soft: rgba(196,167,245,.08); --code-bg: #0d1013;
   --shadow: none; --pop-shadow: 0 12px 32px rgba(0,0,0,.4);
+  --chain-bg: var(--panel); --chain-card: var(--panel-2); --chain-slot-bg: var(--panel-2); --chain-line: var(--line-2); --chain-track: var(--line-2);
+  --chain-txt: var(--txt); --chain-heading: var(--txt); --chain-mut: var(--mut);
 }
 
 * { box-sizing: border-box; }
@@ -70,6 +77,8 @@ button { font: inherit; color: inherit; }
 :root { --top-h: 61px; }
 .top { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
        min-height: var(--top-h); padding: 8px 20px; background: var(--bg); border-bottom: 1px solid var(--line); }
+/* Measured --top-h must not prevent the site header shrinking after a resize. */
+.top.site { min-height: 61px; }
 .ic { flex: none; }
 .tb-home { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--txt); text-decoration: none;
            font-weight: 700; font-size: 18px; }
@@ -79,7 +88,30 @@ button { font: inherit; color: inherit; }
 .tb-nav a:hover { background: var(--panel-2); color: var(--txt); }
 .tb-nav a[aria-current="page"] { background: var(--acc-soft); color: var(--acc); }
 .tb-me { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%;
-         background: var(--txt); color: var(--bg); font-weight: 600; text-decoration: none; }
+         background: var(--txt); color: var(--bg); font-weight: 600; text-decoration: none; border: 0; padding: 0; cursor: pointer; }
+.tb-me img { border-radius: 50%; object-fit: cover; }
+.tb-account { position: relative; flex: none; }
+.tb-account-menu { position: absolute; top: calc(100% + 10px); right: 0; width: 220px; max-width: calc(100vw - 24px);
+                   max-height: calc(100dvh - var(--top-h) - 20px); overflow-y: auto; padding: 6px; border: 1px solid var(--line);
+                   border-radius: 12px; background: var(--pop); color: var(--txt); box-shadow: var(--pop-shadow); }
+.tb-account-head { padding: 8px 10px 12px; display: flex; flex-direction: column; overflow-wrap: anywhere; line-height: 1.4; }
+.tb-account-head b { font-size: 15px; }
+.tb-account-head small { margin-top: 4px; color: var(--mut); font-size: 12px; }
+.tb-account-menu [role="menuitem"] { display: flex; width: 100%; align-items: center; min-height: 44px; padding: 8px 10px;
+                                    border: 0; border-radius: 7px; background: transparent; text-decoration: none; text-align: left;
+                                    color: var(--txt); font: inherit; font-size: 14px; cursor: pointer; }
+.tb-account-menu [role="menuitem"]:hover, .tb-account-menu [aria-current="page"] { background: var(--panel-2); }
+.tb-account-menu hr { margin: 6px 0; border: 0; border-top: 1px solid var(--line); }
+.account-danger, .tb-account-menu .account-danger { color: var(--rose); }
+.account-dialog { width: min(480px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px;
+                  border: 1px solid var(--line); border-radius: 14px; background: var(--pop); color: var(--txt); box-shadow: var(--pop-shadow); }
+.account-dialog::backdrop { background: var(--txt); opacity: .4; }
+.account-dialog h2 { margin: 0; font-size: 22px; line-height: 1.3; }
+.account-dialog p { font-size: 15px; overflow-wrap: anywhere; }
+.account-dialog .note-bad { padding: 10px 14px; border-radius: 9px; background: var(--rose-soft); color: var(--rose); }
+.account-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.account-dialog .btn { min-height: 44px; }
+.account-dialog .account-danger { border-color: var(--rose); background: var(--rose); color: var(--rose-ink); }
 .sd-course .sd-t { font-weight: 600; }
 .tb-tools { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tb-ic { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel);
@@ -138,7 +170,7 @@ body.reading .side { display: none; }
   body.in-lesson .tb-lesson { display: flex; }
   body.in-lesson .tb-listen { display: inline-grid; }
   body.in-lesson .tb-strip { display: flex; }
-  body.in-lesson .tb-home, body.in-lesson .tb-theme, body.in-lesson .tb-me, body.in-lesson .tb-due { display: none; }
+  body.in-lesson .tb-home, body.in-lesson .tb-theme, body.in-lesson .tb-due { display: none; }
   body.in-lesson .tb-tools { margin-left: 0; }
   .layout, body.reading .layout { grid-template-columns: 1fr; }
   .side, body.reading .side { display: block; position: fixed; top: var(--top-h); bottom: 0; left: 0; height: auto;
@@ -761,16 +793,16 @@ a.cp-l:hover { background: var(--panel-2); }
 body.reading .side-show { display: inline-flex; }
 @media (max-width: 880px) { .sd-hide, body.reading .side-show { display: none; } }
 
-/* шапка: счётчик карточек у «Повторений»; на страницах сайта (без меню курса) разделы на телефоне прокручиваются */
+/* шапка: счётчик карточек у «Повторений»; на телефоне разделы сайта стоят отдельной строкой */
 .nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; margin-left: 6px; padding: 0 6px;
              border-radius: 999px; background: var(--acc-fill); color: var(--acc-ink); font-size: 12px; font-weight: 600; }
 @media (max-width: 880px) {
-  .top.site { flex-wrap: nowrap; }
-  .top.site .tb-home span, .top.site .tb-theme, .top.site .tb-due { display: none; }
-  .top.site .tb-nav { display: flex; flex: 1 1 auto; min-width: 0; gap: 0; overflow-x: auto; scrollbar-width: none; }
-  .top.site .tb-nav::-webkit-scrollbar { display: none; }
-  .top.site .tb-nav a { flex: none; padding: 0 8px; }
-  .top.site .tb-tools { margin-left: 0; flex-wrap: nowrap; }
+  .top.site { flex-wrap: wrap; }
+  .top.site .tb-theme, .top.site .tb-due { display: none; }
+  /* Navigation gets its own row; even a large review badge cannot clip a link. */
+  .top.site .tb-nav { display: flex; order: 1; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 0; }
+  .top.site .tb-nav a { flex: none; padding: 0 8px; white-space: nowrap; }
+  .top.site .tb-tools { margin-left: auto; flex-wrap: nowrap; flex: none; }
   .nav-badge { margin-left: 4px; }
 }
 
@@ -853,3 +885,6 @@ body.has-player .main { padding-bottom: 140px; }
   .ap-thumb { width: 18px; height: 18px; margin: -9px 0 0 -9px; transform: scale(1); }
   .ap-tip { display: none; }
 }
+
+/* Preview uses the course layout; its progress is kept only in memory. */
+.preview-banner { padding: 3px 16px; background: var(--acc-soft); color: var(--acc); font-size: 12px; text-align: center; }
