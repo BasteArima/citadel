@@ -51,7 +51,7 @@ func (s *server) adminAuditList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) adminCourseUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := s.cfg.Store.CourseUsers(r.Context(), r.PathValue("id"))
+	users, err := s.cfg.Store.CourseUserMatches(r.Context(), r.PathValue("id"))
 	if s.notFound(w, err, "course users") {
 		return
 	}

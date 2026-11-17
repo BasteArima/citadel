@@ -78,7 +78,7 @@ export function start(course, user, catalog, audio, applied) {
     top.querySelector('.tb-lesson-w').innerHTML = lessonHead;
     top.querySelector('.tb-strip-w').innerHTML = strip;
     top.querySelector('.tb-menu').setAttribute('aria-expanded', String(side.classList.contains('open')));
-    setDue(top, due, 'catalog');
+    setDue(top, due);
     markTheme(top, S.theme);
     document.body.classList.toggle('in-lesson', isLesson);
   }

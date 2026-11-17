@@ -26,7 +26,7 @@ export function usage(c) {
   };
   walk(c.root, (n) => scan(n, n.id));
   Object.keys(c.glossary).forEach((k) => scan(c.glossary[k].d, 'словарь: ' + k));
-  scan([c.about, c.howto], 'паспорт');
+  scan([c.about, c.howto], 'настройки');
   return out;
 }
 

@@ -199,6 +199,9 @@ var migrations = []string{
 		png BLOB NOT NULL,
 		updated_at INTEGER NOT NULL
 	);`,
+	// Unicode-folded names keep prefix lookup indexed; SQLite NOCASE folds only ASCII.
+	`ALTER TABLE users ADD COLUMN name_search TEXT NOT NULL DEFAULT '' COLLATE NOCASE;
+	CREATE INDEX users_name_search ON users(name_search COLLATE NOCASE);`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {
@@ -228,6 +231,12 @@ func (s *Store) migrate(ctx context.Context) error {
 		}
 		if i == 7 {
 			if err := backfillLogins(ctx, tx); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		if i == 13 {
+			if err := backfillSearchNames(ctx, tx); err != nil {
 				tx.Rollback()
 				return err
 			}
@@ -291,3 +300,34 @@ func (s *Store) Backup(ctx context.Context, path string) error {
 }
 
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
+
+func backfillSearchNames(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, `SELECT id, name FROM users`)
+	if err != nil {
+		return err
+	}
+	type entry struct {
+		id   int64
+		name string
+	}
+	var users []entry
+	for rows.Next() {
+		var u entry
+		if err := rows.Scan(&u.id, &u.name); err != nil {
+			rows.Close()
+			return err
+		}
+		users = append(users, u)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, u := range users {
+		if _, err := tx.ExecContext(ctx, `UPDATE users SET name_search = ? WHERE id = ?`, strings.ToLower(u.name), u.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}

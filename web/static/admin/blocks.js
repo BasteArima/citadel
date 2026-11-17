@@ -243,7 +243,7 @@ function runBox(box, b, ctx) {
   const tool = (ctx.course.tool || {}).name;
   runnerReady().then((info) => {
     if (!info.available || !(info.tools || []).includes(tool)) return;
-    wrap.innerHTML = '<button type="button" class="btn ed-run-b">Запустить на сервере</button><span class="ad-small ad-mut">песочница без сети, ' + esc(tool) + ' из паспорта курса; первая сборка — до минуты</span><div class="ed-run-r" aria-live="polite"></div>';
+    wrap.innerHTML = '<button type="button" class="btn ed-run-b">Запустить на сервере</button><span class="ad-small ad-mut">песочница без сети, ' + esc(tool) + ' из настроек курса; первая сборка — до минуты</span><div class="ed-run-r" aria-live="polite"></div>';
     const btn = wrap.querySelector('button'), res = wrap.querySelector('.ed-run-r');
     btn.addEventListener('click', async () => {
       if (!String(b.code || '').trim()) { toast('Сначала код', 'warn'); return; }

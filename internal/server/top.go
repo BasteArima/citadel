@@ -17,11 +17,11 @@ import (
 
 const (
 	icSearch = `<svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>`
-	icRepeat = `<svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>`
-	icSun    = `<svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`
-	icMoon   = `<svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`
-	icMenu   = `<svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>`
-	logo     = `<svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg>`
+
+	icSun  = `<svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`
+	icMoon = `<svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`
+	icMenu = `<svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>`
+	logo   = `<svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true"><rect x="2" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--dim)" stroke-width="2.5"/><rect x="13" y="4" width="15" height="12" rx="6" fill="none" stroke="var(--acc-fill)" stroke-width="2.5"/></svg>`
 )
 
 // topHTML is the inside of <header id="top">. current — catalog, review or profile; inCourse adds
@@ -35,6 +35,9 @@ func topHTML(name, role, avatar, current string, inCourse bool) string {
 	b.WriteString(`<a class="tb-home" href="/">` + logo + `<span>Citadel</span></a>`)
 	b.WriteString(`<nav class="tb-nav" aria-label="Разделы">`)
 	nav := [][3]string{{"/", "Курсы", "catalog"}, {"/projects", "Проекты", "projects"}, {"/review", "Повторения", "review"}}
+	if role == "admin" || role == "author" {
+		nav = append(nav, [3]string{"/admin", "Админка", "admin"})
+	}
 	for _, n := range nav {
 		b.WriteString(`<a href="` + n[0] + `"`)
 		if n[2] == current {
@@ -52,7 +55,6 @@ func topHTML(name, role, avatar, current string, inCourse bool) string {
 		label = "Поиск по курсу"
 	}
 	b.WriteString(`<button type="button" class="tb-search" data-act="search" aria-label="` + label + `, Ctrl K">` + icSearch + `<span>Поиск</span><span class="kbd">Ctrl K</span></button>`)
-	b.WriteString(`<a class="tb-due" href="/review" title="Повторить сегодня" hidden>` + icRepeat + `<span>Повторить</span><b></b></a>`)
 	b.WriteString(`<div class="tb-theme" role="group" aria-label="Тема">` +
 		`<button type="button" data-theme-set="auto">Авто</button>` +
 		`<button type="button" data-theme-set="light" aria-label="Светлая" title="Светлая">` + icSun + `</button>` +
@@ -75,9 +77,6 @@ func topHTML(name, role, avatar, current string, inCourse bool) string {
 	}
 	b.WriteString(`</button><div class="tb-account-menu" id="account-menu" role="menu" aria-label="Аккаунт" hidden><div class="tb-account-head" role="presentation"><b class="tb-account-name">` + html.EscapeString(name) + `</b><small>` + roleLabel + `</small></div>`)
 	items := [][3]string{{"/profile", "Профиль", "profile"}, {"/settings", "Настройки", "settings"}}
-	if role == "admin" || role == "author" {
-		items = append(items, [3]string{"/admin", "Админка", "admin"})
-	}
 	for _, item := range items {
 		b.WriteString(`<a role="menuitem" tabindex="-1" href="` + item[0] + `"`)
 		if current == item[2] {
@@ -85,6 +84,10 @@ func topHTML(name, role, avatar, current string, inCourse bool) string {
 		}
 		b.WriteString(`>` + item[1] + `</a>`)
 	}
+	b.WriteString(`<div class="tb-account-themes" role="presentation"><hr role="separator">` +
+		`<button type="button" role="menuitem" tabindex="-1" data-theme-set="auto">Тема: Авто</button>` +
+		`<button type="button" role="menuitem" tabindex="-1" data-theme-set="light">Тема: Светлая</button>` +
+		`<button type="button" role="menuitem" tabindex="-1" data-theme-set="dark">Тема: Тёмная</button></div>`)
 	b.WriteString(`<hr role="separator"><button type="button" role="menuitem" tabindex="-1" class="account-danger" data-account-logout>Выйти…</button></div></div>`)
 	b.WriteString(`</div>`)
 	if inCourse {

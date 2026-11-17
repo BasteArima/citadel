@@ -19,9 +19,9 @@ export function renderEditor(main, nodeId, courseBar) {
 
   const { off } = courseBar(main, '<a href="#/c/' + esc(draft.id) + '/edit">' + esc(c.title) + '</a>' + crumbs(node));
   const wrap = h('div', 'ed');
-  wrap.innerHTML = '<nav id="editor-tree" class="ed-tree" aria-label="Дерево курса"></nav><div class="ed-body"></div><aside class="ed-prev" aria-label="Живое превью"></aside>';
+  wrap.innerHTML = '<aside class="ed-tree"><div class="ed-column-head ed-tree-controls"></div><nav id="editor-tree" class="ed-tree-content" aria-label="Дерево курса"></nav></aside><section class="ed-form-column"><div class="ed-form-head"></div><div class="ed-body"></div></section><aside class="ed-prev" aria-label="Живое превью"></aside>';
   main.appendChild(wrap);
-  const treeBox = wrap.querySelector('.ed-tree'), body = wrap.querySelector('.ed-body'), prev = wrap.querySelector('.ed-prev');
+  const treeBox = wrap.querySelector('.ed-tree-content'), body = wrap.querySelector('.ed-body'), prev = wrap.querySelector('.ed-prev');
 
   const preview = previewTools(main, wrap, () => node);
   let closeEditorMenu = () => {};
@@ -31,7 +31,7 @@ export function renderEditor(main, nodeId, courseBar) {
   // ── дерево ──
   function drawTree() {
     closeEditorMenu();
-    treeBox.innerHTML = '<a class="ed-passport-link" href="#/c/' + encodeURIComponent(c.id) + '/passport">Паспорт курса →</a><div class="ed-tree-h"><span class="lbl">Дерево</span><button type="button" class="ad-ib" id="ed-add" aria-haspopup="menu" aria-expanded="false" aria-label="Добавить узел" title="Добавить узел">+</button></div><ul class="ed-ul" role="tree"></ul>' +
+    treeBox.innerHTML = '<a class="ed-passport-link" href="#/c/' + encodeURIComponent(c.id) + '/passport">Настройки курса →</a><div class="ed-tree-h"><span class="lbl">Дерево</span><button type="button" class="ad-ib" id="ed-add" aria-haspopup="menu" aria-expanded="false" aria-label="Добавить узел" title="Добавить узел">+</button></div><ul class="ed-ul" role="tree"></ul>' +
       '<p class="ad-small ad-mut">Перетащи узел, чтобы переставить. Двойной клик — переименовать.</p>';
     const ul = treeBox.querySelector('ul');
     const add = (nodes, depth, into) => nodes.forEach((n) => {
@@ -163,7 +163,7 @@ export function renderEditor(main, nodeId, courseBar) {
   // ── поля узла и блоки ──
   function drawBody() {
     body.innerHTML = '';
-    if (!node) { body.innerHTML = '<p class="ad-mut">В курсе нет узлов. Добавь раздел кнопкой «+» над деревом.</p>'; return; }
+    if (!node) { preview.attachFormHead(h('span', 'ad-mut', 'Нет узлов')); body.innerHTML = '<p class="ad-mut">В курсе нет узлов. Добавь раздел кнопкой «+» над деревом.</p>'; return; }
     const n = node, f = h('div', 'ed-fields');
     const fresh = draft.fresh.has(n.id);
     let html = '<div class="ad-row ed-nh"><span class="ad-pill">' + KIND[n.kind] + (n.kind === 'lesson' ? ' ' + (n.n || '') : '') + '</span><span class="ad-sp"></span>' +
@@ -185,6 +185,7 @@ export function renderEditor(main, nodeId, courseBar) {
     html += '</div>';
     f.innerHTML = html;
     body.appendChild(f);
+    preview.attachFormHead(f.querySelector('.ed-nh'));
     bindFields(f, n);
 
     const hasBlocks = n.kind === 'part' || n.kind === 'page' || (n.kind === 'lesson' && !(n.children && n.children.length) && !n.planned);
@@ -233,13 +234,13 @@ export function renderEditor(main, nodeId, courseBar) {
       else { delete n.planned; n.blocks = n.blocks || []; }
       changed(); drawTree(); drawBody();
     });
-    f.querySelectorAll('[data-mv]').forEach((b) => b.addEventListener('click', () => {
+    wrap.querySelector('.ed-form-head').querySelectorAll('[data-mv]').forEach((b) => b.addEventListener('click', () => {
       const sib = siblings(n), i = sib.indexOf(n), j = i + +b.dataset.mv;
       if (j < 0 || j >= sib.length) return;
       sib.splice(i, 1); sib.splice(j, 0, n);
       afterTreeChange();
     }));
-    f.querySelector('#nf-del').addEventListener('click', async () => {
+    wrap.querySelector('#nf-del').addEventListener('click', async () => {
       const kids = n.children ? n.children.length : 0, blocks = n.blocks ? n.blocks.length : 0;
       const ok = await confirmDialog('Удалить «' + n.title + '»?', (kids ? 'Вместе с ' + kids + ' дочерними узлами. ' : '') + (blocks ? 'В узле ' + blocks + ' блоков. ' : '') +
         'Удаление попадёт в черновик при сохранении; прошлые версии остаются в истории.', 'Удалить', true);

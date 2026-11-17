@@ -78,7 +78,7 @@ button { font: inherit; color: inherit; }
 .top { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
        min-height: var(--top-h); padding: 8px 20px; background: var(--bg); border-bottom: 1px solid var(--line); }
 /* Measured --top-h must not prevent the site header shrinking after a resize. */
-.top.site { min-height: 61px; }
+.top:not(.ad-top) { min-height: 61px; }
 .ic { flex: none; }
 .tb-home { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--txt); text-decoration: none;
            font-weight: 700; font-size: 18px; }
@@ -102,6 +102,8 @@ button { font: inherit; color: inherit; }
                                     color: var(--txt); font: inherit; font-size: 14px; cursor: pointer; }
 .tb-account-menu [role="menuitem"]:hover, .tb-account-menu [aria-current="page"] { background: var(--panel-2); }
 .tb-account-menu hr { margin: 6px 0; border: 0; border-top: 1px solid var(--line); }
+.tb-account-themes { display: none; }
+.tb-account-themes [aria-pressed="true"] { background: var(--acc-soft); color: var(--acc); }
 .account-danger, .tb-account-menu .account-danger { color: var(--rose); }
 .account-dialog { width: min(480px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px;
                   border: 1px solid var(--line); border-radius: 14px; background: var(--pop); color: var(--txt); box-shadow: var(--pop-shadow); }
@@ -118,10 +120,6 @@ button { font: inherit; color: inherit; }
          display: inline-grid; place-items: center; cursor: pointer; color: var(--txt); }
 .tb-ic[aria-pressed="true"] { background: var(--acc-soft); border-color: var(--acc-fill); color: var(--acc); }
 .tb-menu { display: none; }
-.tb-due { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: 10px;
-          border: 1px solid var(--line-2); background: var(--panel); color: var(--txt); text-decoration: none; font-size: 14px; }
-.tb-due b { min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--acc-fill); color: var(--acc-ink);
-            font-size: 12px; text-align: center; }
 .tb-theme { display: inline-flex; gap: 2px; padding: 3px; border-radius: 11px; border: 1px solid var(--line-2); background: var(--panel); }
 .tb-theme button { min-width: 38px; min-height: 38px; padding: 0 9px; border: 0; border-radius: 8px; background: none;
                    color: var(--mut); cursor: pointer; font-size: 13px; display: inline-grid; place-items: center; }
@@ -164,19 +162,21 @@ body.reading .side { display: none; }
 @media (max-width: 880px) {
   .tb-menu { display: inline-grid; }
   .top { padding: 6px 10px; gap: 6px 10px; }
-  .tb-due span, .tb-nav, .tb-focus { display: none; }
+  .tb-nav, .tb-focus { display: none; }
   .tb-home { font-size: 16px; }
   .tb-theme button:first-child { display: none; }
   body.in-lesson .tb-lesson { display: flex; }
   body.in-lesson .tb-listen { display: inline-grid; }
   body.in-lesson .tb-strip { display: flex; }
-  body.in-lesson .tb-home, body.in-lesson .tb-theme, body.in-lesson .tb-due { display: none; }
-  body.in-lesson .tb-tools { margin-left: 0; }
+  body.in-lesson .tb-tools { margin-left: auto; }
+  body.in-lesson .tb-lesson { order: 2; flex: 1 1 calc(100% - 54px); }
+  body.in-lesson .tb-listen { order: 2; }
+  body.in-lesson .tb-strip { order: 3; }
   .layout, body.reading .layout { grid-template-columns: 1fr; }
   .side, body.reading .side { display: block; position: fixed; top: var(--top-h); bottom: 0; left: 0; height: auto;
           width: min(330px, 90vw); z-index: 25; transform: translateX(-102%); transition: transform .2s ease;
-          box-shadow: 0 0 40px rgba(0,0,0,.35); }
-  .side.open { transform: none; }
+          box-shadow: none; }
+  .side.open { transform: none; box-shadow: 0 0 40px rgba(0,0,0,.35); }
   .layout { --sbw: 0px; }
   .main { --mp: 16px; margin-left: 0; padding: 24px 0 40px; }
 }
@@ -797,16 +797,22 @@ body.reading .side-show { display: inline-flex; }
 .nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; margin-left: 6px; padding: 0 6px;
              border-radius: 999px; background: var(--acc-fill); color: var(--acc-ink); font-size: 12px; font-weight: 600; }
 @media (max-width: 880px) {
-  .top.site { flex-wrap: wrap; }
-  .top.site .tb-theme, .top.site .tb-due { display: none; }
-  /* Navigation gets its own row; even a large review badge cannot clip a link. */
-  .top.site .tb-nav { display: flex; order: 1; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 0; }
-  .top.site .tb-nav a { flex: none; padding: 0 8px; white-space: nowrap; }
-  .top.site .tb-tools { margin-left: auto; flex-wrap: nowrap; flex: none; }
+  .top:not(.ad-top) { flex-wrap: wrap; gap: 6px; }
+  .top:not(.ad-top) .tb-theme { display: none; }
+  .top:not(.ad-top) .tb-account-themes { display: block; }
+  /* Navigation has its own row on the site, projects and in the course engine. */
+  .top:not(.ad-top) .tb-nav { display: flex; order: 1; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 0; }
+  .top:not(.ad-top) .tb-nav a { flex: none; padding: 0 6px; white-space: nowrap; font-size: 14px; }
+  .top:not(.ad-top) .tb-tools { margin-left: auto; flex-wrap: nowrap; flex: none; }
   .nav-badge { margin-left: 4px; }
 }
 
 /* «+ В карточки» у вопроса после ответа и у фразы для собеса; повторное нажатие убирает карточку */
+@media (max-width: 359px) {
+  .top:not(.ad-top) .tb-nav a { font-size: 13px; padding: 0 4px; }
+  .top:not(.ad-top) .nav-badge { min-width: 18px; padding: 0 4px; margin-left: 2px; }
+}
+
 .card-tg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 12px; }
 .card-tg-b { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; font-size: 14px; }
 .card-tg-b[aria-pressed="true"] { color: var(--good); border-color: var(--good); }

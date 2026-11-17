@@ -84,7 +84,7 @@ func (s *Store) CreateUser(ctx context.Context, login, name, password, role stri
 		return User{}, err
 	}
 	u := User{Name: name, Login: login, Role: role}
-	err = s.db.QueryRowContext(ctx, `INSERT INTO users (login, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?) RETURNING id`, login, name, hash, role, now()).Scan(&u.ID)
+	err = s.db.QueryRowContext(ctx, `INSERT INTO users (login, name, name_search, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id`, login, name, strings.ToLower(name), hash, role, now()).Scan(&u.ID)
 	return u, accountError(err)
 }
 
@@ -136,7 +136,7 @@ func (s *Store) SetName(ctx context.Context, id int64, name string) error {
 	if err != nil {
 		return err
 	}
-	return accountError(s.db.QueryRowContext(ctx, `UPDATE users SET name = ? WHERE id = ? RETURNING id`, name, id).Scan(&id))
+	return accountError(s.db.QueryRowContext(ctx, `UPDATE users SET name = ?, name_search = ? WHERE id = ? RETURNING id`, name, strings.ToLower(name), id).Scan(&id))
 }
 
 // SetPassword is a console reset. Password and session revocation commit together.

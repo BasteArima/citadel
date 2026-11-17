@@ -17,7 +17,7 @@ export function renderAudio(main, courseBar) {
     '<div class="ad-acts" id="au-acts"></div></div>' +
     '<div id="au-job" hidden></div>' +
     '<section class="au-stats" aria-label="Сводка" id="au-stats"></section>' +
-    '<div class="ad-split au-split"><div class="ad-table-w"><table class="ad-table au-table"><thead><tr><th>Часть</th><th>Длина</th><th>Запись</th><th></th></tr></thead>' +
+    '<div class="ad-columns au-split"><div class="ad-table-w"><table class="ad-table au-table"><thead><tr><th>Часть</th><th>Длина</th><th>Запись</th><th></th></tr></thead>' +
     '<tbody id="au-rows"><tr><td colspan="4">Загружаю…</td></tr></tbody></table></div>' +
     '<section class="ad-card ad-pad ad-side-form au-lex" aria-labelledby="au-lex-h"></section></div>';
   const rows = page.querySelector('#au-rows'), acts = page.querySelector('#au-acts'), stats = page.querySelector('#au-stats'), jobBox = page.querySelector('#au-job');
@@ -74,12 +74,12 @@ export function renderAudio(main, courseBar) {
     rows.innerHTML = parts.map((p) => {
       const busy = job.running && job.node === p.node;
       const st = busy ? ['acc', 'записывается…'] : STATUS[p.status];
-      const listen = p.url ? '<button type="button" class="btn au-play" data-url="' + esc(p.url) + '">' + (playing === p.url ? 'Пауза' : 'Послушать') + '</button>' : '';
-      const rec = data.tts && data.published && !job.running ? '<button type="button" class="btn au-rec" data-node="' + esc(p.node) + '">' + (p.status === 'none' ? 'Озвучить' : 'Переписать') + '</button>' : '';
+      const listen = p.url ? '<button type="button" class="btn au-play" aria-label="' + (playing === p.url ? 'Пауза' : 'Послушать') + '" title="' + (playing === p.url ? 'Пауза' : 'Послушать') + '" data-url="' + esc(p.url) + '">' + (playing === p.url ? 'Ⅱ' : '▶') + '</button>' : '';
+      const rec = data.tts && data.published && !job.running ? '<button type="button" class="btn au-rec" aria-label="Переписать" title="Переписать" data-node="' + esc(p.node) + '">↻' + '</button>' : '';
       return '<tr><td><b>' + esc(p.title) + '</b><br><span class="ad-small ad-mut">Урок ' + p.lesson + ' · часть ' + p.index + ' · ' + p.chars.toLocaleString('ru') + ' симв. · ' +
         p.chapters + ' ' + plural(p.chapters, 'глава', 'главы', 'глав') + '</span></td>' +
         '<td class="ad-mut">' + (p.dur ? clock(p.dur) : '—') + '</td>' +
-        '<td><span class="ad-pill ' + st[0] + '"' + (p.madeAt ? ' title="записано ' + esc(when(p.madeAt)) + '"' : '') + '>' + st[1] + '</span></td>' +
+        '<td><span class="ad-pill ' + st[0] + '" title="' + esc(st[1] + (p.madeAt ? ' · записано ' + when(p.madeAt) : '')) + '">' + (p.status === 'stale' && !busy ? 'устарело' : st[1]) + '</span></td>' +
         '<td class="ad-r au-btns">' + listen + rec + '</td></tr>';
     }).join('');
     rows.querySelectorAll('.au-play').forEach((b) => b.addEventListener('click', () => {

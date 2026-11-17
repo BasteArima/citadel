@@ -44,17 +44,21 @@ func TestAccountHeaderRoles(t *testing.T) {
 				}
 			}
 			walk(doc, false, false)
-			if strings.Join(navLinks, ",") != "/,/projects,/review" {
+			navWant := "/,/projects,/review"
+			if role != "student" {
+				navWant += ",/admin"
+			}
+			if strings.Join(navLinks, ",") != navWant {
 				t.Errorf("navigation: %v", navLinks)
 			}
 			want := "/profile,/settings"
-			if role != "student" {
-				want += ",/admin"
+			if strings.Contains(src, "tb-due") {
+				t.Error("duplicate review button")
 			}
 			if strings.Join(menuLinks, ",") != want {
 				t.Errorf("%s menu: %v", role, menuLinks)
 			}
-			for _, required := range []string{`<button type="button" class="tb-me"`, `aria-expanded="false"`, `aria-haspopup="menu"`, `role="menu"`, `data-account-logout`, "Выйти…", label, "&lt;x&gt;"} {
+			for _, required := range []string{`<button type="button" class="tb-me"`, `aria-expanded="false"`, `aria-haspopup="menu"`, `role="menu"`, `data-account-logout`, `class="tb-account-themes"`, `tabindex="-1" data-theme-set="auto">Тема: Авто`, `tabindex="-1" data-theme-set="light">Тема: Светлая`, `tabindex="-1" data-theme-set="dark">Тема: Тёмная`, "Выйти…", label, "&lt;x&gt;"} {
 				if !strings.Contains(src, required) {
 					t.Errorf("%s missing %s", role, required)
 				}

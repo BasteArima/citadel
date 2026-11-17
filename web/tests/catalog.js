@@ -44,7 +44,8 @@ const course = (id, direction, extra = {}) => ({ id, direction, title: id, subti
   assert(!p.app.innerHTML.includes('Дизайн'));
   assert(p.app.innerHTML.includes('В проекте сейчас'));
   assert(!p.app.innerHTML.includes('<h2>Проекты</h2>'));
-  assert(p.app.innerHTML.includes('Сегодня повторять нечего'));
+  assert(!p.app.innerHTML.includes('Повторить сегодня'));
+  assert(!p.app.innerHTML.includes('Сегодня повторять нечего'));
   assert.equal((p.box.innerHTML.match(/class="card tile /g) || []).length, 8); // 6 + 1 + 1
   assert(p.box.innerHTML.indexOf('>active</a>') < p.box.innerHTML.indexOf('>fresh</a>'));
   assert(p.box.innerHTML.includes('Все 9 →'));
@@ -65,7 +66,12 @@ const course = (id, direction, extra = {}) => ({ id, direction, title: id, subti
   const restored = await page(ov, Object.fromEntries(p.storage));
   assert(restored.box.innerHTML.includes('Пока ни одного пройденного курса'));
   const due = await page({ ...ov, courses: [course('review', '', { due: 3 })] });
-  assert(due.app.innerHTML.includes('3 карточки ждут повторения'));
+  assert(due.app.innerHTML.includes('3 карточки из 1 курса'));
+  assert(due.app.innerHTML.includes('Повторить сегодня'));
+  assert(!due.app.innerHTML.includes('review-chips'));
+  const three = await page({ ...ov, courses: [...courses.map((c) => ({...c, due: c.id === 'fresh' ? 2 : c.id === 'active' ? 1 : 0}))] });
+  assert.equal((three.app.innerHTML.match(/class="card top-card"/g) || []).length, 3);
+  assert(three.app.innerHTML.includes('3 карточки из 2 курсов'));
   assert(due.app.innerHTML.includes('>Повторить</a>'));
   const unsafe = vm.runInContext('courseTile(' + JSON.stringify(course('escape', '', { title: '<img src=x>', subtitle: '"<script>', requires: ['secret'] })) + ', {}, { multiple: true, name: "Админ" })', p.ctx);
   assert(!unsafe.includes('<img') && !unsafe.includes('<script>'));

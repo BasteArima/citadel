@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -231,7 +232,7 @@ func (s *Store) RegisterInvite(ctx context.Context, code, login, name, password 
 		return User{}, "", ErrInviteRevoked
 	}
 	u := User{Login: login, Name: name, Role: i.Role, InviteID: id}
-	err = tx.QueryRowContext(ctx, `INSERT INTO users (login, name, password_hash, role, invite_id, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`, login, name, hash, i.Role, id, now(), now()).Scan(&u.ID)
+	err = tx.QueryRowContext(ctx, `INSERT INTO users (login, name, name_search, password_hash, role, invite_id, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`, login, name, strings.ToLower(name), hash, i.Role, id, now(), now()).Scan(&u.ID)
 	if err != nil {
 		return User{}, "", accountError(err)
 	}

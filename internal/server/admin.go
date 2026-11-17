@@ -59,6 +59,9 @@ func (s *server) adminRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/admin/audit", s.admin(s.adminAuditList))
 	mux.Handle("GET /api/admin/courses/{id}/users", s.admin(s.adminCourseUsers))
 	mux.Handle("PUT /api/admin/courses/{id}/users", s.admin(s.adminSetCourseUsers))
+	mux.Handle("POST /api/admin/courses/{id}/users/{uid}", s.admin(s.adminChangeCourseUser))
+	mux.Handle("DELETE /api/admin/courses/{id}/users/{uid}", s.admin(s.adminChangeCourseUser))
+	mux.Handle("GET /api/admin/users/search", s.admin(s.adminSearchUsers))
 	mux.Handle("GET /api/admin/users", s.admin(s.adminUsers))
 	mux.Handle("PUT /api/admin/users/{id}", s.admin(s.adminSetRole))
 	mux.Handle("PUT /api/admin/users/{id}/disabled", s.admin(s.adminSetDisabled))
@@ -121,11 +124,12 @@ func (s *server) adminCourses(w http.ResponseWriter, r *http.Request) {
 	}
 	type row struct {
 		store.CourseInfo
-		GrantedUsers int          `json:"grantedUsers"`
-		Access       string       `json:"access"` // public or private
-		Tool         string       `json:"tool"`
-		Agents       int          `json:"agents"` // proposals waiting for the admin
-		Check        checkSummary `json:"check"`
+		Owner        *store.UserMatch `json:"owner,omitempty"`
+		GrantedUsers int              `json:"grantedUsers"`
+		Access       string           `json:"access"` // public or private
+		Tool         string           `json:"tool"`
+		Agents       int              `json:"agents"` // proposals waiting for the admin
+		Check        checkSummary     `json:"check"`
 	}
 	out := make([]row, 0, len(list))
 	for _, ci := range list {
@@ -133,6 +137,13 @@ func (s *server) adminCourses(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		rw := row{CourseInfo: ci, Agents: pending[ci.ID], Access: access[ci.ID], GrantedUsers: counts[ci.ID]}
+		if userFrom(r.Context()).Role == store.RoleAdmin && ci.OwnerID != 0 {
+			rw.Owner, err = s.cfg.Store.UserMatchByID(r.Context(), ci.OwnerID)
+			if err != nil {
+				s.fail(w, "course owner", err)
+				return
+			}
+		}
 		if data, _, err := s.cfg.Store.Version(r.Context(), ci.ID, 0); err == nil {
 			if c, err := course.Decode(data); err == nil {
 				rw.Check = check(c)

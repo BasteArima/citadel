@@ -3,6 +3,7 @@
 import { esc, h, req, toast, when, walk, nodeLabel, plural, confirmDialog } from './ui.js';
 import { draft, openDraft, publishFlow, onDraft } from './draft.js';
 import { SPECS, loadSpecs } from './blocks.js';
+import { workPage } from './layout.js';
 
 export function renderVersions(main, selected, courseBar) {
   const c = draft.course;
@@ -10,8 +11,9 @@ export function renderVersions(main, selected, courseBar) {
   const page = h('div', 'ad-page');
   main.appendChild(page);
   page.innerHTML = '<div class="ad-head"><div><span class="ad-sub">' + esc(c.title) + '</span><h1>Версии</h1><p class="ad-sub">История курса: каждое сохранение и каждая принятая правка становятся новой версией. Здесь можно посмотреть, что менялось, и вернуться к старой версии. В обычной работе эта страница не нужна: это страховка, если что-то сломалось.</p></div><div class="ad-acts" id="v-acts"></div></div>' +
-    '<div class="ad-split v-split"><section class="ad-card v-hist" aria-label="История"><div class="lbl v-hh">История</div><ul id="v-list"><li class="ad-pad">Загружаю…</li></ul></section>' +
+    '<div class="ad-columns v-split"><section class="ad-card v-hist" aria-label="История"><div class="lbl v-hh">История</div><ul id="v-list"><li class="ad-pad">Загружаю…</li></ul></section>' +
     '<section class="v-diff" aria-label="Разница" id="v-diff"></section></div>';
+  workPage(page, '.v-split', '.v-diff');
   let list = [];
   const offDraft = onDraft(() => load());
   load();
@@ -114,7 +116,7 @@ const PASSPORT = ['title', 'subtitle', 'metal', 'tool', 'labels', 'review', 'pag
 export function diffCourses(a, b) {
   const out = [];
   const pass = fieldsDiff(a, b, PASSPORT);
-  if (pass.length) out.push({ title: 'Паспорт курса', items: pass });
+  if (pass.length) out.push({ title: 'Настройки курса', items: pass });
   const na = nodesOf(a), nb = nodesOf(b);
   walk(b.root, (n) => {
     const old = na.get(n.id), items = [];

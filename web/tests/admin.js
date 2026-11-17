@@ -76,39 +76,53 @@ async function main() {
   assert.equal(course.root[0].blocks[0].html, '{{renamed|слово}} {{>term}}', 'node refs stay intact');
 
   const node = () => ({ handlers: {}, style: {}, dataset: {}, attrs: {}, classList: { toggle() {} },
+    focus() { previewContext.document.activeElement = this; }, append() {}, prepend() {}, replaceChildren() {}, removeEventListener() {}, remove() {},
+    showModal() {this.open = true;}, close() {this.open = false;}, getAttribute(key) { return this.attrs[key]; },
     addEventListener(type, fn) { this.handlers[type] = fn; }, setAttribute(key, value) { this.attrs[key] = value; },
     async fire(type, event = {}) { await this.handlers[type]?.({ preventDefault() {}, ...event }); } });
-  const controls = node(), prev = node(), frame = node(), viewport = node(), caption = node(), select = node(), student = node(), tree = node();
-  const modes = ['edit', 'split', 'preview'].map((mode) => Object.assign(node(), { dataset: { mode } }));
-  controls.querySelector = (selector) => ({ '[data-tree]': tree, select, '[data-student]': student })[selector];
-  controls.querySelectorAll = () => modes;
+  const controls = node(), prev = node(), frame = node(), viewport = node(), caption = node(), select = node(), student = node(), tree = node(), treeControls = node(), formHead = node(), show = node(), expand = node(), hide = node(), back = node(), mobileDialog = node();
+  treeControls.querySelector = () => tree;
+
+  controls.querySelector = (selector) => ({ '[data-expand]': expand, '[data-hide]': hide, '[data-back-form]': back, select, '[data-student]': student })[selector];
+  controls.querySelectorAll = () => [];
   prev.querySelector = (selector) => selector === 'iframe' ? frame : viewport; prev.firstElementChild = caption;
   viewport.clientWidth = 640; viewport.clientHeight = 600;
-  const timers = new Map(), sent = [], prefs = [], tabs = []; let timerId = 0, modal, saved = 0, currentNode = { id: 'part', blocks: [] };
+  const timers = new Map(), sent = [], prefs = [], tabs = []; let timerId = 0, modal, saved = 0, storedView = null, currentNode = { id: 'part', blocks: [] };
   const narrow = { matches: false, addEventListener(type, fn) { this.change = fn; }, removeEventListener() { this.change = null; } };
   frame.contentWindow = { postMessage: (message, target) => sent.push({ message, target }) };
-  const previewContext = vm.createContext({ h: () => controls, location: { origin },
+  const previewContext = vm.createContext({ h: (tag, cls) => cls === 'btn ed-show-preview' ? show : cls === 'ed-mobile-preview' ? mobileDialog : controls, location: { origin },
     draft: { id: 'demo', course: initial, version: 3, dirty: false }, save: async () => { saved++; return true; },
-    localStorage: { getItem: () => null, setItem: (...args) => prefs.push(args) },
-    ResizeObserver: class { observe() {} disconnect() {} }, MutationObserver: class { observe() {} disconnect() {} }, document: { documentElement: { dataset: {} } },
+    localStorage: { getItem: () => storedView, setItem: (...args) => prefs.push(args) },
+    ResizeObserver: class { observe() {} disconnect() {} }, MutationObserver: class { observe() {} disconnect() {} }, document: { querySelector: () => null, documentElement: { dataset: {} } },
     setTimeout: (fn, ms) => { assert.equal(ms, 300); timers.set(++timerId, fn); return timerId; }, clearTimeout: (id) => timers.delete(id),
     dialog: (title, text, buttons) => { modal = { title, text, buttons }; },
     window: { matchMedia: () => narrow, addEventListener(type, fn) { this[type] = fn; }, removeEventListener() {}, open: () => { const tab = {}; tabs.push(tab); return tab; } } });
   vm.runInContext(source('admin/preview.js'), previewContext);
-  const wrap = { querySelector: () => prev, dataset: {}, classList: { toggle() {} } };
-  const preview = previewContext.previewTools({ insertBefore() {}, style: { setProperty() {} } }, wrap, () => currentNode);
+  const wrap = { querySelector: (selector) => ({'.ed-prev':prev, '.ed-tree-controls':treeControls,'.ed-form-head':formHead})[selector], dataset: {}, classList: { toggle() {} }, append() {}, addEventListener() {}, removeEventListener() {} };
+  const preview = previewContext.previewTools({ append() {}, insertBefore() {}, style: { setProperty() {} } }, wrap, () => currentNode);
   assert.equal(wrap.dataset.mode, 'split');
+  assert.equal(back.hidden, true, 'split preview has no redundant back-to-form button');
   for (const width of [320, 375, 390, 820, 1280]) {
-    narrow.matches = width <= 899; narrow.change();
+    narrow.matches = width < 880; narrow.change();
     const expected = narrow.matches ? 'edit' : 'split';
     assert.equal(wrap.dataset.mode, expected, 'split preference adapts at ' + width);
-    assert.equal(modes.find((b) => b.dataset.mode === expected).attrs['aria-pressed'], 'true');
+    assert.equal(show.hidden, expected !== 'edit');
   }
   narrow.matches = true; narrow.change();
-  await modes[2].fire('click'); assert.equal(wrap.dataset.mode, 'preview', 'phone can still open preview');
-  await modes[0].fire('click'); assert.equal(wrap.dataset.mode, 'edit');
-  assert.equal(frame.style.width, '1280px'); assert.equal(frame.style.transform, 'scale(0.5)'); assert.equal(frame.style.height, '1200px');
-  assert.match(caption.textContent, /ПК · 1280 · уменьшено до 50%/);
+  await show.fire('click'); assert.equal(wrap.dataset.mode, 'preview', 'phone can still open preview');
+  assert.equal(mobileDialog.open, true); assert.equal(previewContext.document.activeElement, back);
+  await back.fire('click'); assert.equal(wrap.dataset.mode, 'edit');
+  assert.equal(mobileDialog.open, false); assert.equal(previewContext.document.activeElement, show);
+  narrow.matches = false; narrow.change();
+  assert.equal(frame.style.width, '640px', 'fluid is the default');
+  assert.equal(frame.style.transform, 'scale(1)');
+  for (const [width, label] of [[390, 'Телефон'], [820, 'Планшет вертикально'], [1180, 'Планшет горизонтально'], [1440, 'Ноутбук']]) {
+    select.value = String(width); await select.fire('change', {target:select});
+    const scale = Math.min(1, 640 / width);
+    assert.equal(frame.style.width, width + 'px'); assert.equal(frame.style.transform, 'scale(' + scale + ')');
+    assert.equal(frame.style.height, Math.max(1, 600 / scale) + 'px');
+    assert(caption.textContent.startsWith(label + ' · ' + width));
+  }
   previewContext.window.message({ origin: 'https://evil.test', source: frame.contentWindow, data: { type: 'citadel-preview-ready' } });
   assert.equal(timers.size, 0, 'ignore foreign ready message');
   previewContext.window.message({ origin, source: frame.contentWindow, data: { type: 'citadel-preview-ready' } }); preview.update(); preview.update();
@@ -118,13 +132,38 @@ async function main() {
   currentNode = { id: 'next', blocks: [{ type: 'text', html: 'changed' }] }; preview.update({ navigate: true }); flush();
   assert.equal(sent[1].message.node.id, 'next'); assert.equal(sent[1].message.navigate, 'next');
   preview.update({ full: true }); flush(); assert(sent[2].message.course);
-  select.value = '390'; await select.fire('change', { target: select }); assert.equal(frame.style.width, '390px'); assert.equal(frame.style.transform, 'scale(1)'); assert(prefs.length);
+  select.value = '390'; await select.fire('change', { target: select }); assert.equal(frame.style.width, '390px'); assert.equal(frame.style.transform, 'scale(1)'); assert.equal(frame.style.left, '125px', 'natural size is centered'); assert(prefs.length);
+  narrow.matches = false; narrow.change(); await expand.fire('click'); assert.equal(wrap.dataset.mode,'preview');
+  assert.equal(back.hidden, false); await back.fire('click'); assert.equal(wrap.dataset.mode,'edit');
+  assert.equal(back.hidden, true); assert.equal(previewContext.document.activeElement, show);
+  await show.fire('click'); await expand.fire('click'); assert.equal(wrap.dataset.mode,'preview');
+  select.value = '0'; viewport.clientWidth = 1100; await select.fire('change', {target:select});
+  assert.equal(frame.style.width,'1100px'); assert.equal(frame.style.transform,'scale(1)');
+  await tree.fire('click'); assert.equal(tree.textContent, '›');
   previewContext.draft.dirty = true; await student.fire('click');
   assert.match(modal.text, /Несохранённые правки в новой вкладке не видны/);
   assert.deepEqual(Array.from(modal.buttons, (b) => b.label), ['Отмена', 'Открыть без них', 'Сохранить и открыть']);
   await modal.buttons[2].onClick(() => {}, { querySelectorAll: () => [] });
   assert.equal(saved, 1); assert.equal(tabs[0].location, '/admin/preview/demo#next'); assert.equal(tabs[0].opener, null);
+  // Every desktop preference opens the full-width form on a phone; mobile dialogs
+  // and the temporary tree state must not overwrite desktop preferences.
   preview.destroy();
+  for (const mode of ['edit','split','preview']) {
+    narrow.matches = true; storedView = JSON.stringify({mode, width:1440, collapsed:false});
+    const count = prefs.length;
+    const phone = previewContext.previewTools({append() {}}, wrap, () => currentNode);
+    assert.equal(wrap.dataset.mode,'edit', mode + ' must not hide the mobile form');
+    assert.equal(tree.attrs['aria-expanded'],'false'); assert.equal(show.hidden,false);
+    await tree.fire('click'); assert.equal(tree.attrs['aria-expanded'],'true');
+    phone.update({navigate:true}); assert.equal(tree.attrs['aria-expanded'],'false');
+    await show.fire('click'); assert.equal(mobileDialog.open,true);
+    assert.equal(frame.style.width,'1100px', 'mobile preview always uses the viewport width');
+    await mobileDialog.fire('cancel'); assert.equal(mobileDialog.open,false);
+    assert.equal(wrap.dataset.mode,'edit'); assert.equal(previewContext.document.activeElement, show);
+    assert.equal(prefs.length,count, 'mobile choices leave desktop preferences intact');
+    narrow.matches = false; narrow.change(); assert.equal(wrap.dataset.mode,mode);
+    phone.destroy();
+  }
   assert.equal(narrow.change, null, 'media listener is removed with the editor');
   console.log('Admin checks passed: memory progress, message origin/source, whole-course and node updates, question filters, term references, preview scale/throttle/preferences and save-before-open.');
 }

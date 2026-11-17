@@ -15,6 +15,7 @@
 
 /* каталог */
 .top-cards { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; }
+.top-cards:has(> :nth-child(3)) { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
 .top-cards > :only-child { grid-column: 1 / -1; }
 .top-card { padding: 22px; display: flex; flex-direction: column; gap: 14px; }
 .top-card p { margin: 0; color: var(--mut); font-size: 15px; }
@@ -70,7 +71,7 @@
 .review-row > .btn { flex: none; margin-left: auto; }
 .review-empty { display: flex; align-items: center; min-height: 48px; margin: 0; color: var(--mut); font-size: 14px; }
 @media (max-width: 639px) {
-  .top-cards { grid-template-columns: minmax(0, 1fr); }
+  .top-cards, .top-cards:has(> :nth-child(3)) { grid-template-columns: minmax(0, 1fr); }
   .review-row { flex-wrap: wrap; gap: 8px; }
   .review-count { flex: 1 1 240px; }
   .review-chips { flex-basis: calc(100% - 140px); }

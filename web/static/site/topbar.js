@@ -21,23 +21,41 @@ function initMenuListeners() {
   if (menuListeners) return; menuListeners = true;
   document.addEventListener('click', (e) => { for (const m of openMenus) if (!m.root.contains(e.target)) m.close(); });
   document.addEventListener('focusin', (e) => { for (const m of openMenus) if (!m.root.contains(e.target)) m.close(false); });
+  window.addEventListener('resize', () => { for (const m of openMenus) m.close(); });
+  document.addEventListener('scroll', (e) => { for (const m of openMenus) if (!m.menu.contains(e.target)) m.close(); }, true);
+}
+
+// Viewport coordinates for every shared menu, including buttons inside scrollers.
+export function menuPosition(button, size, viewport, margin = 8, gap = 6) {
+  const width = Math.min(size.width, Math.max(0, viewport.width - margin * 2));
+  const height = Math.min(size.height, Math.max(0, viewport.height - margin * 2));
+  const below = button.bottom + gap;
+  return {
+    left: Math.max(margin, Math.min(button.right - width, viewport.width - margin - width)),
+    top: Math.max(margin, Math.min(below + height <= viewport.height - margin ? below : button.top - gap - height, viewport.height - margin - height)),
+    width, height
+  };
 }
 
 // Shared keyboard menu for the avatar and admin row actions.
 export function bindMenu(root, button, menu, onSelect, manual = false) {
   initMenuListeners();
-  const entry = { root, close };
-  const items = () => [...menu.querySelectorAll('[role="menuitem"]:not(:disabled)')];
+  const entry = { root, menu, close };
+  const items = () => [...menu.querySelectorAll('[role="menuitem"]:not(:disabled)')].filter((item) => item.getClientRects().length);
   function close(focus = true) {
     if (menu.hidden) return;
     openMenus.delete(entry);
     menu.hidden = true; button.setAttribute('aria-expanded', 'false');
-    if (focus && button.isConnected) button.focus();
+    if (focus && button.isConnected) button.focus({ preventScroll: true });
   }
   function open(last = false) {
     for (const m of openMenus) m.close(false);
     openMenus.add(entry);
     menu.hidden = false; button.setAttribute('aria-expanded', 'true');
+    menu.style.position = 'fixed'; menu.style.inset = 'auto';
+    menu.style.maxWidth = 'calc(100vw - 16px)'; menu.style.maxHeight = 'calc(100dvh - 16px)';
+    const p = menuPosition(button.getBoundingClientRect(), menu.getBoundingClientRect(), { width: document.documentElement.clientWidth, height: window.innerHeight });
+    menu.style.left = p.left + 'px'; menu.style.top = p.top + 'px';
     const list = items(); list[last ? list.length - 1 : 0]?.focus();
   }
   const toggle = () => menu.hidden ? open() : close();
@@ -71,6 +89,9 @@ export function initAccountMenu(top) {
   const account = top.querySelector('.tb-account');
   if (!account || account.dataset.bound) return;
   account.dataset.bound = 'true';
+  if (!top.classList.contains('ad-top')) {
+    new ResizeObserver(() => document.documentElement.style.setProperty('--top-h', top.offsetHeight + 'px')).observe(top);
+  }
   const button = account.querySelector('.tb-me'), menu = account.querySelector('[role="menu"]');
   bindMenu(account, button, menu, (item) => {
     if (item.hasAttribute('data-account-logout')) confirmLogout(false, button);
@@ -98,20 +119,15 @@ export function markTheme(top, theme) {
   top.querySelectorAll('[data-theme-set]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeSet === theme)));
 }
 
-// Карточки на сегодня: счётчик у «Повторений» и кнопка «Повторить» (кроме самой страницы повторений).
-export function setDue(top, due, current) {
-  const badge = top.querySelector('.nav-badge'), link = top.querySelector('.tb-due');
+// Карточки на сегодня: единственный счётчик у «Повторений».
+export function setDue(top, due) {
+  const badge = top.querySelector('.nav-badge');
   if (badge) { badge.textContent = due || ''; badge.hidden = !due; }
-  if (link) { link.querySelector('b').textContent = due || ''; link.hidden = !due || current === 'review'; }
 }
 
 // Страницы сайта: тема меняется на месте, счётчик карточек — после ответа API.
 export function siteTop(current) {
   const top = document.getElementById('top');
-  if (top.classList.contains('site')) {
-    // Mobile navigation may wrap; anchor offsets and menus follow the actual header height.
-    new ResizeObserver(() => document.documentElement.style.setProperty('--top-h', top.offsetHeight + 'px')).observe(top);
-  }
   initAccountMenu(top);
   markTheme(top, readTheme());
   top.addEventListener('click', (e) => {
@@ -124,7 +140,7 @@ export function siteTop(current) {
   return {
     redraw() { markTheme(top, readTheme()); },
     update(user, due) {
-      setDue(top, due, current);
+      setDue(top, due);
       updateAccount(top, user);
     }
   };

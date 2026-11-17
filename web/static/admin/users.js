@@ -1,5 +1,6 @@
 import { req, esc, h, when, toast, dialog, confirmDialog, actionsMenu } from './ui.js';
 import { resetLinkDialog } from './invites.js';
+import { cardValue } from './layout.js';
 
 export const roles = { student: 'ученик', author: 'автор', admin: 'админ' };
 
@@ -159,6 +160,7 @@ export async function renderUsers(main) {
       items.push(reset, block); if (limitItem) items.push(limitItem);
       // Moving the original controls keeps their existing API and confirmation handlers.
       actions.replaceChildren(); actionsMenu(actions, items);
+      [...tr.cells].forEach(cardValue);
     });
   }
 }

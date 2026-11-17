@@ -16,7 +16,10 @@ function element(document) {
   const handlers = {}, attrs = {};
   return {
     handlers, attrs, dataset: {}, hidden: false, disabled: false, isConnected: true,
-    textContent: '', innerHTML: '',
+    textContent: '', innerHTML: '', style: {},
+    getClientRects: () => [{}],
+    getBoundingClientRect: () => ({top: 50, bottom: 90, right: 700, width: 220, height: 200}),
+    contains: () => false,
     addEventListener(type, handler) { (handlers[type] ||= []).push(handler); },
     async fire(type, event = {}) {
       for (const fn of handlers[type] || []) await fn({ target: this, currentTarget: this, preventDefault() {}, stopPropagation() {}, ...event });
@@ -29,9 +32,10 @@ function element(document) {
 }
 
 async function main() {
-  const document = { activeElement: null };
+  const document = { activeElement: null, documentElement: {clientWidth: 800} };
+  const window = element(document); window.innerHeight = 600;
   Object.assign(document, element(document));
-  const ctx = vm.createContext({ document, localStorage: storage({
+  const ctx = vm.createContext({ document, window, ResizeObserver: class { observe() {} }, localStorage: storage({
     'unrelated': '{"dirty":true}',
     'citadel-progress:hidden-course': '{"dirty":true,"syncedAt":10}',
     'citadel-progress:broken': 'oops',
@@ -54,11 +58,20 @@ async function main() {
   const items = [element(document), element(document), element(document)];
   items[2].attrs['data-account-logout'] = '';
   menu.hidden = true;
-  menu.querySelectorAll = () => items;
+  const hiddenTheme = element(document); hiddenTheme.getClientRects = () => [];
+  menu.querySelectorAll = () => [...items, hiddenTheme];
   account.querySelector = (selector) => selector === '.tb-me' ? button : menu;
   account.contains = (target) => [account, button, menu, ...items].includes(target);
-  const top = { querySelector: () => account };
-  ctx.initAccountMenu = vm.runInContext('(function () {' + source('topbar.js') + '; return initAccountMenu; })()', ctx);
+  const top = { querySelector: () => account, classList: {contains: () => false} };
+  const menus = vm.runInContext('(function () {' + source('topbar.js') + '; return {initAccountMenu, menuPosition}; })()', ctx);
+  ctx.initAccountMenu = menus.initAccountMenu;
+  const pos = (rect, size, viewport) => JSON.parse(JSON.stringify(menus.menuPosition(rect, size, viewport)));
+  assert.deepEqual(pos({top: 50, bottom: 90, right: 700}, {width: 220,height:200}, {width:800,height:600}), {left:480,top:96,width:220,height:200});
+  assert.equal(pos({top: 550,bottom:590,right:700}, {width:220,height:200}, {width:800,height:600}).top, 344);
+  for (const [w,h] of [[375,600],[1280,820],[40,40]]) {
+    const p = pos({top:h-20,bottom:h+10,right:w+100}, {width:300,height:900}, {width:w,height:h});
+    assert(p.left >= 8 && p.top >= 8 && p.left+p.width <= w-8 && p.top+p.height <= h-8);
+  }
   let logouts = 0;
   ctx.confirmLogout = (all, trigger) => { assert.equal(all, false); assert.equal(trigger, button); logouts++; };
   ctx.initAccountMenu(top);
@@ -91,6 +104,8 @@ async function main() {
   await button.fire('click');
   await menu.fire('click', { target: items[2] });
   assert.equal(logouts, 1);
+  await button.fire('click'); await window.fire('resize'); assert.equal(menu.hidden,true);
+  await button.fire('click'); await document.fire('scroll', {target: element(document)}); assert.equal(menu.hidden,true);
 
   // Dialog: the safe button receives focus; cancel/Escape send nothing; failures
   // keep the dialog open and show an error; both logout endpoints are exercised.

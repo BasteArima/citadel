@@ -71,7 +71,7 @@ export const AREAS = [
   ['links', 'Ссылки на узлы', 'все ссылки и опоры ведут на существующие узлы'],
   ['answers', 'Правильные ответы', 'у каждого вопроса есть верный ответ'],
   ['outputs', 'Выводы программ', 'у каждого «предскажи» есть вывод или ошибка'],
-  ['passport', 'Паспорт и дерево', 'название, металл, инструмент, id узлов']
+  ['passport', 'Настройки и дерево', 'название, металл, инструмент, id узлов']
 ];
 
 export function areaOf(p) {
@@ -146,25 +146,6 @@ export function nodeLabel(course, id) {
     else out = n.title;
   });
   return out;
-}
-
-// Nonmodal drawer: the list remains in place and usable.
-export function drawer(title) {
-  const opener = document.activeElement, panel = h('dialog', 'ad-drawer');
-  panel.setAttribute('aria-label', title);
-  panel.innerHTML = '<div class="ad-row ad-drawer-head"><h2>' + esc(title) + '</h2><span class="ad-sp"></span><button type="button" class="btn" aria-label="Закрыть панель">✕</button></div><div class="ad-drawer-body ad-form"></div>';
-  let disposed = false;
-  const key = (e) => { if (e.key === 'Escape' && !document.querySelector('.ad-dialog[open]')) { e.preventDefault(); close(); } };
-  function close() {
-    if (disposed) return; disposed = true;
-    document.removeEventListener('keydown', key); panel.close(); panel.remove();
-    if (opener?.isConnected) opener.focus();
-  }
-  panel.querySelector('button').addEventListener('click', close);
-  document.addEventListener('keydown', key);
-  panel.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
-  document.body.append(panel); panel.show(); panel.querySelector('button').focus();
-  return { panel, body: panel.querySelector('.ad-drawer-body'), close };
 }
 
 // Preserve existing action listeners when moving controls into the shared menu.

@@ -34,10 +34,10 @@ function render(user, everything, allSoon, directions) {
   if (without.length) groups.push({ id: '', title: 'Без направления', courses: without });
   if (direction !== 'all' && !groups.some((g) => g.id === direction)) direction = 'all';
   top.update(user, everything.reduce((s, c) => s + c.due, 0));
-  const now = continueCard(courses, byId) + projectCard(projects);
+  const now = continueCard(courses, byId) + projectCard(projects) + reviewCard(everything);
   app.innerHTML = '<main class="site-main"><h1 class="visually-hidden">Курсы</h1>' +
     '<section class="catalog-section" aria-labelledby="now-title"><h2 id="now-title">Сейчас</h2><div class="top-cards">' +
-    (now || '<section class="card top-card"><h2>С чего начать</h2><p>Выбери курс в каталоге и открой первый урок.</p></section>') + '</div>' + reviewRow(everything) + '</section>' +
+    (now || '<section class="card top-card"><h2>С чего начать</h2><p>Выбери курс в каталоге и открой первый урок.</p></section>') + '</div></section>' +
     '<section class="catalog-section" aria-labelledby="catalog-title"><div class="catalog-toolbar"><h2 id="catalog-title">Каталог</h2><div class="catalog-filters">' +
     '<div class="direction-chips" role="group" aria-label="Направление курсов">' + directionChip('all', 'Все') +
     groups.filter((g) => g.id || directions.length).map((g) => directionChip(g.id, g.title + ' · ' + g.courses.length)).join('') + '</div>' +
@@ -61,7 +61,6 @@ function render(user, everything, allSoon, directions) {
       '<div class="tiles">' + (grouped ? g.courses.slice(0, 6) : g.courses).map((c) => c.soon ? soonCourseTile(c) : courseTile(c, byId, context)).join('') + '</div></section>').join('') ||
       '<div class="empty">' + ({ done: 'Пока ни одного пройденного курса. Первое звено ещё куётся.', active: 'Ни один курс ещё не начат.', new: 'Все курсы уже начаты.' }[filter] || 'Курсов пока нет.') + '</div>';
     app.querySelectorAll('.direction-chips [data-direction]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.direction === direction)));
-    fitReviewChips();
   };
   app.addEventListener('click', (e) => {
     const b = e.target.closest('[data-direction]');
@@ -73,36 +72,16 @@ function render(user, everything, allSoon, directions) {
   });
   app.querySelector('#catalog-status').addEventListener('change', (e) => { filter = e.target.value; save(); draw(); });
   draw();
-  const chips = app.querySelector('.review-chips');
-  if (chips) new ResizeObserver(fitReviewChips).observe(chips);
 }
 
 function directionChip(id, title) {
   return '<button type="button" class="chip" data-direction="' + esc(id) + '" aria-pressed="' + (direction === id) + '">' + esc(title) + '</button>';
 }
 
-function reviewRow(courses) {
+function reviewCard(courses) {
   const due = courses.filter((c) => c.due > 0), total = due.reduce((s, c) => s + c.due, 0);
-  if (!total) return '<p class="review-empty">Сегодня повторять нечего</p>';
-  return '<div class="review-row"><span aria-hidden="true">↻</span><span class="review-count">' + total + ' ' + plural(total, 'карточка ждёт', 'карточки ждут', 'карточек ждут') + ' повторения</span>' +
-    '<div class="review-chips">' + due.map((c) => '<span class="chip" title="' + esc(c.title) + '">' + esc(c.title) + ' · ' + c.due + '</span>').join('') + '<span class="chip review-more" hidden></span></div>' +
-    '<a class="btn btn-l" href="/review">Повторить</a></div>';
-}
-
-// Чипы измеряются в доступной ширине, остаток сворачивается в +N.
-function fitReviewChips() {
-  const box = app.querySelector('.review-chips');
-  if (!box) return;
-  const more = box.querySelector('.review-more'), chips = [...box.children].filter((c) => c !== more);
-  chips.forEach((c) => { c.hidden = false; });
-  more.hidden = true;
-  let count = chips.length;
-  while (count && box.scrollWidth > box.clientWidth) {
-    chips[--count].hidden = true;
-    more.textContent = '+' + (chips.length - count);
-    more.title = chips.slice(count).map((c) => c.title).join(', ');
-    more.hidden = false;
-  }
+  if (!total) return '';
+  return '<section class="card top-card"><div class="lbl">Повторение</div><h2>Повторить сегодня</h2><p>' + total + ' ' + plural(total, 'карточка', 'карточки', 'карточек') + ' из ' + due.length + ' ' + plural(due.length, 'курса', 'курсов', 'курсов') + '</p><div class="row"><a class="btn btn-l" href="/review">Повторить</a></div></section>';
 }
 
 function continueCard(courses, byId) {

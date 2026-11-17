@@ -7,7 +7,9 @@
 //   #/c/<курс>/versions/<v>  версии и разница
 //   #/users                  пользователи
 //   #/agents                 правки агентов (этап 6)
-import { req, esc, h, when, plural, toast, dialog, confirmDialog, linkIcon, checkPill, actionsMenu, AREAS, areaOf, METALS } from './ui.js';
+import { req, esc, h, when, plural, toast, dialog, confirmDialog, linkIcon, METALS } from './ui.js';
+import { adminLayout, workPage, courseBarLayout, cardValue } from './layout.js';
+import { adminNavigation } from './navigation.js';
 import { draft, openDraft, onDraft, save, publishFlow } from './draft.js';
 import { renderEditor } from './editor.js';
 import { renderQuestions } from './questions.js';
@@ -25,20 +27,20 @@ import { siteTop, readTheme, saveTheme, applyTheme, markTheme } from '../site/to
 const LAST = 'citadel-admin-course';
 let me = null;
 let courses = [];
-let selectedCheck = null; // курс, чья проверка открыта на странице курсов
+let offNavigation = () => {};
 
 function rememberCourse(id) { try { localStorage.setItem(LAST, id); } catch (e) { /* optional */ } }
 
 function shell(current) {
-  const items = me.role === 'author' ? [['courses', '#/', 'Мои курсы'], ['agents', '#/agents', 'Агенты']] : [
+  const items = me.role === 'author' ? [['courses', '#/', 'Мои курсы'], ['agents', '#/agents', 'Правки агентов'], ['tokens', '#/tokens', 'Токены агентов']] : [
     ['courses', '#/', 'Курсы'], ['agents', '#/agents', 'Правки агентов'], ['users', '#/users', 'Пользователи'],
     ['invites', '#/invites', 'Приглашения'], ['tokens', '#/tokens', 'Токены агентов'], ['audit', '#/audit', 'Журнал']];
   const top = document.getElementById('top'), nav = top.querySelector('.tb-nav');
-  nav.id = 'admin-nav'; nav.setAttribute('aria-label', 'Админка');
-  nav.innerHTML = items.map(([key, href, title]) => '<a href="' + href + '"' + (key === current ? ' aria-current="page"' : '') + '>' + title + '</a>').join('');
+  offNavigation();
+  offNavigation = adminNavigation(top, items, current);
   nav.classList.remove('open'); top.querySelector('.ad-nav-toggle')?.setAttribute('aria-expanded', 'false');
   const app = document.getElementById('app');
-  app.innerHTML = '<div class="ad"><main class="ad-main" id="ad-main"></main></div>';
+  app.innerHTML = '<div class="ad"><main class="ad-main ' + adminLayout(current) + '" id="ad-main"></main></div>';
   refreshBadge();
   return document.getElementById('ad-main');
 }
@@ -46,9 +48,8 @@ function shell(current) {
 function initHeader() {
   const top = document.getElementById('top'), home = top.querySelector('.tb-home');
   home.href = '#/'; home.insertAdjacentHTML('beforeend', '<span class="ad-pill ad-role">' + (me.role === 'author' ? 'автор' : 'админ') + '</span>');
-  top.querySelector('.tb-search')?.remove(); top.querySelector('.tb-due')?.remove();
-  top.querySelector('a[href="/admin"]').href = '#/';
-  top.querySelector('.tb-tools').insertAdjacentHTML('afterbegin', '<a class="ad-site-link" href="/">На сайт</a>');
+  top.querySelector('.tb-search')?.remove();
+  top.querySelector('.tb-tools').insertAdjacentHTML('afterbegin', '<a class="btn ad-site-link" href="/" aria-label="На сайт" title="На сайт"><span aria-hidden="true">←</span><span class="ad-site-label">На сайт</span></a>');
   const toggle = h('button', 'tb-ic ad-nav-toggle', '☰');
   toggle.type = 'button'; toggle.setAttribute('aria-label', 'Меню админки'); toggle.setAttribute('aria-controls', 'admin-nav'); toggle.setAttribute('aria-expanded', 'false');
   home.after(toggle);
@@ -65,6 +66,8 @@ function initHeader() {
   top.querySelector('.tb-theme').after(themeControl);
   theme.addEventListener('change', () => { saveTheme(theme.value); applyTheme(theme.value); markTheme(top, theme.value); });
   top.addEventListener('click', (e) => { if (e.target.closest('[data-theme-set]')) theme.value = readTheme(); });
+  const inner = h('div', 'ad-top-inner');
+  inner.append(...top.childNodes); top.append(inner);
   // The actual height may grow at intermediate desktop widths.
   new ResizeObserver(() => document.documentElement.style.setProperty('--admin-top-h', top.offsetHeight + 'px')).observe(top);
 }
@@ -72,20 +75,26 @@ function initHeader() {
 // Верхняя строка страниц курса: путь, состояние черновика, «Сохранить», «Опубликовать…».
 export function courseBar(main) {
   const header = h('div', 'ad-course-header');
-  header.innerHTML = '<div class="ad-bar"><nav class="ad-crumbs" aria-label="Путь"><a href="#/">Курсы</a> / <strong class="ad-course-title"></strong> <span class="ad-pill ad-version"></span></nav><span class="ad-sp"></span><span class="ad-state" aria-live="polite"></span><button type="button" class="btn ad-save">Сохранить <kbd>Ctrl S</kbd></button><button type="button" class="btn pri ad-pub">Опубликовать…</button></div>';
+  header.innerHTML = '<div class="ad-bar"><nav class="ad-crumbs" aria-label="Путь"><a href="#/">← Курсы</a> <strong class="ad-course-title"></strong> <span class="ad-pill ad-version"></span></nav><div class="ad-course-actions"><span class="ad-state" aria-live="polite"></span><button type="button" class="btn ad-save">Сохранить <kbd>Ctrl S</kbd></button><button type="button" class="btn pri ad-pub">Опубликовать…</button></div></div>';
   const nav = h('nav', 'ad-tabs ad-course-tabs'); nav.setAttribute('aria-label', 'Вкладки курса');
   const view = location.hash.split('/')[3] || 'edit';
-  nav.innerHTML = [['edit', 'Редактор'], ['questions', 'Вопросы'], ['glossary', 'Словарь'], ['audio', 'Озвучка'], ['versions', 'Версии'], ...(me.role === 'admin' ? [['access', 'Доступ']] : []), ['passport', 'Паспорт']].map(([key, title]) => '<a href="#/c/' + encodeURIComponent(draft.id) + '/' + key + '"' + (view === key ? ' aria-current="page"' : '') + '>' + title + '</a>').join('');
-  header.append(nav); main.append(header);
+  nav.innerHTML = [['edit', 'Редактор'], ['questions', 'Вопросы'], ['glossary', 'Словарь'], ['audio', 'Озвучка'], ['versions', 'Версии'], ...(me.role === 'admin' ? [['access', 'Доступ']] : []), ['passport', 'Настройки']].map(([key, title]) => '<a href="#/c/' + encodeURIComponent(draft.id) + '/' + key + '"' + (view === key ? ' aria-current="page"' : '') + '>' + title + '</a>').join('');
+  header.querySelector('.ad-crumbs').after(nav); main.classList.add('ad-course-main'); main.append(header);
   const observer = new ResizeObserver(() => main.style.setProperty('--course-header-h', header.offsetHeight + 'px')); observer.observe(header);
   const bar = header.querySelector('.ad-bar'), state = bar.querySelector('.ad-state'), saveBtn = bar.querySelector('.ad-save');
+  const layout = courseBarLayout(bar, nav);
   const draw = () => {
     bar.querySelector('.ad-course-title').textContent = draft.course.title;
-    bar.querySelector('.ad-version').textContent = 'v' + draft.version + (draft.published ? ' опубликована' : ' черновик');
-    state.innerHTML = '<i class="ad-dot ' + (draft.dirty ? 'dirty' : draft.published ? 'pub' : '') + '"></i>' + (draft.dirty ? 'есть несохранённое' : draft.published ? 'опубликована' : 'сохранена');
+    bar.querySelector('.ad-course-title').title = draft.course.title;
+    const version = bar.querySelector('.ad-version');
+    version.textContent = 'v' + draft.version;
+    version.title = 'v' + draft.version + (draft.published ? ' опубликована' : ' черновик');
+    version.setAttribute('aria-label', version.title);
+    state.innerHTML = '<i class="ad-dot ' + (draft.dirty ? 'dirty' : draft.published ? 'pub' : '') + '"></i>' + (draft.dirty ? 'не сохранено' : draft.published ? 'опубликована' : 'сохранена');
     saveBtn.disabled = !draft.dirty;
+    layout.update();
   };
-  draw(); const unsubscribe = onDraft(draw); const off = () => { unsubscribe(); observer.disconnect(); };
+  draw(); const unsubscribe = onDraft(draw); const off = () => { unsubscribe(); layout(); observer.disconnect(); };
   saveBtn.addEventListener('click', () => save()); bar.querySelector('.ad-pub').addEventListener('click', () => publishFlow());
   return { bar, off };
 }
@@ -102,8 +111,8 @@ async function pageCourses() {
   const main = shell('courses');
   main.innerHTML = '<div class="ad-page"><div class="ad-head"><div><h1>' + (me.role === 'author' ? 'Мои курсы' : 'Курсы') + '</h1><p class="ad-sub">' + (me.role === 'author' ? 'Здесь твои курсы и проекты. Каждое сохранение — новая версия. Доступ другим выдаёт админ.' : 'Ученики видят только опубликованную версию. Каждое сохранение — новая версия.') + '</p></div>' +
     '<div class="ad-acts">' + (me.role === 'admin' ? '<button type="button" class="btn" id="ad-directions">Направления…</button>' : '') + '<label class="btn ad-file" tabindex="0" role="button">Импорт JSON<input type="file" accept=".json,application/json" hidden></label><button type="button" class="btn pri" id="ad-new">+ Новый курс</button></div></div>' +
-    '<p id="ad-limit" class="ad-sub" role="status"></p><div class="ad-table-w"><table class="ad-table ad-responsive ad-courses"><thead><tr><th>Курс</th><th>Направление</th>' + (me.role === 'admin' ? '<th>Владелец</th><th>Доступ</th>' : '') + '<th>Опубликовано</th><th>Черновик</th><th>Изменён</th><th>Правки агентов</th><th>Проверка</th></tr></thead><tbody id="ad-rows"><tr><td colspan="8">Загружаю…</td></tr></tbody></table></div>' +
-    '<section class="ad-card ad-check" id="ad-check" aria-labelledby="ad-check-h"></section></div>';
+    '<p id="ad-limit" class="ad-sub" role="status"></p><div class="ad-table-w"><table class="ad-table ad-responsive ad-courses"><colgroup><col><col class="ad-col-direction">' + (me.role === 'admin' ? '<col class="ad-col-owner"><col class="ad-col-access">' : '') + '<col class="ad-col-version"><col class="ad-col-changed"><col class="ad-col-agents"><col class="ad-col-check"></colgroup><thead><tr><th>Курс</th><th>Направление</th>' + (me.role === 'admin' ? '<th>Владелец</th><th>Доступ</th>' : '') + '<th>Версия</th><th>Изменён</th><th>Правки агентов</th><th>Проверка</th></tr></thead><tbody id="ad-rows"><tr><td colspan="8">Загружаю…</td></tr></tbody></table></div>' +
+    '</div>';
   main.querySelector('#ad-directions')?.addEventListener('click', () => directionsDialog(loadCourses));
   main.querySelector('#ad-new').addEventListener('click', newCourse);
   main.querySelector('.ad-file').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); main.querySelector('.ad-file input').click(); } });
@@ -129,74 +138,29 @@ async function loadCourses() {
   if (!rows) return;
   if (!courses.length) { rows.innerHTML = '<tr><td colspan="7">Курсов пока нет. Создай новый или импортируй JSON.</td></tr>'; }
   else rows.innerHTML = courses.map((c) => {
-    const changes = c.published ? c.latest.version - c.published : c.latest.version;
-    const draftCell = c.latest.version === c.published ? '<span class="ad-mut">нет</span>'
-      : '<span class="ad-pill acc">v' + c.latest.version + (c.published ? ' · ' + changes + ' ' + plural(changes, 'изменение', 'изменения', 'изменений') : '') + '</span>';
-    return '<tr tabindex="0" data-id="' + esc(c.id) + '"' + (c.id === selectedCheck ? ' class="is-sel"' : '') + '>' +
-      '<td><div class="ad-course">' + linkIcon(c.metal, !c.published) + '<span><a href="#/c/' + esc(c.id) + '/edit" class="ad-ct">' + esc(c.title || c.id) + '</a><code>' + esc(c.id) + ' · ' + esc(METALS[c.metal] || c.metal) + (c.type === 'project' ? ' · проект' : '') + '</code></span></div>' + '</td><td>' + esc(directions.find((d) => d.id === c.direction)?.title || 'Без направления') + '</td>' +
+    const version = c.published ? (c.latest.version === c.published ? '<span class="ad-pill good">v' + c.published + '</span>' : 'v' + c.published) : '<span class="ad-mut">не опубликован</span>';
+    const draftCell = c.latest.version === c.published ? '' : ' · черновик v' + c.latest.version;
+    const problems = (c.check.problems || []).map((p) => p.path + ': ' + p.msg).join('\n');
+    const count = c.check.errors + c.check.warnings;
+    return '<tr tabindex="0" data-id="' + esc(c.id) + '">' +
+      '<td><div class="ad-course">' + linkIcon(c.metal, !c.published) + '<span><a href="#/c/' + esc(c.id) + '/edit" class="ad-ct" title="' + esc(c.title || c.id) + '">' + esc(c.title || c.id) + '</a><code>' + esc(c.id) + ' · ' + esc(METALS[c.metal] || c.metal) + (c.type === 'project' ? ' · проект' : '') + '</code></span></div>' + '</td><td>' + esc(directions.find((d) => d.id === c.direction)?.title || 'Без направления') + '</td>' +
       (me.role === 'admin' ? '<td>' + esc(c.ownerName || 'платформа') + '</td><td>' + (c.access === 'private' ? 'по доступу · ' + c.grantedUsers : 'всем') + '</td>' : '') +
-      '<td>' + (c.published ? '<span class="ad-pill good">v' + c.published + '</span>' : '<span class="ad-mut">не опубликован</span>') + '</td>' +
-      '<td>' + draftCell + '</td>' +
-      '<td class="ad-mut">' + esc(when(c.latest.createdAt)) + ' · ' + esc(authorName(c.latest.author)) + '</td>' +
+      '<td>' + version + (c.published ? draftCell : '') + '</td>' +
+      '<td class="ad-mut" title="' + esc(authorName(c.latest.author)) + '">' + esc(when(c.latest.createdAt)) + '</td>' +
       '<td>' + (c.agents ? '<a class="ad-pill acc" href="#/agents">' + c.agents + ' ' + plural(c.agents, 'ждёт', 'ждут', 'ждут') + '</a>' : '<span class="ad-mut">—</span>') + '</td>' +
-      '<td><button type="button" class="ad-linkbtn ad-ck" aria-label="Проверка ' + esc(c.title) + '">' + checkPill(c.check) + '</button></td>' +
+      '<td><a href="#/c/' + encodeURIComponent(c.id) + '/passport" class="ad-linkbtn ad-ck" title="' + esc(problems || 'Без ошибок') + '" aria-label="Проверка ' + esc(c.title) + ': ' + (count ? 'замечаний ' + count : 'без ошибок') + '"><span class="ad-pill ' + (count ? 'bad' : 'good') + '">' + (count ? '⚠ ' + count : '✓') + '</span></a></td>' +
       '</tr>';
   }).join('');
-  const labels = ['Курс', 'Направление', ...(me.role === 'admin' ? ['Владелец', 'Доступ'] : []), 'Опубликовано', 'Черновик', 'Изменён', 'Правки агентов', 'Проверка'];
+  const labels = ['Курс', 'Направление', ...(me.role === 'admin' ? ['Владелец', 'Доступ'] : []), 'Версия', 'Изменён', 'Правки агентов', 'Проверка'];
   rows.querySelectorAll('tr[data-id]').forEach((tr) => {
-    [...tr.cells].forEach((td, i) => { td.dataset.label = labels[i]; });
+    [...tr.cells].forEach((td, i) => { td.dataset.label = labels[i]; cardValue(td); });
     const go = () => { location.hash = '#/c/' + encodeURIComponent(tr.dataset.id) + '/edit'; };
     tr.addEventListener('click', (e) => { if (!e.target.closest('a,button')) go(); });
     tr.addEventListener('keydown', (e) => { if (e.target === tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); go(); } });
-    const cell = tr.lastElementChild, del = h('button', 'btn ad-danger ad-del', 'Удалить курс'); del.type = 'button'; cell.append(del);
   });
-  rows.querySelectorAll('.ad-del').forEach((b) => b.addEventListener('click', async () => {
-    const id = b.closest('tr').dataset.id, c = courses.find((x) => x.id === id);
-    const text = 'Удалятся все версии курса, прогресс и карточки всех учеников, правки агентов и записи озвучки. Отменить это нельзя. Файл курса на диске не удаляется и обратно курс сам не вернётся: только через «Импорт JSON».';
-    if (!(await confirmDialog('Удалить курс «' + (c ? c.title : id) + '»?', text, 'Удалить навсегда', true))) return;
-    const r2 = await req('DELETE', '/api/admin/courses/' + encodeURIComponent(id));
-    if (!r2.ok) { toast(r2.data.error || 'Ошибка ' + r2.status, 'bad'); return; }
-    toast('Курс удалён', 'good');
-    try { localStorage.removeItem(LAST); } catch (e) { /* без хранилища */ }
-    location.hash = '#/';
-    location.reload();
-  }));
-  rows.querySelectorAll('.ad-ck').forEach((b) => b.addEventListener('click', () => {
-    selectedCheck = b.closest('tr').dataset.id;
-    rows.querySelectorAll('tr').forEach((tr) => tr.classList.toggle('is-sel', tr.dataset.id === selectedCheck));
-    drawCheck();
-  }));
-  rows.querySelectorAll('tr[data-id]').forEach((tr) => actionsMenu(tr.lastElementChild, [tr.querySelector('.ad-del')]));
-  if (!selectedCheck || !courses.some((c) => c.id === selectedCheck)) {
-    const worst = courses.find((c) => c.check && c.check.errors) || courses.find((c) => c.check && c.check.warnings) || courses[0];
-    selectedCheck = worst ? worst.id : null;
-  }
-  drawCheck();
 }
 
 function authorName(a) { return authorLabel(a); }
-
-function drawCheck() {
-  const box = document.getElementById('ad-check');
-  const c = courses.find((x) => x.id === selectedCheck);
-  if (!box || !c) { if (box) box.hidden = true; return; }
-  box.hidden = false;
-  const by = {};
-  (c.check.problems || []).forEach((p) => { (by[areaOf(p)] = by[areaOf(p)] || []).push(p); });
-  box.innerHTML = '<div class="ad-row"><h2 id="ad-check-h">Проверка черновика · ' + esc(c.title) + ' v' + c.latest.version + '</h2><span class="ad-sp"></span>' +
-    '<button type="button" class="btn" id="ad-recheck">Проверить снова</button></div>' +
-    '<ul class="ad-areas">' + AREAS.map((a) => {
-      const ps = by[a[0]] || [], errs = ps.filter((p) => !p.warning).length;
-      const cls = !ps.length ? '' : errs ? 'bad' : 'warn';
-      const mark = !ps.length ? '✓' : errs ? '✕' : '!';
-      const text = !ps.length ? esc(a[2]) : ps.slice(0, 3).map((p) => esc(p.path + ': ' + p.msg)).join('<br>') + (ps.length > 3 ? '<br>… ещё ' + (ps.length - 3) : '');
-      return '<li class="' + cls + '"><span class="ad-mark" aria-hidden="true">' + mark + '</span><span><strong>' + esc(a[1]) + '</strong><br><span class="ad-small">' + text + '</span></span></li>';
-    }).join('') + '</ul>' +
-    '<p class="ad-small ad-mut">Выводы программ проверяются на наличие: получить их нужно запуском на ' + esc(toolOf(c)) + ' и записать в блок.</p>';
-  box.querySelector('#ad-recheck').addEventListener('click', async () => { await loadCourses(); toast('Проверено заново', 'good'); });
-}
-
-function toolOf(c) { return c.tool ? c.tool : 'версии инструмента из паспорта'; }
 
 function newCourse() {
   const form = h('div', 'ad-form');
@@ -234,15 +198,14 @@ async function importFile(file) {
   if (!r.ok) { toast(r.data.error || 'Импорт не прошёл: ' + r.status, 'bad'); return; }
   const c = r.data.check;
   toast('Импортирован «' + r.data.id + '» черновиком v' + r.data.version + (c.errors ? ' · ' + c.errors + ' ' + plural(c.errors, 'ошибка', 'ошибки', 'ошибок') : ''), c.errors ? 'warn' : 'good');
-  selectedCheck = r.data.id;
   if (draft.id === r.data.id && !draft.dirty) draft.course = null; // откроется заново с новой версией
   loadCourses();
 }
 
 function pageAgents(id) {
   const main = shell('agents');
-  if (me.role === 'author') { const box = h('section', 'ad-page'); main.append(box); renderTokens(box, courses, me.role); }
   renderAgents(main, id, () => { draft.course = draft.dirty ? draft.course : null; refreshBadge(); });
+  workPage(main.querySelector('.ad-page'), '.ag-split', '.ag-detail');
 }
 
 // Сколько правок агентов ждёт — бейджем у пункта меню.
@@ -281,7 +244,6 @@ async function route() {
   }
   if (me.role === 'author' && ['invites', 'users', 'audit'].includes(parts[0])) return pageCourses();
   if (parts[0] === 'audio') { location.hash = '#/'; return; }
-  if (me.role === 'author' && parts[0] === 'tokens') return pageAgents(0);
   if (parts[0] === 'invites') return renderInvites(shell('invites'), courses);
   if (parts[0] === 'users') return renderUsers(shell('users'));
   if (parts[0] === 'tokens') {
